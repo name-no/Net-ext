@@ -25,14 +25,14 @@ my $myclass;
 
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.86';
+    $VERSION = '0.88';
 }
 
 sub Version () { "$myclass v$VERSION" }
 
 use AutoLoader;
 #use Exporter ();
-use Net::Gen 0.85 qw(:ALL);
+use Net::Gen 0.88 qw(:ALL);
 use Socket qw(!/^[a-z]/ /^inet_/ !SOMAXCONN);
 
 BEGIN {
@@ -392,13 +392,14 @@ sub inet_addr;			# (helps with -w)
 BEGIN {
     *inet_addr = \&inet_aton;	# same code for old interface
 
-    my $n;
-    no strict 'refs';
-    local ($^W) = 0;
-    for $n (@EXPORT, @EXPORT_OK) {
-	unless (defined &$n) {
-	    eval "sub $n () ;";
-	}
+;# pre-declare some things to keep the prototypes in sync
+
+    my $name;
+    local ($^W) = 0;		# prevent sub redefined warnings
+    no strict 'refs';		# so we can do the defined() checks
+    for $name (@EXPORT, @EXPORT_OK) {
+	# declare alone is not enough--need reference to silence -w
+	eval "sub $name (); \&$name;" unless defined(&$name);
     }
 }
 

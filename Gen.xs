@@ -75,6 +75,11 @@ extern "C" {
 #endif
 #endif
 
+#if (PATCHLEVEL < 5) && (SUBVERSION < 5)
+#define	PL_sv_no	sv_no
+#define	PL_sv_undef	sv_undef
+#endif
+
 #ifdef __cplusplus
 }
 #endif
@@ -295,7 +300,7 @@ char * file;
     CV *cv;
     OP *svop;
     cv = newXS(name, cv_constant, file);
-    sv_setsv((SV*)cv, &sv_no);		/* prototype it as () */
+    sv_setsv((SV*)cv, &PL_sv_no);	/* prototype it as () */
     if (SvTEMP(valsv))			/* Don't let mortality get you down. */
 	SvREFCNT_inc(valsv);		/* Give it an afterlife.  :-> */
     svop = newSVOP(OP_CONST, 0, valsv);	/* does SvREADONLY_on */
@@ -343,7 +348,7 @@ char *	name;
 UV	uval;
 char *	file;
 {
-    SV * valsv = newSVsv(&sv_undef);		/* missing newSVuv()! */
+    SV * valsv = newSVsv(&PL_sv_undef);	/* missing newSVuv()! */
     sv_setuv(valsv, uval);
     newXSconst(name, valsv, file);
 }
@@ -889,7 +894,7 @@ unpack_sockaddr(sad)
 					   len));
 	    }
 	    else {
-		datsv = sv_mortalcopy(&sv_undef);
+		datsv = sv_mortalcopy(&PL_sv_undef);
 	    }
 	    EXTEND(sp, 2);
 	    PUSHs(famsv);

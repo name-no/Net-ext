@@ -1,3 +1,22 @@
+Wed Nov  4 01:37:24 1998  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/TCP.pm: Avoid "used only once" warnings for
+	undefined XS constants.
+
+	* lib/Net/Inet.pm: Avoid "used only once" warnings for
+	undefined XS constants.
+
+	* lib/Net/Gen.pm: Bump version number.  Update to avoid
+	"used only once" warnings for undefined XS constants.
+
+	* t/00basic.t: Update for Solaris bug with socket-over-stream
+	emulation to not hang on test 16.
+
+Wed Oct 21 04:16:48 1998  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* README: Fix embedded test code in response to a bug report
+	from Rob Hagopian <hagopiar@vuser.vu.union.edu>.
+
 Released as version 0.87.  Critical to replace 0.86 because of
 the typos in Gen.xs.
 

@@ -7,7 +7,7 @@ my $begin_tests;
 my $testnum;
 BEGIN {
     $begin_tests = 4;
-    $num_tests = $begin_tests + 15; # for now
+    $num_tests = $begin_tests + 16; # for now
     $testnum = 0;
     #$Net::Gen::adebug = 1;
     $| = 1;
@@ -112,9 +112,15 @@ $testnum++;
 exit 1 unless $u->send("GHIJK");
 print "ok $testnum\n";
 
+# Don't block forever on the receive attempt.
+$testnum++;
+my $recvok = $u2->select(1,0,0,30);
+print "not " unless $recvok;
+print "ok $testnum\n";
+
 # Validate the receipt.
 $testnum++;
-exit 1 unless ($msg = $u2->recv(40, 0, $sender)) && $sender;
+exit 1 unless $recvok && ($msg = $u2->recv(40, 0, $sender)) && $sender;
 print "ok $testnum\n";
 
 # Validate the addressing.

@@ -73,7 +73,7 @@ A simple test script:
 		tie $f,'Net::TCP',0,'finger';
 
 	$f = "-s\n";
-	print $line while (defined $line=$f);
+	print $line while defined($line=$f);
 	untie $f;
 
 Should be the same (on most BSD-ish systems, anyway) as

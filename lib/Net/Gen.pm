@@ -22,7 +22,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD $adebug);
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.87';
+    $VERSION = '0.88';
 }
 
 sub Version () { "$myclass v$VERSION" }
@@ -158,7 +158,18 @@ sub AUTOLOAD
 BEGIN {
 # do this now so the constant XSUBs really are
     $myclass->bootstrap($VERSION);
+
+;# pre-declare some things to keep the prototypes in sync
+
+    my $name;
+    local ($^W) = 0;		# prevent sub redefined warnings
+    no strict 'refs';		# so we can do the defined() checks
+    for $name (@EXPORT, @EXPORT_OK) {
+	# declare alone is not enough--need reference to silence -w
+	eval "sub $name (); \&$name;" unless defined(&$name);
+    }
 }
+
 
 # Preloaded methods go here.  Autoload methods go after __END__, and are
 # processed by the autosplit program.
