@@ -1,3 +1,39 @@
+Released as version 0.75 (still alpha) because of perl 5.003_96 & AUTOLOAD.
+
+Tue Apr  1 00:53:05 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* README: Add a note about the Linux issue, and configuration
+	problems with tracking down the right <*.h> files.
+
+	* lib/Net/UNIX.pm: Hoisted initialisation, and corrected for the
+        non-inherited AUTOLOAD problem.  Minor additional cleanup so that
+        it will work with autosplit now.
+
+	* lib/Net/UDP.pm: Hoisted initialisation, and corrected for the
+        non-inherited AUTOLOAD problem.
+
+	* lib/Net/Inet.pm: Hoisted initialisation, and corrected for the
+	non-inherited AUTOLOAD problem.  Made auto-split, as well.
+
+	* lib/Net/Gen.pm: Hoisted some things into BEGIN {} blocks so that
+	should-be-constant subs (and xsubs) will be.
+
+	* Gen.xs (cv_constant): Fixed up the constant XSUBs.  Now they
+	really are.
+
+Sun Mar 30 20:34:35 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.pm: Revamped a lot of calling sequences to be a
+	strict match for the docs, after cleaning up the few remaining
+	errant calls in my own code.  This streamlined a lot of the
+	methods, so some fairly common operations should be faster now.
+	Also fixed up references to $myclass so that the "should be
+	autoloaded" functions can be.  In fact, now they are.  Added the
+	condition() method, so that the autoflush() and binmode() calls in
+	accept() and open() can be abstracted.  Some sub-classes may only
+	need to override (or augment) condition() now rather than both
+	open() and accept().
+
 Turned loose as version 0.74 (still alpha because of the Linux problem).
 
 Fri Mar 28 21:48:53 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>

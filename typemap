@@ -14,7 +14,10 @@ Result			T_UV
 #############################################################################
 INPUT
 T_UV
-	$var = ($type)SvUV($arg)
+	$var = ($type)((dowarn && (($type)SvUV($arg)) != SvUV($arg)) ?
+		(warn (\"${Package}::$func_name - $var argument truncated\"),
+			SvUV($arg))
+		: SvUV($arg))
 #############################################################################
 OUTPUT
 T_UV

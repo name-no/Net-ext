@@ -10,6 +10,8 @@
 \.orig$
 \.ORIG$
 \.[Dd][Ii][Ss][Tt]$
+\.old$
 \.bak$
 \.tar\.gz$
 \.tgz$
+\.sig$

@@ -19,25 +19,29 @@ use strict;
 use Carp;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
-my $myclass = &{+sub {(caller(0))[0]}};
-$VERSION = '0.74';
-sub Version { "$myclass v$VERSION" }
+my $myclass;
+BEGIN {
+    $myclass = &{+sub {(caller(0))[0]}};
+    $VERSION = '0.75';
+}
+sub Version () { "$myclass v$VERSION" }
 
 use AutoLoader;
-require Exporter;
+use Exporter ();
 use Net::Inet;
 use Net::Gen;
 use Socket qw(!/^[a-z]/);
 
-@ISA = qw(Exporter Net::Inet);
+BEGIN {
+    @ISA = qw(Exporter Net::Inet);
 
 # Items to export into callers namespace by default
 # (move infrequently used names to @EXPORT_OK below)
-@EXPORT = qw(
-);
+    @EXPORT = qw(
+    );
 
 # Other items we are prepared to export if requested
-@EXPORT_OK = qw(
+    @EXPORT_OK = qw(
 	TCPOPT_EOL
 	TCPOPT_MAXSEG
 	TCPOPT_NOP
@@ -54,17 +58,20 @@ use Socket qw(!/^[a-z]/);
 	TH_RST
 	TH_SYN
 	TH_URG
-);
+    );
 
-%EXPORT_TAGS = (
+    %EXPORT_TAGS = (
 	sockopts	=> [qw(TCP_NODELAY TCP_MAXSEG TCP_RPTR2RXT)],
-);
+    );
 
 ;# sub AUTOLOAD inherited from Net::Gen (via Net::Inet)
 
+;# However, since 5.003_96 will make simple subroutines not inherit AUTOLOAD...
+    *AUTOLOAD = $myclass->can('AUTOLOAD');
+
 ;# pre-declare some things to keep the prototypes in sync
 
-{
+
     my $name;
     local ($^W) = 0;		# prevent sub redefined warnings
     no strict 'refs';		# so we can do the defined() checks
@@ -99,22 +106,32 @@ $myclass->initsockopts( IPPROTO_TCP, \%sockopts );
 
 my $debug = 0;
 
+sub _debug			# $this, [$newval] ; returns oldval
+{
+    my ($this,$newval) = @_;
+    return $this->debug($newval) if ref $this;
+    my $prev = $debug;
+    $debug = 0+$newval if defined $newval;
+    $prev;
+}
+
 sub new
 {
-    print STDERR "${myclass}::new(@_)\n" if $debug;
+    my $whoami = $_[0]->_trace(\@_,1);
     my($class,@args) = @_;
     my $self = $class->SUPER::new(@args);
-    print STDERR "${myclass}::new(@_), self=$self after sub-new\n"
-	if $debug > 1;
+    ($self || $class)->_trace(\@_,2,", self=$self after sub-new");
     if ($self) {
 	;# no new keys for TCP?
 	# register our socket options
 	$self->registerOptions(['IPPROTO_TCP', IPPROTO_TCP+0], \%sockopts);
-	# set our required parameters
-	$self->setparams({type => SOCK_STREAM, proto => IPPROTO_TCP});
+	# set our expected parameters
+	$self->setparams({IPproto => 'tcp',
+			  type => SOCK_STREAM,
+			  proto => IPPROTO_TCP},-1);
 	$self = $self->init(@args) if $class eq $myclass;
     }
-    print STDERR "${myclass}::new returning self=$self\n" if $debug;
+    ($self || $class)->_trace(0,1," returning self=$self");
     $self;
 }
 
@@ -129,10 +146,6 @@ sub _addrinfo			# $this, $sockaddr, [numeric_only]
     @r;
 }
 
-# try to fix the TIESCALAR problem (5.000 and 5.001?)
-
-#eval {new Net::TCP} if $] < 5.002;
-#eval "new " . $myclass . "()" if $] < 5.002;
 
 package Net::TCP::Server;	# here to ease creating server sockets
 
@@ -142,17 +155,19 @@ my $svclass = 'Net::TCP::Server';
 
 # When autosplit/autoload & inherticance work together (5.002 or 5.003),
 # every routine in this (sub-)class should be autoloaded.
+# Problem is, AutoLoader won't let me mix packages, so this class can't
+# autoload right now.
 
 sub new				# classname, [[hostspec,] service,] [\%params]
 {
-    print STDERR "Net::TCP::Server::new(@_)\n" if $debug;
+    $_[0]->_trace(\@_,1);
     my ($xclass, @Args) = @_;
     if (@Args == 2 && ref $Args[1] && ref($Args[1]) eq 'HASH' or
 	@Args == 1 and not ref $Args[0]) {
 	unshift(@Args, undef);	# thishost spec
     }
     my $self = $xclass->SUPER::new(@Args);
-    return undef unless $self;
+    return unless $self;
     $self = $self->init(@Args) if $xclass eq $svclass;
     $self;
 }
@@ -164,14 +179,14 @@ sub init			# $self, [@stuff] ; returns updated $self
 	@Args == 1 and not ref $Args[0]) {
 	unshift(@Args, undef);	# thishost spec
     }
-    return undef unless $self->_hostport('this',\@Args);
-    return undef unless $self->SUPER::init;
+    return unless $self->_hostport('this',\@Args);
+    return unless $self->SUPER::init;
     $self->setsopt('SO_REUSEADDR',1);
     if ($self->getparam('srcaddrlist') && !$self->isbound) {
-	return undef unless $self->bind;
+	return unless $self->bind;
     }
     if ($self->isbound && !$self->didlisten) {
-	return undef unless $self->listen;
+	return unless $self->listen;
     }
     $self;
 }
@@ -181,17 +196,6 @@ sub init			# $self, [@stuff] ; returns updated $self
 package Net::TCP;		# back to starting package for autosplit
 
 1;
-
-# these would have been autoloaded, but autoload and inheritance conflict
-
-sub setdebug			# $this, [bool, [norecurse]]
-{
-    my $prev = $debug;
-    my $this = shift;
-    $debug = @_ ? $_[0] : 1;
-    @_ > 1 && $_[1] ? $prev :
-	$prev . $this->SUPER::setdebug(@_);
-}
 
 # autoloaded methods go after the END token (& pod) below
 
@@ -313,7 +317,7 @@ Example:
     print $y while defined($y = $x);
     untie $x;
 
-This is an expensive re-implementation of C<finger -s> on many
+This is an expensive re-implementation of F<finger -s> on many
 machines.
 
 Each assignment to the tied scalar is really a call to the C<put>

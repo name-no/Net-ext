@@ -19,9 +19,12 @@ use strict;
 use Carp;
 use vars qw($VERSION @ISA);
 
-my $myclass = &{+sub {(caller(0))[0]}};
-$VERSION = '0.74';
-sub Version { "$myclass v$VERSION" }
+my $myclass;
+BEGIN {
+    $myclass = &{+sub {(caller(0))[0]}};
+    $VERSION = '0.75';
+}
+sub Version () { "$myclass v$VERSION" }
 
 use AutoLoader;
 
@@ -29,7 +32,9 @@ use Net::Inet;
 use Net::Gen;
 use Socket qw(!/^[a-z]/);
 
-@ISA = qw(Net::Inet);
+BEGIN {
+    @ISA = qw(Net::Inet);
+}
 
 # Preloaded methods go here.  Autoload methods go after
 # __END__, and are processed by the autosplit program.
@@ -60,8 +65,6 @@ sub _addrinfo			# $this, $sockaddr, [numeric_only]
     }
     @r;
 }
-
-# autoload-wannabe's go here
 
 # autoloaded methods go after the END token (& pod) below
 

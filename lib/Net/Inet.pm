@@ -19,20 +19,26 @@ use strict;
 use Carp;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
-my $myclass = &{+sub {(caller(0))[0]}};
-$VERSION = '0.74';
-sub Version { "$myclass v$VERSION" }
+my $myclass;
+
+BEGIN {
+    $myclass = &{+sub {(caller(0))[0]}};
+    $VERSION = '0.75';
+}
+
+sub Version () { "$myclass v$VERSION" }
 
 use AutoLoader;
-require Exporter;
-use Net::Gen qw(:ALL);
+use Exporter ();
+use Net::Gen 0.75 qw(:ALL);
 use Socket qw(!/^[a-z]/ /^inet_/);
 
-@ISA = qw(Exporter Net::Gen);
+BEGIN {
+    @ISA = qw(Exporter Net::Gen);
 
 # Items to export into callers namespace by default
 # (move infrequently used names to @EXPORT_OK below)
-@EXPORT = qw(
+    @EXPORT = qw(
 	INADDR_ALLHOSTS_GROUP
 	INADDR_ANY
 	INADDR_BROADCAST
@@ -63,10 +69,10 @@ use Socket qw(!/^[a-z]/ /^inet_/);
 	inet_ntoa
 	ntohl
 	ntohs
-);
+    );
 
 # Other items we are prepared to export if requested
-@EXPORT_OK = qw(
+    @EXPORT_OK = qw(
 	ICMP_ADVLENMIN
 	ICMP_ECHO
 	ICMP_ECHOREPLY
@@ -184,9 +190,9 @@ use Socket qw(!/^[a-z]/ /^inet_/);
 	SUBNETSHIFT
 	pack_sockaddr_in
 	unpack_sockaddr_in
-);
+    );
 
-%EXPORT_TAGS = (
+    %EXPORT_TAGS = (
 	sockopts	=> [qw(IP_HDRINCL IP_RECVDSTADDR IP_RECVOPTS
 			       IP_RECVRETOPTS IP_TOS IP_TTL IP_ADD_MEMBERSHIP
 			       IP_DROP_MEMBERSHIP IP_MULTICAST_IF
@@ -243,28 +249,15 @@ use Socket qw(!/^[a-z]/ /^inet_/);
 			       IP_DEFAULT_MULTICAST_TTL IP_DROP_MEMBERSHIP
 			       IP_MAX_MEMBERSHIPS IP_MULTICAST_IF
 			       IP_MULTICAST_LOOP IP_MULTICAST_TTL)],
-);
+    );
+}
 
 ;# sub AUTOLOAD inherited from Net::Gen
 
-;# Get the prototypes right for the autoloaded values, to avoid confusing
-;# the caller's code with changes in prototypes.
+;# inherited autoload for 'regular' subroutines is being removed in
+;# 5.003_96, so cheat a little.
 
-;# sub inet_aton in Socket.xs
-
-sub inet_addr;			# (helps with -w)
-*inet_addr = \&inet_aton;	# same code for old interface
-
-{
-    my $n;
-    no strict 'refs';
-    local ($^W) = 0;
-    for $n (@EXPORT, @EXPORT_OK) {
-	unless (defined &$n) {
-	    eval "sub $n () ;";
-	}
-    }
-}
+BEGIN { *AUTOLOAD = $myclass->can('AUTOLOAD') }
 
 # Preloaded methods go here.  Autoload methods go after __END__, and are
 # processed by the autosplit program.
@@ -348,40 +341,72 @@ sub unpack_sockaddr_in ($)	# $sockaddr_in; returns ($fam,$port,$in_addr)
     ($fam,$port,$inaddr);
 }
 
+;# Get the prototypes right for the autoloaded values, to avoid confusing
+;# the caller's code with changes in prototypes.
+
+;# sub inet_aton in Socket.xs
+
+sub inet_addr;			# (helps with -w)
+BEGIN {
+    *inet_addr = \&inet_aton;	# same code for old interface
+
+    my $n;
+    no strict 'refs';
+    local ($^W) = 0;
+    for $n (@EXPORT, @EXPORT_OK) {
+	unless (defined &$n) {
+	    eval "sub $n () ;";
+	}
+    }
+}
+
+
 my $debug = 0;
 
-my @hostkeys = qw(thishost desthost host);
-my @hostkeyHandlers = (\&_sethost) x @hostkeys;
-my @portkeys = qw(thisservice thisport destservice destport service port);
-my @portkeyHandlers = (\&_setport) x @portkeys;
+sub _debug			# $this, [$newval] ; returns oldval
+{
+    my ($this,$newval) = @_;
+    return $this->debug($newval) if ref $this;
+    my $prev = $debug;
+    $debug = 0+$newval if defined $newval;
+    $prev;
+}
+
+my %keyhandlers;
+my @hostkeys = qw(thishost desthost);
+@keyhandlers{@hostkeys} = (\&_sethost) x @hostkeys;
+my @portkeys = qw(thisservice thisport destservice destport);
+@keyhandlers{@portkeys} = (\&_setport) x @portkeys;
 my @protokeys = qw(IPproto proto);
-my @protokeyHandlers = (\&_setproto) x @protokeys;
+@keyhandlers{@protokeys} = (\&_setproto) x @protokeys;
 # Don't include "handled" keys in this list, since that's redundant.
 my @Keys = qw(lclhost lcladdr lclservice lclport
 	      remhost remaddr remservice remport);
 
 sub new				# $class, [\%params]
 {
-    print STDERR "${myclass}::new(@_)\n" if $debug;
+    my $whoami = $_[0]->_trace(\@_,1);
     my($class,@Args,$self) = @_;
     $self = $class->SUPER::new(@Args);
-    print STDERR "${myclass}::new(@_), self=$self after sub-new\n"
-	if $debug > 1;
+    $class->_trace(\@_,2,", self=$self after sub-new");
     if ($self) {
 	dump if $debug > 1 and
 	    ref $self ne $class || "$self" !~ /HASH/;
+	# init object debug level
+	$self->setparams({'debug'=>$debug},-1);
 	# register our keys and their handlers
 	$self->registerParamKeys(\@Keys);
-	$self->registerParamHandlers(\@portkeys,\@portkeyHandlers);
-	$self->registerParamHandlers(\@hostkeys,\@hostkeyHandlers);
-	$self->registerParamHandlers(\@protokeys,\@protokeyHandlers);
+	$self->registerParamHandlers(\%keyhandlers);
 	# register our socket options
 	$self->registerOptions('IPPROTO_IP', &IPPROTO_IP()+0, \%sockopts);
-	# set our required parameters
-	$self->setparams({PF => PF_INET, AF => AF_INET});
+	# set our expected parameters
+	$self->setparams({PF => PF_INET, AF => AF_INET},-1);
 	$self = $self->init(@Args) if $class eq $myclass;
+	$self->_trace([],1," returning self=$self");
     }
-    print STDERR "${myclass}::new returning self=$self\n" if $debug;
+    else {
+	$class->_trace([],1," returning self=(undef)");
+    }
     $self;
 }
 
@@ -410,7 +435,7 @@ sub _hostport			# $self, {'this'|'dest'}, [\]@list
 
 sub init			# $self, [\%params || @speclist]
 {				# returns updated $self
-    print STDERR "${myclass}::init(@_)\n" if $debug > 1;
+    $_[0]->_trace(\@_,2);
     my($self,@args) = @_;
     return $self unless $self = $self->SUPER::init(@args);
     if (@args > 1 || @args == 1 && (!ref $args[0] || ref $args[0] ne 'HASH')) {
@@ -422,7 +447,7 @@ sub init			# $self, [\%params || @speclist]
 	    return undef;	# and refuse to make less object than requested
 	}
     }
-    if ($self->isopen and $self->getparam('dstaddrlist')) {
+    if ($self->getparam('dstaddrlist')) {
 	# have enough object already to attempt the connection
 	return undef unless $self->connect; # make no less object than requested
     }
@@ -454,7 +479,7 @@ sub _sethost			# $self,$key,$newval
 		qw(dstaddrlist dstaddr remhost remaddr remport remservice);
 	}
 	splice(@delkeys, 1) if @delkeys and $self->isconnected;
-	$self->delparams(@delkeys) if @delkeys;
+	$self->delparams(\@delkeys) if @delkeys;
 	return '';		# ok to delete
     }
     # here we're really trying to set some kind of address (we think)
@@ -492,7 +517,6 @@ sub _sethost			# $self,$key,$newval
     return '' unless
 	($port = $$self{Parms}{$pkey}) =~ /^\d+$/s or
 	    !defined $port and $pkey eq 'thisport'; # allow for 'bind'
-    return '' if $key eq 'host'; # don't know yet whether 'dest' or 'this'
     my $af = $self->getparam('AF',AF_INET,1);
     for (@addrs) {
 	$_ = pack_sockaddr_in($af, $port+0, $_);
@@ -503,7 +527,7 @@ sub _sethost			# $self,$key,$newval
     $_[2] = $addr;		# update the canonical representation to store
     print STDERR " - ${myclass}::_sethost $self $key ",
 	$self->format_addr($addr,1),"\n"
-	    if $debug;
+	    if $self->debug;
     '';				# return nullstring for goodness
 }
 
@@ -512,7 +536,7 @@ sub _setport			# ($self,$key,$newval)
     my($self,$key,$newval) = @_;
     return "Invalid arguments to ${myclass}::_setport(@_), called"
 	if @_ != 3 || !exists($$self{Keys}{$key});
-    print STDERR " - ${myclass}::_setport(@_)\n" if $debug;
+    my $whoami = $self->_trace(\@_,1);
     my($skey,$hkey,$pkey,$svc,$port,$proto,$type,$host,$reval);
     my($pname,$defport,@serv);
     ($skey = $key) =~ s/port$/service/;	# a key known to be for a service
@@ -520,8 +544,7 @@ sub _setport			# ($self,$key,$newval)
     ($hkey = $pkey) =~ s/port$/host/; # another for calling _sethost
     if (!defined $newval) {	# deleting a service or port
 	delete $$self{Parms}{$skey};
-	delete $$self{Parms}{$pkey} unless
-	    $pkey ne 'port' and $self->isconnected;
+	delete $$self{Parms}{$pkey} unless $self->isconnected;
 	my @delkeys;
 	if ($pkey eq 'thisport') {
 	    @delkeys = qw(srcaddrlist srcaddr);
@@ -530,7 +553,7 @@ sub _setport			# ($self,$key,$newval)
 	    @delkeys = qw(dstaddrlist dstaddr);
 	}
 	pop(@delkeys) if @delkeys and $self->isconnected;
-	$self->delparams(@delkeys) if @delkeys;
+	$self->delparams(\@delkeys) if @delkeys;
 	return '';		# ok to delete
     }
     # here, we're trying to set a port or service
@@ -590,14 +613,13 @@ sub _setport			# ($self,$key,$newval)
     $$self{Parms}{$skey} = $svc if $svc; # in case no port change
     $_[2] = $reval;
     print STDERR " - ${myclass}::_setport $self $skey $svc\n" if
-	$debug and $svc;
+	$self->debug and $svc;
     print STDERR " - ${myclass}::_setport $self $pkey $port\n" if
-	$debug and defined $port;
+	$self->debug and defined $port;
     return '' if defined($$self{Parms}{$pkey}) and
 	$$self{Parms}{$pkey} == $port; # nothing to update if same number
     $$self{Parms}{$pkey} = $port; # in case was service key
     # check for whether we can ask _sethost to set {dst,src}addrlist now
-    return '' if $pkey eq 'port'; # not if don't know local/remote yet
     return '' unless
 	$host = $$self{Parms}{$hkey} or $hkey eq 'thishost';
     $host = '0' if !defined $host; # 'thishost' value was null
@@ -692,32 +714,6 @@ sub format_addr			# $this, $sockaddr, [numeric_only]
 
 1;
 
-# these would have been autoloaded, but autoload and inheritance conflict
-
-sub setdebug			# $this, [bool, [norecurse]]
-{
-    my $prev = $debug;
-    my $this = shift;
-    $debug = @_ ? $_[0] : 1;
-    @_ > 1 && $_[1] ? $prev :
-	$prev . $this->SUPER::setdebug(@_);
-}
-
-sub bind			# $self, [\]@([host],[port])
-{
-    my($self,@args) = @_;
-    return undef if @args and not $self->_hostport('this',@args);
-    $self->SUPER::bind;
-}
-
-sub unbind			# $self
-{
-    my($self,@args) = @_;
-    carp "Excess args to ${myclass}::unbind ignored" if @args;
-    $self->delparams([qw(thishost thisport)]) || return undef;
-    $self->SUPER::unbind;
-}
-
 # autoloaded methods go after the END token (& pod) below
 
 __END__
@@ -753,22 +749,21 @@ Usage:
 
 Returns a newly-initialised object of the given class.  If called
 for a derived class, no validation of the supplied parameters
-will be performed.  (This is so that the derived class can add
-the parameter validation it needs to the object before allowing
+will be performed.  (This is so that the derived class can set up
+the parameter validation it needs in the object before allowing
 the validation.)  Otherwise, it will cause the parameters to be
 validated by calling its C<init> method.  In particular, this
-means that if both a host and a service are given, and a protocol
-and socket type are already known, then an object will only be
-returned if a connect() call was successful.
+means that if both a host and a service are given, then an object
+will only be returned if a connect() call was successful.
 
 =item init
 
 Usage:
 
-    return undef unless $self = $self->init;
-    return undef unless $self = $self->init(\%parameters);
-    return undef unless $self = $self->init($host, $service);
-    return undef unless $self = $self->init($host, $service, \%parameters);
+    return undef unless $self->init;
+    return undef unless $self->init(\%parameters);
+    return undef unless $self->init($host, $service);
+    return undef unless $self->init($host, $service, \%parameters);
 
 Verifies that all previous parameter assignments are valid (via
 C<checkparams>).  Returns the incoming object on success, and
@@ -781,11 +776,13 @@ Usage:
 
     $ok = $obj->bind;
     $ok = $obj->bind($host, $service);
+    $ok = $obj->bind($host, $service, \%parameters);
 
 Sets up the C<srcaddrlist> object parameter with the specified
 $host and $service arguments if supplied (via the C<thishost> and
 C<thisport> object parameters), and then returns the value from
-the inherited C<bind> method.
+the inherited C<bind> method.  Changing of parameters is also
+allowed, mainly for setting debug status or timeouts.
 
 Example:
 
@@ -807,14 +804,15 @@ Usage:
 
     $ok = $obj->connect;
     $ok = $obj->connect($host, $service);
-    $ok = $obj->connect([$host, $service]);
+    $ok = $obj->connect($host, $service, \%parameters);
 
 Attempts to establish a connection for the object.  If the $host
 or $service arguments are specified, they will be used to set the
 C<desthost> and C<destservice>/C<destport> object parameters,
 with side-effects of setting up the C<dstaddrlist> object
 parameter.  Then, the result of a call to the inherited
-C<connect> method will be returned.
+C<connect> method will be returned.  Changing of parameters is
+also allowed, mainly for setting debug status or timeouts.
 
 =item format_addr
 
@@ -1001,46 +999,46 @@ an invocation of the C<connect> method.
 =item lcladdr
 
 The local IP address stashed by the C<getsockinfo> method after a
-successful connect() call.
+successful bind() or connect() call.
 
 =item lclhost
 
 The local hostname stashed by the C<getsockinfo> method after a
-successful connect(), as resolved from the F<lcladdr> object
-parameter.
+successful bind() or connect(), as resolved from the F<lcladdr>
+object parameter.
 
 =item lclport
 
 The local port number stashed by the C<getsockinfo> method after a
-successful connect() call.
+successful bind() or connect() call.
 
 =item lclservice
 
 The local service name stashed by the C<getsockinfo> method after
-a successful connect(), as resolved from the F<lclport> object
-parameter.
+a successful bind() or connect(), as resolved from the F<lclport>
+object parameter.
 
 =item remaddr
 
 The remote IP address stashed by the C<getsockinfo> method after a
-successful connect() call.
+successful bind() or connect() call.
 
 =item remhost
 
 The remote hostname stashed by the C<getsockinfo> method after a
-successful connect(), as resolved from the F<remaddr> object
-parameter.
+successful bind() or connect(), as resolved from the F<remaddr>
+object parameter.
 
 =item remport
 
 The remote port number stashed by the C<getsockinfo> method after a
-successful connect() call.
+successful bind() or connect() call.
 
 =item remservice
 
 The remote service name stashed by the C<getsockinfo> method after
-a successful connect(), as resolved from the F<remport> object
-parameter.
+a successful bind() or connect(), as resolved from the F<remport>
+object parameter.
 
 =back
 
@@ -1086,6 +1084,7 @@ As you'd expect, I think.
 Usage:
 
     $connect_address = pack_sockaddr_in($family, $port, $in_addr);
+    $connect_address = pack_sockaddr_in($port, $in_addr);
 
 Returns the packed C<struct sockaddr_in> corresponding to the
 provided $family, $port, and $in_addr arguments.  The $family and
@@ -1093,7 +1092,7 @@ $port arguments must be numbers, and the $in_addr argument must
 be a packed C<struct in_addr> such as the trailing elements from
 perl's gethostent() return list.  This differs from the
 implementation in the C<Socket> module in that the C<$family>
-argument is present and used.
+argument is available (though optional).
 
 =item unpack_sockaddr_in
 
@@ -1268,72 +1267,83 @@ C<unpack_sockaddr_in>
 
 =item tags
 
-	sockopts	=> [qw(IP_HDRINCL IP_RECVDSTADDR IP_RECVOPTS
-			       IP_RECVRETOPTS IP_TOS IP_TTL IP_ADD_MEMBERSHIP
-			       IP_DROP_MEMBERSHIP IP_MULTICAST_IF
-			       IP_MULTICAST_LOOP IP_MULTICAST_TTL
-			       IP_OPTIONS IP_RETOPTS)]
-	routines	=> [qw(pack_sockaddr_in unpack_sockaddr_in
-			       inet_ntoa inet_aton inet_addr
-			       htonl ntohl htons ntohs)]
-	icmpvalues	=> [qw(ICMP_ADVLENMIN ICMP_ECHO ICMP_ECHOREPLY
-			       ICMP_IREQ ICMP_IREQREPLY ICMP_MASKLEN
-			       ICMP_MASKREPLY ICMP_MASKREQ ICMP_MAXTYPE
-			       ICMP_MINLEN ICMP_PARAMPROB ICMP_REDIRECT
-			       ICMP_REDIRECT_HOST ICMP_REDIRECT_NET
-			       ICMP_REDIRECT_TOSHOST ICMP_REDIRECT_TOSNET
-			       ICMP_SOURCEQUENCH ICMP_TIMXCEED
-			       ICMP_TIMXCEED_INTRANS ICMP_TIMXCEED_REASS
-			       ICMP_TSLEN ICMP_TSTAMP ICMP_TSTAMPREPLY
-			       ICMP_UNREACH ICMP_UNREACH_HOST
-			       ICMP_UNREACH_NEEDFRAG ICMP_UNREACH_NET
-			       ICMP_UNREACH_PORT ICMP_UNREACH_PROTOCOL
-			       ICMP_UNREACH_SRCFAIL)]
-	ipoptions	=> [qw(IPOPT_CONTROL IPOPT_DEBMEAS IPOPT_EOL
-			       IPOPT_LSRR IPOPT_MINOFF IPOPT_NOP IPOPT_OFFSET
-			       IPOPT_OLEN IPOPT_OPTVAL
-			       IPOPT_RESERVED1 IPOPT_RESERVED2
-			       IPOPT_RR IPOPT_SATID
-			       IPOPT_SECURITY IPOPT_SECUR_CONFID
-			       IPOPT_SECUR_EFTO IPOPT_SECUR_MMMM
-			       IPOPT_SECUR_RESTR IPOPT_SECUR_SECRET
-			       IPOPT_SECUR_TOPSECRET IPOPT_SECUR_UNCLASS
-			       IPOPT_SSRR
-			       IPOPT_TS IPOPT_TS_PRESPEC
-			       IPOPT_TS_TSANDADDR IPOPT_TS_TSONLY)]
-	iptosvalues	=> [qw(IPTOS_LOWDELAY IPTOS_PREC_CRITIC_ECP
-			       IPTOS_PREC_FLASH IPTOS_PREC_FLASHOVERRIDE
-			       IPTOS_PREC_IMMEDIATE IPTOS_PREC_INTERNETCONTROL
-			       IPTOS_PREC_NETCONTROL IPTOS_PREC_PRIORITY
-			       IPTOS_PREC_ROUTINE IPTOS_RELIABILITY
-			       IPTOS_THROUGHPUT)]
-	protocolvalues	=> [qw(INADDR_ALLHOSTS_GROUP INADDR_ANY
-			       INADDR_BROADCAST INADDR_LOOPBACK
-			       INADDR_MAX_LOCAL_GROUP INADDR_NONE
-			       INADDR_UNSPEC_GROUP
-			       IP_DF IP_MAXPACKET IP_MF IP_MSS
-			       IPPORT_RESERVED IPPORT_USERRESERVED
-			       IPPROTO_EGP IPPROTO_EON IPPROTO_GGP
-			       IPPROTO_HELLO IPPROTO_ICMP IPPROTO_IDP
-			       IPPROTO_IGMP IPPROTO_IP IPPROTO_MAX
-			       IPPROTO_PUP IPPROTO_RAW IPPROTO_TCP IPPROTO_TP
-			       IPPROTO_UDP
-			       IPFRAGTTL
-			       IPTTLDEC IPVERSION)]
-	ipmulticast	=> [qw(IP_ADD_MEMBERSHIP IP_DEFAULT_MULTICAST_LOOP
-			       IP_DEFAULT_MULTICAST_TTL IP_DROP_MEMBERSHIP
-			       IP_MAX_MEMBERSHIPS IP_MULTICAST_IF
-			       IP_MULTICAST_LOOP IP_MULTICAST_TTL)]
+The following :tags are in C<%EXPORT_TAGS>, with the associated exportable
+values as listed:
+
+=over 4
+
+=item :sockopts
+
+C<IP_HDRINCL> C<IP_RECVDSTADDR> C<IP_RECVOPTS> C<IP_RECVRETOPTS> C<IP_TOS>
+C<IP_TTL> C<IP_ADD_MEMBERSHIP> C<IP_DROP_MEMBERSHIP> C<IP_MULTICAST_IF>
+C<IP_MULTICAST_LOOP> C<IP_MULTICAST_TTL> C<IP_OPTIONS> C<IP_RETOPTS>
+
+=item :routines
+
+C<pack_sockaddr_in> C<unpack_sockaddr_in> C<inet_ntoa> C<inet_aton>
+C<inet_addr> C<htonl> C<ntohl> C<htons> C<ntohs>
+
+=item :icmpvalues
+
+C<ICMP_ADVLENMIN> C<ICMP_ECHO> C<ICMP_ECHOREPLY> C<ICMP_IREQ>
+C<ICMP_IREQREPLY> C<ICMP_MASKLEN> C<ICMP_MASKREPLY> C<ICMP_MASKREQ>
+C<ICMP_MAXTYPE> C<ICMP_MINLEN> C<ICMP_PARAMPROB> C<ICMP_REDIRECT>
+C<ICMP_REDIRECT_HOST> C<ICMP_REDIRECT_NET> C<ICMP_REDIRECT_TOSHOST>
+C<ICMP_REDIRECT_TOSNET> C<ICMP_SOURCEQUENCH> C<ICMP_TIMXCEED>
+C<ICMP_TIMXCEED_INTRANS> C<ICMP_TIMXCEED_REASS> C<ICMP_TSLEN> C<ICMP_TSTAMP>
+C<ICMP_TSTAMPREPLY> C<ICMP_UNREACH> C<ICMP_UNREACH_HOST>
+C<ICMP_UNREACH_NEEDFRAG> C<ICMP_UNREACH_NET> C<ICMP_UNREACH_PORT>
+C<ICMP_UNREACH_PROTOCOL> C<ICMP_UNREACH_SRCFAIL>
+
+=item :ipoptions
+
+C<IPOPT_CONTROL> C<IPOPT_DEBMEAS> C<IPOPT_EOL> C<IPOPT_LSRR> C<IPOPT_MINOFF>
+C<IPOPT_NOP> C<IPOPT_OFFSET> C<IPOPT_OLEN> C<IPOPT_OPTVAL> C<IPOPT_RESERVED1>
+C<IPOPT_RESERVED2> C<IPOPT_RR> C<IPOPT_SATID> C<IPOPT_SECURITY>
+C<IPOPT_SECUR_CONFID> C<IPOPT_SECUR_EFTO> C<IPOPT_SECUR_MMMM>
+C<IPOPT_SECUR_RESTR> C<IPOPT_SECUR_SECRET> C<IPOPT_SECUR_TOPSECRET>
+C<IPOPT_SECUR_UNCLASS> C<IPOPT_SSRR> C<IPOPT_TS> C<IPOPT_TS_PRESPEC>
+C<IPOPT_TS_TSANDADDR> C<IPOPT_TS_TSONLY>
+
+=item :iptosvalues
+
+C<IPTOS_LOWDELAY> C<IPTOS_PREC_CRITIC_ECP> C<IPTOS_PREC_FLASH>
+C<IPTOS_PREC_FLASHOVERRIDE> C<IPTOS_PREC_IMMEDIATE>
+C<IPTOS_PREC_INTERNETCONTROL> C<IPTOS_PREC_NETCONTROL>
+C<IPTOS_PREC_PRIORITY> C<IPTOS_PREC_ROUTINE> C<IPTOS_RELIABILITY>
+C<IPTOS_THROUGHPUT>
+
+=item :protocolvalues
+
+C<INADDR_ALLHOSTS_GROUP> C<INADDR_ANY> C<INADDR_BROADCAST>
+C<INADDR_LOOPBACK> C<INADDR_MAX_LOCAL_GROUP> C<INADDR_NONE>
+C<INADDR_UNSPEC_GROUP> C<IP_DF> C<IP_MAXPACKET> C<IP_MF> C<IP_MSS>
+C<IPPORT_RESERVED> C<IPPORT_USERRESERVED> C<IPPROTO_EGP> C<IPPROTO_EON>
+C<IPPROTO_GGP> C<IPPROTO_HELLO> C<IPPROTO_ICMP> C<IPPROTO_IDP>
+C<IPPROTO_IGMP> C<IPPROTO_IP> C<IPPROTO_MAX> C<IPPROTO_PUP>
+C<IPPROTO_RAW> C<IPPROTO_TCP> C<IPPROTO_TP> C<IPPROTO_UDP> C<IPFRAGTTL>
+C<IPTTLDEC> C<IPVERSION>
+
+=item :ipmulticast
+
+C<IP_ADD_MEMBERSHIP> C<IP_DEFAULT_MULTICAST_LOOP>
+C<IP_DEFAULT_MULTICAST_TTL> C<IP_DROP_MEMBERSHIP>
+C<IP_MAX_MEMBERSHIPS> C<IP_MULTICAST_IF> C<IP_MULTICAST_LOOP>
+C<IP_MULTICAST_TTL>
+
+=back
+
+Z<>
 
 =back
 
 =head1 NOTES
 
-Anywhere a L<service> or L<port> argument is used above, the
+Anywhere a F<service> or F<port> argument is used above, the
 allowed syntax is either a service name, a port number, or a
 service name with a caller-supplied default port number.
 Examples are C<'echo'>, C<7>, and C<'echo(7)'>, respectively.
-For a L<service> argument, a bare port number must be
+For a F<service> argument, a bare port number must be
 translatable into a service name with getservbyport() or an error
 will result.  A service name must be translatable into a port
 with getservbyname() or an error will result.  However, a service
@@ -1345,7 +1355,7 @@ fails.
 
 This is still missing a way to pretty-print the connection
 information after a successful connect() or accept().
-[Not still true, but the following yet holds.]  This is
+[Not strictly still true, but the following yet holds.]  This is
 largely because I'm not satisfied with any of the obvious ways to
 do it.  Now taking suggestions.  Proposals so far:
 
@@ -1370,3 +1380,26 @@ Spider Boardman F<E<lt>spider@Orb.Nashua.NH.USE<gt>>
 #other sections should be added, sigh.
 
 #any real autoloaded methods go after this line
+
+
+sub setdebug			# $this, [bool, [norecurse]]
+{
+    my $this = shift;
+    $this->_debug($_[0]) .
+	((@_ > 1 && $_[1]) ? '' : $this->SUPER::setdebug(@_));
+}
+
+sub bind			# $self, [\]@([host],[port])
+{
+    my($self,@args) = @_;
+    return if @args and not $self->_hostport('this',@args);
+    $self->SUPER::bind;
+}
+
+sub unbind			# $self
+{
+    my($self,@args) = @_;
+    carp "Excess args to ${myclass}::unbind ignored" if @args;
+    $self->delparams([qw(thishost thisport)]) || return undef;
+    $self->SUPER::unbind;
+}

@@ -19,34 +19,41 @@ use strict;
 use Carp;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
-my $myclass = &{+sub {(caller(0))[0]}};
-$VERSION = '0.74';
-
+my $myclass;
+BEGIN {
+    $myclass = &{+sub {(caller(0))[0]}};
+    $VERSION = '0.75';
+}
 sub Version { "$myclass v$VERSION" }
 
 use AutoLoader;
-require Exporter;
+use Exporter ();
 use Net::Gen qw(/pack_sockaddr$/);
 use Socket qw(!pack_sockaddr_un !unpack_sockaddr_un);
 
-@ISA = qw(Exporter Net::Gen);
+BEGIN {
+    @ISA = qw(Exporter Net::Gen);
 
 # Items to export into callers namespace by default.
 # (Move infrequently used names to @EXPORT_OK below.)
 
-@EXPORT = qw(
-);
+    @EXPORT = qw(
+    );
 
-@EXPORT_OK = qw(
+    @EXPORT_OK = qw(
 	pack_sockaddr_un
 	unpack_sockaddr_un
-);
+    );
 
-%EXPORT_TAGS = (
+    %EXPORT_TAGS = (
 	routines	=> [qw(pack_sockaddr_un unpack_sockaddr_un)],
-);
+    );
 
 ;# sub AUTOLOAD inherited from Net::Gen
+
+;# since 5.003_96 will break simple subroutines with inheritid autoload, cheat
+    *AUTOLOAD = $myclass->can('AUTOLOAD');
+}
 
 # Preloaded methods go here.  Autoload methods go after __END__, and are
 # processed by the autosplit program.
@@ -99,31 +106,35 @@ sub unpack_sockaddr_un ($)	# $sockaddr_un; returns [$fam,] $path
 
 my $debug = 0;
 
+sub _debug			# $this, [$newval] ; returns oldval
+{
+    my ($this,$newval) = @_;
+    return $this->debug($newval) if ref $this;
+    my $prev = $debug;
+    $debug = 0+$newval if defined $newval;
+    $prev;
+}
+
 my %keyhandlers = (thispath => \&_setbindpath,
 		   destpath => \&_setconnpath,
 );
-my @handledkeys = keys %keyhandlers;
-my @keyhandlers = values %keyhandlers;
 
 my @Keys = qw();
 
 sub new				# $class, [\%params]
 {
-    print STDERR "${myclass}::new(@_)\n" if $debug;
+    my $whoami = $_[0]->_trace(\@_,1);
     my($class,@Args,$self) = @_;
     $self = $class->SUPER::new(@Args);
-    print STDERR "${myclass}::new(@_), self=$self after sub-new\n"
-	if $debug > 1;
+    ($self || $class)->_trace(\@_,2,", self=$self after sub-new");
     if ($self) {
-	dump if $debug > 1 and
-	    ref $self ne $class || "$self" !~ /HASH/;
 	# register our keys and their handlers
 	$self->registerParamKeys(\@Keys) if @Keys;
-	$self->registerParamHandlers(\@handledkeys,\@keyhandlers);
+	$self->registerParamHandlers(\%keyhandlers);
 	# register our socket options
 	# none for AF_UNIX?
-	# set our required parameters
-	$self->setparams({PF => PF_UNIX, AF => AF_UNIX});
+	# set our expected parameters
+	$self->setparams({PF => PF_UNIX, AF => AF_UNIX},-1);
 	$self = $self->init(@Args) if $class eq $myclass;
     }
     print STDERR "${myclass}::new returning self=$self\n" if $debug;
@@ -147,7 +158,8 @@ sub _setbindpath		# $self, 'thispath', $path
 	$_[2] = undef;
     }
     else {
-	$$self{Parms}{srcaddrlist} = [Socket::pack_sockaddr_un($path)];
+	$$self{Parms}{srcaddrlist} =
+	    [pack_sockaddr_un($self->getparam('AF',AF_UNIX,1), $path)];
     }
     '';
 }
@@ -168,7 +180,8 @@ sub _setconnpath		# $self, 'destpath', $path
 	"$what parameter has no path: $path";
     }
     else {			# just try it here
-	$$self{Parms}{dstaddrlist} = [Socket::pack_sockaddr_un($path)];
+	$$self{Parms}{dstaddrlist} =
+	    [pack_sockaddr_un($self->getparam('AF',AF_UNIX,1), $path)];
 	'';
     }
 }
@@ -188,17 +201,17 @@ sub _init			# $self, whatpath[, $path][, \%params]
 	if @args == 2 and !$parms or @args > 2 or !$what;
     $parms ||= {};
     $$parms{$what} = $path if defined $path;
-    return undef unless $self->SUPER::init($parms);
+    return unless $self->SUPER::init($parms);
     if ($self->getparams([qw(srcaddr srcaddrlist dstaddr dstaddrlist)],1) >0) {
 	$self->setparams({type=>SOCK_DGRAM},-1);
-	return undef unless $self->isopen or $self->open;
+	return unless $self->isopen or $self->open;
 	$self->setsopt('SO_REUSEADDR',1)
 	    if (ref $self) =~ /::Server$/;
 	if ($self->getparams([qw(srcaddr srcaddrlist)],1) > 0) {
-	    return undef unless $self->isbound or $self->bind;
+	    return unless $self->isbound or $self->bind;
 	}
 	if ($self->getparams([qw(dstaddr dstaddrlist)],1) > 0) {
-	    return undef unless $self->isconnected or $self->connect;
+	    return unless $self->isconnected or $self->connect;
 	}
     }
     $self;
@@ -212,52 +225,41 @@ sub init			# $self [, $destpath][, \%params]
 
 1;
 
-# these would have been autoloaded, but autoload and inheritance conflict
+# These would have been autoloaded, but AutoLoader doesn't like that yet.
 
 package Net::UNIX::Server;
 
-my $srvpkg = &{+sub {(caller(0))[0]}};
-
 use vars qw(@ISA);
 
-@ISA = $myclass;
+my $srvpkg;
+BEGIN {
+    $srvpkg = &{+sub {(caller(0))[0]}};
+    @ISA = $myclass;
+}
 
 sub new
 {
-    print STDERR "${srvpkg}::new(@_)\n" if $debug;
+    my $whoami = $_[0]->_trace(\@_,1);
     my($class,@Args,$self) = @_;
     $self = $class->SUPER::new(@Args);
-    print STDERR "${myclass}::new(@_), self=$self after sub-new\n"
-	if $debug > 1;
+    ($class || $self)->_trace(\@_,2," self=$self after sub-new");
     if ($self) {
 	$self = $self->init(@Args) if $class eq $myclass;
     }
-    print STDERR "${myclass}::new returning self=$self\n" if $debug;
+    ($class || $self)->_trace(0,1," returning self=$self");
     $self;
 }
 
 sub init			# $self [, $thispath][, \%params]
 {
     my ($self,@args) = @_;
-    return undef unless $self->_init('thispath',@args);
-    return undef unless
+    return unless $self->_init('thispath',@args);
+    return unless
 	$self->isconnected or $self->didlisten or $self->listen;
     $self;
 }
 
 package Net::UNIX;		# back to original package for Autoloader
-
-sub bind			# $self [, $thispath]
-{
-    my($self,$path) = @_;
-    if (@_ > 2 or @_ == 2 and ref $path) {
-	croak("Invalid arguments to ${myclass}::bind(@_), called");
-    }
-    if (@_ == 2) {
-	return undef unless $self->setparams({thispath=>$path});
-    }
-    $self->SUPER::bind;
-}
 
 sub connect			# $self [, $destpath]
 {
@@ -483,3 +485,24 @@ Spider Boardman F<E<lt>spider@Orb.Nashua.NH.USE<gt>>
 #other sections should be added, sigh.
 
 #any real autoloaded methods go after this line
+
+
+sub setdebug			# $this, [bool, [norecurse]]
+{
+    my $this = shift;
+    $this->_debug($_[0]) .
+	((@_ > 1 && $_[1]) ? '' : $this->SUPER::setdebug(@_));
+}
+
+sub bind			# $self [, $thispath]
+{
+    my($self,$path) = @_;
+    if (@_ > 2 or @_ == 2 and ref $path) {
+	my $whoami = $self->_trace;
+	croak("Invalid arguments to ${whoami}(@_), called");
+    }
+    if (@_ == 2) {
+	return unless $self->setparams({thispath=>$path});
+    }
+    $self->SUPER::bind;
+}

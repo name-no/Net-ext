@@ -28,20 +28,22 @@ What's still missing:
 
 	Finished integration with 5.003_13 & later features.
 
+	Configuration testing to get the include files right on
+	more systems, and to manage to find the constants which
+	at least some Linux systems have as enums rather than
+	as #defines.
+
 	Probably several other things I won't have missed (yet).
 
 
 The .pm files themselves are pod-ified (somewhat), with a catalogue of
-the methods.  I've found them to be most readable after something like
-
-	pod/pod2man ext/Net/Gen/Gen.pm | nroff -man | less -is
-
-Your mileage may vary.
+the methods.
 
 I'm not a tech. writer, nor do I usually play one on the net.  The
 documentation could still use a lot of work, I'm sure.
 
-Making it work requires perl 5.003_93 or later.
+Making it all work requires perl 5.003_93 or later.  The 0.75 version
+may be required for version 5.003_96 or later of perl.
 
 A simple test script:
 
@@ -61,7 +63,6 @@ A simple test script:
 		tie $f,'Net::TCP',0,'finger';
 
 	$f = "-s\n";
-	tied($f)->shutdown(1);
 	print $line while (defined $line=$f);
 	untie $f;
 
