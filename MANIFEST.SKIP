@@ -1,7 +1,8 @@
 (^|/)(RCS|CVS|SCCS)$
+^IANA$
 \,v$
-^[M]akefile$
-^[M]akefile\.aperl$
+^[Mm]akefile$
+^[Mm]akefile\.aperl$
 \bnetgen\.h$
 \bnetgenh\.new$
 ^blib/

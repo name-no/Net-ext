@@ -1,3 +1,4 @@
+use 5.004;
 use ExtUtils::MakeMaker qw(WriteMakefile $Verbose);
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
@@ -60,11 +61,22 @@ sub MY::libscan
 # Here are some possible include files which we'll need if the system
 # has them.  Add to this (and let me know!) if you find one that your
 # system has to have to get some of the constants defined.
+#
+# Also, if you get other compilation problems besides undefined values,
+# such as "incomplete type" problems, you may need to add additional system
+# headers here.  For "incomplete type" in particular, you'll need to find
+# which header file provides the missing information to complete a type
+# (usually a union or a struct, possibly embedded inside another, and often
+# also involving a typedef).  While this has been done for ULTRIX, old SunOS,
+# some versions of Linux, and some versions of Solaris, I don't claim that
+# the current list is complete.
 
 my @hfiles = qw(
 	netinet/in_systm.h
+	netinet/in_system.h
 	netinet/ip.h
 	netinet/ip_icmp.h
+        netinet/ip_tcp.h
 	netinet/ip_var.h
 	netinet/tcp.h
 	inet/common.h

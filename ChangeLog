@@ -1,3 +1,60 @@
+Released as 0.78.
+
+Mon Jul 14 21:28:00 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* README: Pointed harder at Makefile.PL for instructions about
+	adding new system headers.
+
+	* Makefile.PL: Added check for netinet/ip_tcp.h as contributed by
+	Christopher F. Miller <cfm@maine.com>.  Added additional text
+	near "my @hfiles" describing what a user might need to do in
+	order to get a good build on a "new port".  Added perl version
+	check here to keep people from trying to compile under 5.003 despite
+	what the README says.
+
+Mon May 19 05:22:54 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* Makefile.PL: Added check for <netinet/in_system.h>.
+
+Sun May 18 04:49:17 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Inet.pm: Updated to require 5.00399 and use __PACKAGE__
+        for $myclass setup.  Added 'desthost=>"host:port(n)"' handling.
+        Added default ports for services known from IANA's list.
+
+Sat May 17 20:27:23 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.pm: Updated pods.  Most significant change was to
+	re-arrange the routines to be listed alphabetically, since there
+	are so many of them.  Added a 'functional grouping' intro to the
+	'public methods' section.  Made SEND autoloaded.  Updated to
+	require 5.00399 because of TIEHANDLE support.  Because of being
+	post-5.00394, switched from godawful caller()-abuse to __PACKAGE__
+	for $myclass initialisation.
+
+Fri May 16 01:01:10 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.pm: Tweak pod entry for PRINTF to avoid bogus
+        warning from pod2man.
+
+Fri May  2 14:12:54 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.pm (READLINE): Fixread READLINE vs. getline so
+	that READLINE respects wantarray as the tied-fh internals
+	expect.  Updated pods for tied-fh methods.
+
+Thu May  1 02:14:14 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.pm: Some additional support for tied filehandles.
+	Now have TIEHANDLE, READ, PRINTF, and GETC.  READLINE is still
+	scalar-context-only, and these new methods need docs.
+
+Wed Apr 30 21:11:15 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.pm (sub listen): Applied patch from Eric Anderson
+	<eanders@cs.berkeley.edu> to eliminate warning with respect to
+	$$self{didlisten} (quotes got added).
+
 Released as version 0.77 as this part of development now seems stable.
 
 Sat Apr  5 01:58:20 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>

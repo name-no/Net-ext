@@ -49,8 +49,7 @@ the methods.
 I'm not a technical writer, nor do I usually play one on the net.
 The documentation could still use a lot of work, I'm sure.
 
-Making it all work requires perl 5.003_93 or later.  The 0.75 version
-may be the minimum that will work for version 5.003_96 or later of perl.
+Making it all work requires perl 5.004 or later.
 
 A simple test script:
 
@@ -79,6 +78,13 @@ to the shell.
 
 
 Anyway, bug reports & feature requests to me (spider@Orb.Nashua.NH.US).
+
+In particular, however, if you have compilation difficulties, check
+the Makefile.PL file again, especially near "my @hfiles".  The list
+of required system include files is almost entirely tester-contributed.
+If it doesn't build (yet) on your system/configuration/version, see if
+you can figure out why, following those guidelines.  Future users will
+thank you, too.
 
 
 # Copyright 1995,1996,1997 Spider Boardman.

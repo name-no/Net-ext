@@ -13,7 +13,7 @@
 
 
 package Net::Gen;
-use 5.00393;		# new minimum Perl version for this package
+use 5.00399;		# new minimum Perl version for this package
 
 use strict;
 use Carp;
@@ -21,8 +21,8 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD $adebug);
 
 my $myclass;
 BEGIN {
-    $myclass = &{+sub {(caller(0))[0]}};
-    $VERSION = '0.77';
+    $myclass = __PACKAGE__;
+    $VERSION = '0.78';
 }
 
 sub Version () { "$myclass v$VERSION" }
@@ -64,7 +64,7 @@ sub RD_NODATA		();
 sub VAL_EAGAIN		();
 sub VAL_O_NONBLOCK	();
 
-my $nullsub = sub {};		# handly null warning handler
+my $nullsub = sub {};		# handy null warning handler
 ;# If the warning handler is this exact code ref, don't bother calling
 ;# croak in the AUTOLOAD constant section, since we're being called from
 ;# inside the eval in initsockopts().
@@ -242,7 +242,8 @@ sub _setdebug			# $self, $name, $newval
 
 ;# try to work even in places where Fcntl.xs doesn't.
 
-my $F_GETFL = eval 'use Fcntl qw(F_GETFL);F_GETFL';
+my ($F_GETFL,$F_SETFL) =
+    eval 'use Fcntl qw(F_GETFL F_SETFL);(F_GETFL,F_SETFL)';
 my $nonblock_flag = eval 'pack("I",VAL_O_NONBLOCK)';
 my $eagain = eval 'VAL_EAGAIN';
 
@@ -626,23 +627,6 @@ sub sendto			# $self, $buf, $where, [$flags] ; returns bool
     CORE::send($fh, $buf, $flags, $where);
 }
 
-;# This one's for tied filehandle support.
-
-sub SEND			# $self, $buf [,$flags] [,$where] ; bool
-{
-    my $whoami = $_[0]->_trace(\@_,3);
-    my ($self,$buf,$flags,$where,$fh) = @_;
-    croak "Invalid args to ${whoami}, called"
-	if @_ < 2 or !ref $self or !($fh = $$self{fhref});
-    $flags = 0 unless defined $flags;
-    carp "Excess arguments to ${whoami} ignored" if @_ > 4;
-    return getsockopt($fh,SOL_SOCKET,SO_TYPE) unless
-	$self->isopen or $self->open;	# EBADF error unless open
-    (defined $where) ?
-	CORE::send($fh, $buf, $flags, $where) :
-	CORE::send($fh, $buf, $flags);
-}
-
 sub put				# $self, @stuff ; returns boolean
 {
     $_[0]->_trace(\@_,3);
@@ -694,7 +678,13 @@ sub recv			# $self, [$maxlen, [$flags, [$from]]] ;
     $flags = 0 unless defined $flags;
     if (defined($$self{sockLineBuf}) && !$flags) {
 	$buf = $$self{sockLineBuf};
-	$$self{sockLineBuf} = undef;
+	if (length($buf) > $maxlen) {
+	    $$self{sockLineBuf} = substr($buf, $maxlen);
+	    substr($buf, $maxlen) = '';
+	}
+	else {
+	    $$self{sockLineBuf} = undef;
+	}
 	$_[3] = $$self{lastRegFrom} if @_ > 3;
 	return $buf;
     }
@@ -706,12 +696,14 @@ sub recv			# $self, [$maxlen, [$flags, [$from]]] ;
     $$self{lastFrom} = $from;
     $_[3] = $from if @_ > 3;
     $$self{lastRegFrom} = $from if !$flags;
-    return undef if !defined $from;
+    return undef if !defined $from and (EOF_NONBLOCK or $errnum != $eagain);
     return $buf if length $buf;
-    # At this point, we had a 0-length read with no error.
+    # At this point, we had a 0-length read with no error (or EAGAIN).
     # Especially for a SOCK_STREAM connection, this may mean EOF.
     $! = $errnum;		# restore possible failure just in case
-    return $buf unless $self->ckeof;
+    unless ($self->ckeof) {
+	return defined($from) ? $buf : undef;
+    }
     $self->shutdown(0);		# make sure I know about this EOF
     $! = 0;			# no error for EOF
     undef;			# no buffer, either, though
@@ -772,11 +764,7 @@ sub getline			# $self ; returns like scalar(<$fhandle>)
     }
 }
 
-sub readline;			# helps with -w
-*readline = \&getline;		# alias related to perl OPs (pp_readline).
-sub READLINE;			# similar for eventual tied FHs
-*READLINE = \&getline;
-sub gets;			# another for FileHandle:: or IO:: compat.
+sub gets;			# an alias for FileHandle:: or IO:: compat.
 *gets = \&getline;
 
 sub DESTROY
@@ -831,14 +819,498 @@ which are layered atop C<Net::Gen>.
 
 =head2 Public Methods
 
+The public methods are listed alphabetically below.  Here is an
+indication of their functional groupings:
+
 =over
+
+=item Creation and setup
+
+C<new>, C<new_from_fh>, C<init>, C<checkparams>, C<open>, C<connect>,
+C<bind>, C<listen>
+
+=item Parameter manipulation
+
+C<setparams>, C<setparam>, C<delparams>, C<delparam>, C<getparams>, C<getparam>
+
+=item Low-level control
+
+C<unbind>, C<condition>, C<getsopt>, C<getropt>, C<setsopt>, C<setropt>,
+C<fcntl>, C<ioctl>
+
+=item Medium-level control
+
+C<getsockinfo>, C<shutdown>, C<stopio>, C<close>
+
+=item Informational
+
+C<isopen>, C<isconnected>, C<isbound>, C<didlisten>, C<fhvec>, C<getfh>,
+C<fileno>
+
+=item I/O
+
+C<send>, C<sendto>, C<put>, C<recv>, C<get>, C<getline>, C<gets>, C<select>,
+C<accept>
+
+=item Utility routines
+
+C<format_addr>, C<format_local_addr>, C<format_remote_addr>
+
+=item Tied filehandle support
+
+C<SEND>, C<PRINT>, C<PRINTF>, C<RECV>, C<READLINE>, C<READ>, C<GETC>,
+C<TIEHANDLE>
+
+=item Tied scalar support
+
+C<FETCH>, C<STORE>, C<TIESCALAR>
+
+=back
+
+The descriptions, listed alphabetically:
+
+=over
+
+=item accept
+
+Usage:
+
+    $newobj = $obj->accept;
+
+Returns a new object in the same class as the given object if an
+accept() call succeeds, and C<undef> otherwise.  If the accept()
+call succeeds, the new object is marked as being open, connected,
+and bound.
+
+=item bind
+
+Usage:
+
+    $ok = $obj->bind;
+
+Makes a call to the bind() builtin on the filehandle associated
+with the object.  The arguments to bind() are determined from the
+current parameters of the object.  First, if the filehandle has
+previously been bound or connected, it is closed.  Then, if it is
+not currently open, a call to the C<open> method is made.  If all
+that works (which may be a no-op), then the following list of
+possible values is tried for the bind() builtin:  First, the
+C<srcaddrlist> object parameter, if its value is an array
+reference.  The elements of the array are tried in order until a
+bind() succeeds or the list is exhausted.  Second, if the
+C<srcaddrlist> parameter is not set to an array reference, if the
+C<srcaddr> parameter is a non-null string, it will be used.
+Finally, if neither C<srcaddrlist> nor C<srcaddr> is suitably
+set, the C<AF> parameter will be used to construct a C<sockaddr>
+struct which will be mostly zeroed, and the bind() will be
+attempted with that.  If the bind() fails, C<undef> will be
+returned at this point.  Otherwise, a call to the C<getsockinfo>
+method will be made, and then the value from a call to the
+C<isbound> method will be returned.
+
+If all that seems too confusing, don't worry.  Most clients will
+never need to do an explicit C<bind> call, anyway.  If you're
+writing a server or a privileged client which does need to bind
+to a particular local port or address, and you didn't understand
+the foregoing discussion, you may be in trouble.  Don't panic
+until you've checked the discussion of binding in the derived
+class you're using, however.
+
+=item checkparams
+
+Usage:
+
+    $ok = $obj->checkparams;
+
+Verifies that all previous parameter assignments are valid.
+(Normally called only via the C<init> method, rather than
+directly.)
+
+=item close
+
+Usage:
+
+    $ok = $obj->close;
+
+The C<close> method is like a call to the C<shutdown> method
+followed by a call to the C<stopio> method.  It is the standard
+way to close down an object.
+
+=item condition
+
+Usage:
+
+    $obj->condition;
+
+(Re-)establishes the condition of the associated filehandle after
+an open() or accept().  (In other words, the C<open> and C<accept>
+methods call the C<condition> method.)
+Sets the socket to be autoflushed and marks it binmode().
+No useful value is returned.
+
+=item connect
+
+Usage:
+
+    $ok = $obj->connect;
+
+Attempts to establish a connection for the object.  First, if the
+object is currently connected or has been connected since the
+last time it was opened, its C<close> method is called.  Then, if
+the object is not currently open, its C<open> method is called.
+If it's not open after that, C<undef> is returned.  If it is
+open, and if either of its C<srcaddrlist> or C<srcaddr>
+parameters are set to indicate that a bind() is desired, and it
+is not currently bound, its C<bind> method is called.  If the
+C<bind> method is called and fails, C<undef> is returned.  (Most
+of the foregoing is a no-op for simple clients, so don't panic.)
+
+Next, if the C<dstaddrlist> object parameter is set to an array
+reference, a call to connect() is made for each element of the
+list until it succeeds or the list is exhausted.  If the
+C<dstaddrlist> parameter is not an array reference, a single
+attempt is made to call connect() with the C<dstaddr> object
+parameter.  If no connect() call succeeded, C<undef> is returned.
+Finally, a call is made to the object's C<getsockinfo> method,
+and then the value from a call to its C<isconnected> method is
+returned.
+
+Note that the derived classes tend to provide additional
+capabilities which make the C<connect> method easier to use than
+the above description would indicate.
+
+=item delparam
+
+Usage:
+
+    $ok = $obj->delparam($keyname);
+
+Sugar-coated call to the C<delparams> method.  Functions just like it.
+
+=item delparams
+
+Usage:
+
+    $ok = $obj->delparams(\@keynames);
+
+Removes the settings for the specified parameters.  Uses the
+C<setparams> method (with C<undef> for the values) to validate
+that the removal is allowed by the owning object.  If the
+invocation of C<setparams> is successful, then the parameters in
+question are removed.  Returns 1 if all the removals were
+successful, and C<undef> otherwise.
+
+=item didlisten
+
+Usage:
+
+    $ok = $obj->didlisten;
+
+Returns true if the object's C<listen> method has been used
+successfully, and the object is still bound.  If this method has
+not been overridden by a derived class, the value is C<undef> on
+failure and the C<$maxqueue> value used for the listen() builtin
+on success.
+
+=item fcntl
+
+Usage:
+
+    $rval = $obj->fcntl($func, $value);
+
+Returns the result of an fcntl() call on the associated I/O stream.
+
+=item fhvec
+
+Usage:
+
+    $vecstring = $obj->fhvec;
+
+Returns a vector suitable as an argument to the 4-argument select()
+call.  This is for use in doing selects with multiple I/O streams.
+See also L</select>.
+
+=item fileno
+
+Usage:
+
+    $fnum = $obj->fileno;
+
+Returns the actual file descriptor number for the underlying socket.
+See L</getfh> for some restrictions as to the safety of using this.
+
+=item format_addr
+
+Usage:
+
+    $string = $obj->format_addr($sockaddr);
+    $string = format_addr Module $sockaddr;
+
+Returns a formatted representation of the address.  This is a
+method so that it can be overridden by derived classes.  It is
+used to implement ``pretty-printing'' methods for source and
+destination addresses.
+
+=item format_local_addr
+
+Usage:
+
+    $string = $obj->format_local_addr;
+
+Returns a formatted representation of the local socket address
+associated with the object.
+
+=item format_remote_addr
+
+Usage:
+
+    $string = $obj->format_remote_addr;
+
+Returns a formatted representation of the remote socket address
+associated with the object.
+
+=item get
+
+This is just a sugar-coated way to call the C<recv> method which will
+work with indirect-object syntax.  See L</recv> for details.
+
+=item GETC
+
+Usage:
+
+    $char = $obj->GETC;
+    $char = getc(TIEDFH);
+
+This method uses the C<recv> method with a $flags argument of 0 and
+a $maxlen argument of 1 to emulate the getc() builtin.  Like that builtin,
+it returns a string representing the character read when successful,
+and undef on eof or errors.  This method exists for the support of tied
+filehandles.
+
+=item getfh
+
+Usage:
+
+    $fhandle = $obj->getfh;
+
+I've strongly resisted giving people direct access to the filehandle
+embedded in the object because of the problems of mixing C<stdio> input
+calls and traditional socket-level I/O.  However, if you're sure you can
+keep things straight, here are the rules under which it's safe to use the
+embedded filehandle:
+
+=over
+
+=item Z<>
+
+Don't use perl's own C<stdio> calls.  Stick to sysread() and recv().
+
+=item Z<>
+
+Don't use the object's C<getline> method, since that stores a read-ahead
+buffer in the object which only the object's own C<get>/C<recv> and
+C<getline> methods know to return to you.  (The object's C<select> method
+knows about the buffer enough to tell you that a read will succeed if
+there's saved data, though.)
+
+=item Z<>
+
+Please don't change the state of the socket behind my back.  That
+means no close(), shutdown(), connect(), bind(), or listen()
+built-ins.  Use the corresponding methods instead, or all bets
+are off.
+
+=back
+
+That C<$fh> is a glob ref, by the way, but that doesn't matter for calling
+the built-in I/O primitives.
+
+=item getline
+
+Usage:
+
+    $line = $obj->getline;
+
+This is a simulation of C<scalar(E<lt>$filehandleE<gt>)> that doesn't let
+stdio confuse the C<get>/C<recv> method.
+
+=item getparam
+
+Usage:
+
+    $value = $obj->getparam($key, $defval, $def_if_undef);
+    $value = $obj->getparam($key, $defval);
+    $value = $obj->getparam($key);
+
+Returns the current setting for the named parameter (in the
+current object), or the specified default value if the parameter
+is not in the object's current parameter list.  If the optional
+C<$def_if_undef> parameter is true, then undefined values will be
+treated the same as non-existent keys, and thus will return the
+supplied default value (C<$defval>).
+
+=item getparams
+
+Usage:
+
+    %hash = $obj->getparams(\@keynames, $noundefs);
+    %hash = $obj->getparams(\@keynames);
+
+Returns a hash (I<not> a reference) consisting of the key-value
+pairs corresponding to the specified keyname list.  Only those
+keys which exist in the current parameter list of the object will
+be returned.  If the C<$noundefs> parameter is present and true,
+then existing keys with undefined values will be suppressed like
+non-existent keys.
+
+=item getropt
+
+Usage:
+
+    $optsetting = $obj->getropt($level, $option);
+    $optsetting = $obj->getropt($optname);
+
+Returns the raw value from a call to the getsockopt() builtin.
+If both the C<$level> and C<$option> arguments are given as
+numbers, the getsockopt() call will be made even if the given
+socket option is not registered with the object.  Otherwise, the
+return value for unregistered objects will be undef with the
+value of $! set as described below for the C<getsopt> method.
+
+=item gets
+
+Usage:
+
+    $line = $obj->gets;
+
+This is a simulation of C<scalar(E<lt>$filehandleE<gt>)> that doesn't let
+stdio confuse the C<get>/C<recv> method.  (The C<gets> method is just
+an alias for the C<getline> method, for partial compatibility with
+the POSIX module.)
+
+=item getsockinfo
+
+Usage:
+
+    ($localsockaddr, $peersockaddr) = $obj->getsockinfo;
+    $peersockaddr = $obj->getsockinfo;
+
+Attempts to determine connection parameters associated with the
+object.  If a getsockname() call on the associated filehandle
+succeeds, the C<srcaddr> object parameter is set to that returned
+sockaddr.  If a getpeername() call on the associated filehandle
+succeeds, the C<dstaddr> parameter is set to that returned
+sockaddr.  In a scalar context, if both socket addresses were
+found, the getpeername() value is returned, otherwise C<undef> is
+returned.  In a list context, the getsockname() and getpeername()
+values are returned, unless both are undefined.
+
+Derived classes normally replace this method with one which
+provides friendlier return information appropriate to the derived
+class, and which establishes more of the object parameters.
+
+=item getsopt
+
+Usage:
+
+    @optvals = $obj->getsopt($level, $option);
+    @optvals = $obj->getsopt($optname);
+
+Returns the unpacked values from a call to the getsockopt()
+builtin.  In order to do the unpacking, the socket option must
+have been registered with the object.  See the additional discussion of
+socket options below in L</initsockopts>.
+
+Since registered socket options are known by name as well as by
+their level and option values, it is possible to make calls using
+only option name.  If the name is not registered with the object,
+the return value is the same as that for C<getsopt $obj -1,-1>,
+which is an empty return array and $! set appropriately (should
+be C<EINVAL>).
+
+Examples:
+
+    ($sotype) = $obj->getsopt('SO_TYPE');
+    @malinger = $obj->getsopt(SOL_SOCKET, SO_LINGER);
+    ($sodebug) = $obj->getsopt('SOL_SOCKET', 'SO_DEBUG');
+
+=item init
+
+Usage:
+
+    return undef unless $self->init;
+
+Verifies that all previous parameter assignments are valid (via
+C<checkparams>).  Returns the incoming object on success, and
+C<undef> on failure.  This method is normally called from the C<new>
+method appropriate to the class of the created object.
+
+=item ioctl
+
+Usage:
+
+    $rval = $obj->ioctl($func, $value);
+
+Returns the result of an ioctl() call on the associated I/O stream.
+
+=item isbound
+
+Usage:
+
+    $ok = $obj->isbound;
+
+Returns true if the object's C<bind> method has been used
+successfully, and the binding is still in effect.  If this method
+has not been overridden by a derived class, the value is the
+saved return value of the call to the bind() builtin (if it was
+called).
+
+=item isconnected
+
+Usage:
+
+    $ok = $obj->isconnected;
+
+Returns true if the object's C<connect> method has been used
+successfully to establish a "session", and that session is still
+connected.  If this method has not been overridden by a derived
+class, the value is the saved return value of the call to the
+connect() builtin (if it was called).
+
+=item isopen
+
+Usage:
+
+    $ok = $obj->isopen;
+
+Returns true if the object currently has a socket attached to its
+associated filehandle, and false otherwise.  If this method has
+not been overridden by a derived class, the value is the saved
+return value of the call to the socket() builtin (if it was
+called).
+
+=item listen
+
+Usage:
+
+    $ok = $obj->listen($maxqueue);
+    $ok = $obj->listen;
+
+Makes a call to the listen() builtin on the filehandle associated
+with the object.  Propagates the return value from listen().  If
+the C<$maxqueue> parameter is missing, it defaults to the value
+of the object's I<maxqueue> parameter, or the value of C<SOMAXCONN>.
+If the C<SOMAXCONN> constant is not available in your
+configuration, the default value used for the C<listen> method is
+5.  This method will fail if the object is not bound and cannot
+be made bound by a simple call to its C<bind> method.
 
 =item new
 
 Usage:
 
-    $obj = Net::Gen->new($classname);
-    $obj = Net::Gen->new($classname, \%parameters);
+    $obj = $classname->new();
+    $obj = $classname->new(\%parameters);
 
 Returns a newly-initialised object of the given class.  If called
 for a class other than C<Net::Gen>, no validation of the supplied
@@ -865,26 +1337,188 @@ Only real filehandles or file descriptor numbers are allowed as
 arguments.  This method makes no attempt to resolve filehandle
 names.
 
-=item init
+=item open
 
 Usage:
 
-    return undef unless $self->init;
+    $ok = $obj->open;
 
-Verifies that all previous parameter assignments are valid (via
-C<checkparams>).  Returns the incoming object on success, and
-C<undef> on failure.  This method is normally called from the C<new>
-method appropriate to the class of the created object.
+Makes a call to the socket() builtin, using the current object
+parameters to determine the desired protocol family, socket type,
+and protocol number.  If the object was already open, its
+C<stopio> method will be called before socket() is called again.
+The object parameters consulted (and possibly updated) are C<PF>,
+C<AF>, C<proto>, and C<type>.  Returns true if the socket() call
+results in an open filehandle, C<undef> otherwise.
 
-=item checkparams
+=item PRINT
+
+See L</put>, as this method is just an alias for the C<pub> method.
+The C<PRINT> alias is for the support of tied filehandles.
+
+=item PRINTF
 
 Usage:
 
-    $ok = $obj->checkparams;
+    $ok = $obj->PRINTF($format, @args);
+    $ok = printf TIEDFH $format, @args;
 
-Verifies that all previous parameter assignments are valid.
-(Normally called only via the C<init> method, rather than
-directly.)
+This method is exactly equivalent to C<$obj-E<gt>put(sprintf $format,@args)>.
+It exists for the support of tied filehandles.
+
+=item put
+
+Usage:
+
+    $ok = $obj->put(@whatever);
+    $ok = put $obj @whatever;
+
+This method uses the print() builtin to send the @whatever
+arguments to the filehandle associated with the object.  That
+filehandle is always marked for autoflushing by the C<open>
+method, so the method is in effect equivalent to this:
+
+    $ok = $obj->send(join($, , @whatever) . $\ , 0);
+
+However, since multiple fwrite() calls are sometimes involved in
+the actual use of print(), this method can be more efficient than
+the above code sample for large strings in the argument list.
+It's a bad idea except on stream sockets (C<SOCK_STREAM>)
+though, since the record boundaries are unpredictable through
+stdio.  This method makes no attempt to trap C<SIGPIPE>.
+
+=item READ
+
+Usage:
+
+    $numread = $obj->READ($buffer, $maxlen);
+    $numread = $obj->READ($buffer, $maxlen, $offset);
+    $numread = read(TIEDFH, $buffer, $maxlen);
+    $numread = read(TIEDFH, $buffer, $maxlen, $offset);
+
+This method uses the C<recv> method (with a flags argument of 0) to
+emulate the read() and sysread() builtins.  This is specifically for the
+support of tied filehandles.  Like the emulated builtins, this method
+returns the number of bytes successfully read, or undef on error.
+
+=item READLINE
+
+Usage:
+
+    $line = $obj->READLINE;
+    @lines = $obj->READLINE;
+    $line = readline(TIEDFH);	# or $line = <TIEDFH>;
+    @lines = readline(TIEDFH);	# or @lines = <TIEDFH>;
+
+This method supports the use of the E<lt>E<gt> (or readline()) operator
+on tied filehandles.  In scalar context, it uses the C<getline> method.
+In array context, it reads all remaining input on the socket (until eof, which
+makes this unsuitable for connectionless socket types such as UDP), and
+splits it into lines based on the current value of the $/ variable.
+
+=item RECV
+
+Usage:
+
+    $from = $obj->RECV($buffer, $maxlen, $flags);
+    $from = $obj->RECV($buffer, $maxlen);
+    $from = $obj->RECV($buffer);
+
+This method calls the recv() method with the arguments and return
+rearranged to match the recv() builtin.  This is for (eventual) support of
+tied filehandles.
+
+=item recv
+
+Usage:
+
+    $record = $obj->recv($maxlen, $flags, $whence);
+    $record = $obj->recv($maxlen, $flags);
+    $record = $obj->recv($maxlen);
+    $record = $obj->recv;
+
+This method calls the recv() builtin, and returns a buffer (if
+one is received) or C<undef> on eof or error.  If an eof is seen
+on the socket (as checked with its C<ckeof> method), then C<$!>
+will be 0 on return.  If the C<$whence> argument is supplied, it
+will be filled in with the sending socket address if possible.
+If the C<$flags> argument is not supplied, it defaults to 0.  If
+the C<$maxlen> argument is not supplied, it is defaulted to the
+receive buffer size of the associated filehandle (if known), or
+the preferred blocksize of the associated filehandle (if known,
+which it usually won't be), or 8192.
+
+=item select
+
+Usage:
+
+    ($nfound, $timeleft, $rbool, $wbool, $xbool) =
+	$obj->select($doread, $dowrite, $doxcept, $timeout);
+    $nfound = $obj->select($doread, $dowrite, $doxcept, $timeout);
+
+Issues a 4-argument select() call for the associated I/O stream.
+All arguments are optional.  The $timeout argument is the same as
+the fourth argument to select().  The first three are booleans, used
+to determine whether the method should include the object's I/O stream
+in the corresponding parameter to the select() call.  The return in list
+context is the standard two values from select(), follwed by booleans
+indicating whether the actual select() call found reading, writing, or
+exception to be true.  In scalar context, returns only the count of the
+number of matching conditions.  This is probably only useful when you're
+checking just one of the three possible conditions.
+
+=item SEND
+
+Usage:
+
+    $ok = $obj->SEND($buffer, $flags, $destsockaddr);
+    $ok = $obj->SEND($buffer, $flags);
+    $ok = $obj->SEND($buffer);
+
+This method calls the send() builtin (three- or four-argument
+form).  The C<$flags> parameter is defaulted to 0 if not supplied.
+If the C<$destsockaddr> value is missing or undefined, the three-
+argument form of the send() builtin will be used.  A defined
+C<$destsockaddr> will result in a four-argument send() call.
+The return value from the send() builtin is returned.  This method
+makes no attempt to trap C<SIGPIPE>.
+
+=item send
+
+Usage:
+
+    $ok = $obj->send($buffer, $flags);
+    $ok = $obj->send($buffer);
+
+This method calls the send() builtin (three-argument form).  The
+C<$flags> parameter is defaulted to 0 if not supplied.  The
+return value from the send() builtin is returned.  This method
+makes no attempt to trap C<SIGPIPE>.
+
+=item sendto
+
+Usage:
+
+    $ok = $obj->sendto($buffer, $destsockaddr, $flags);
+    $ok = $obj->sendto($buffer, $destsockaddr);
+
+This method calls the send() builtin (four-argument form).  The
+C<$flags> parameter is defaulted to 0 if not supplied.  The
+return value from the send() builtin is returned.  This method
+makes no attempt to trap C<SIGPIPE>.
+
+=item setparam
+
+Usage:
+
+    $ok = $obj->setparam($key, $value, $newonly, $checkup);
+    $ok = $obj->setparam($key, $value, $newonly);
+    $ok = $obj->setparam($key, $value);
+
+Sets a single new parameter.  Uses the C<setparams> method, and
+has the same rules for the handling of the C<$newonly> and
+C<$checkup> parameters.  Returns 1 if the set was successful, and
+C<undef> otherwise.
 
 =item setparams
 
@@ -926,207 +1560,30 @@ new value will (finally) get set for the given key.
 The C<setparams> method returns 1 if all parameters were
 successfully set, and C<undef> otherwise.
 
-=item setparam
+=item setropt
 
 Usage:
 
-    $ok = $obj->setparam($key, $value, $newonly, $checkup);
-    $ok = $obj->setparam($key, $value, $newonly);
-    $ok = $obj->setparam($key, $value);
+    $ok = $obj->setropt($level, $option, $rawvalue);
+    $ok = $obj->setropt($optname, $rawvalue);
 
-Sets a single new parameter.  Uses the C<setparams> method, and
-has the same rules for the handling of the C<$newonly> and
-C<$checkup> parameters.  Returns 1 if the set was successful, and
-C<undef> otherwise.
+Returns the result from a call to the setsockopt() builtin.  If
+the $level and $option arguments are both given as numbers, the
+setsockopt() call will be made even if the option is not
+registered with the object.  Otherwise, unregistered options will
+fail as for the C<setsopt> method, below.
 
-=item delparams
-
-Usage:
-
-    $ok = $obj->delparams(\@keynames);
-
-Removes the settings for the specified parameters.  Uses the
-C<setparams> method (with C<undef> for the values) to validate
-that the removal is allowed by the owning object.  If the
-invocation of C<setparams> is successful, then the parameters in
-question are removed.  Returns 1 if all the removals were
-successful, and C<undef> otherwise.
-
-=item delparam
+=item setsopt
 
 Usage:
 
-    $ok = $obj->delparam($keyname);
+    $ok = $obj->setsopt($level, $option, @optvalues);
+    $ok = $obj->setsopt($optname, @optvalues);
 
-Sugar-coated call to the C<delparams> method.  Functions just like it.
-
-=item getparams
-
-Usage:
-
-    %hash = $obj->getparams(\@keynames, $noundefs);
-    %hash = $obj->getparams(\@keynames);
-
-Returns a hash (I<not> a reference) consisting of the key-value
-pairs corresponding to the specified keyname list.  Only those
-keys which exist in the current parameter list of the object will
-be returned.  If the C<$noundefs> parameter is present and true,
-then existing keys with undefined values will be suppressed like
-non-existent keys.
-
-=item getparam
-
-Usage:
-
-    $value = $obj->getparam($key, $defval, $def_if_undef);
-    $value = $obj->getparam($key, $defval);
-    $value = $obj->getparam($key);
-
-Returns the current setting for the named parameter (in the
-current object), or the specified default value if the parameter
-is not in the object's current parameter list.  If the optional
-C<$def_if_undef> parameter is true, then undefined values will be
-treated the same as non-existent keys, and thus will return the
-supplied default value (C<$defval>).
-
-=item open
-
-Usage:
-
-    $ok = $obj->open;
-
-Makes a call to the socket() builtin, using the current object
-parameters to determine the desired protocol family, socket type,
-and protocol number.  If the object was already open, its
-C<stopio> method will be called before socket() is called again.
-The object parameters consulted (and possibly updated) are C<PF>,
-C<AF>, C<proto>, and C<type>.  Returns true if the socket() call
-results in an open filehandle, C<undef> otherwise.
-
-=item condition
-
-Usage:
-
-    $obj->condition;
-
-(Re-)establishes the condition of the associated filehandle after
-an open() or accept().  Sets the socket to be autoflushed and
-marks it binmode().  No useful value is returned.
-
-=item listen
-
-Usage:
-
-    $ok = $obj->listen($maxqueue);
-    $ok = $obj->listen;
-
-Makes a call to the listen() builtin on the filehandle associated
-with the object.  Propagates the return value from listen().  If
-the C<$maxqueue> parameter is missing, it defaults to the value
-of the object's I<maxq> parameter, or the value of C<SOMAXCONN>.
-If the C<SOMAXCONN> constant is not available in your
-configuration, the default value used for the C<listen> method is
-5.  This method will fail if the object is not bound and cannot
-be made bound by a simple call to its C<bind> method.
-
-=item bind
-
-Usage:
-
-    $ok = $obj->bind;
-
-Makes a call to the bind() builtin on the filehandle associated
-with the object.  The arguments to bind() are determined from the
-current parameters of the object.  First, if the filehandle has
-previously been bound or connected, it is closed.  Then, if it is
-not currently open, a call to the C<open> method is made.  If all
-that works (which may be a no-op), then the following list of
-possible values is tried for the bind() builtin:  First, the
-C<srcaddrlist> object parameter, if its value is an array
-reference.  The elements of the array are tried in order until a
-bind() succeeds or the list is exhausted.  Second, if the
-C<srcaddrlist> parameter is not set to an array reference, if the
-C<srcaddr> parameter is a non-null string, it will be used.
-Finally, if neither C<srcaddrlist> nor C<srcaddr> is suitably
-set, the C<AF> parameter will be used to construct a C<sockaddr>
-struct which will be mostly zeroed, and the bind() will be
-attempted with that.  If the bind() fails, C<undef> will be
-returned at this point.  Otherwise, a call to the C<getsockinfo>
-method will be made, and then the value from a call to the
-C<isbound> method will be returned.
-
-If all that seems too confusing, don't worry.  Most clients will
-never need to do an explicit C<bind> call, anyway.  If you're
-writing a server or a privileged client which does need to bind
-to a particular local port or address, and you didn't understand
-the foregoing discussion, you may be in trouble.  Don't panic
-until you've checked the discussion of binding in the derived
-class you're using, however.
-
-=item unbind
-
-Usage:
-
-    $obj->unbind;
-
-Removes any saved binding for the object.  Unless the object is
-currently connected, this will result in a call to its C<close>
-method, in order to ensure that any previous binding is removed.
-Even if the object is connected, the C<srcaddrlist> object
-parameter is removed (via the object's C<delparams> method).  The
-return value from this method is indeterminate.
-
-=item connect
-
-Usage:
-
-    $ok = $obj->connect;
-
-Attempts to establish a connection for the object.  First, if the
-object is currently connected or has been connected since the
-last time it was opened, its C<close> method is called.  Then, if
-the object is not currently open, its C<open> method is called.
-If it's not open after that, C<undef> is returned.  If it is
-open, and if either of its C<srcaddrlist> or C<srcaddr>
-parameters are set to indicate that a bind() is desired, and it
-is not currently bound, its C<bind> method is called.  If the
-C<bind> method is called and fails, C<undef> is returned.  (Most
-of the foregoing is a no-op for simple clients, so don't panic.)
-
-Next, if the C<dstaddrlist> object parameter is set to an array
-reference, a call to connect() is made for each element of the
-list until it succeeds or the list is exhausted.  If the
-C<dstaddrlist> parameter is not an array reference, a single
-attempt is made to call connect() with the C<dstaddr> object
-parameter.  If no connect() call succeeded, C<undef> is returned.
-Finally, a call is made to the object's C<getsockinfo> method,
-and then the value from a call to its C<isconnected> method is
-returned.
-
-Note that the derived classes tend to provide additional
-capabilities which make the C<connect> method easier to use than
-the above description would indicate.
-
-=item getsockinfo
-
-Usage:
-
-    ($localsockaddr, $peersockaddr) = $obj->getsockinfo;
-    $peersockaddr = $obj->getsockinfo;
-
-Attempts to determine connection parameters associated with the
-object.  If a getsockname() call on the associated filehandle
-succeeds, the C<srcaddr> object parameter is set to that returned
-sockaddr.  If a getpeername() call on the associated filehandle
-succeeds, the C<dstaddr> parameter is set to that returned
-sockaddr.  In a scalar context, if both socket addresses were
-found, the getpeername() value is returned, otherwise C<undef> is
-returned.  In a list context, the getsockname() and getpeername()
-values are returned, unless both are undefined.
-
-Derived classes normally replace this method with one which
-provides friendlier return information appropriate to the derived
-class, and which establishes more of the object parameters.
+Returns the result from a call to the setsockopt() builtin.  In
+order to be able to pack the C<@optvalues>, the option must be
+registered with the object, just as for the C<getsopt> method,
+above.
 
 =item shutdown
 
@@ -1158,316 +1615,18 @@ primarily for the use of server modules which need to avoid
 C<shutdown> calls at inappropriate times.  This method calls the
 C<delparams> method for the keys of C<srcaddr> and C<dstaddr>.
 
-=item close
+=item unbind
 
 Usage:
 
-    $ok = $obj->close;
-
-The C<close> method is like a call to the C<shutdown> method
-followed by a call to the C<stopio> method.  It is the standard
-way to close down an object.
-
-=item send
-
-Usage:
-
-    $ok = $obj->send($buffer, $flags);
-    $ok = $obj->send($buffer);
-
-This method calls the send() builtin (three-argument form).  The
-C<$flags> parameter is defaulted to 0 if not supplied.  The
-return value from the send() builtin is returned.  This method
-makes no attempt to trap C<SIGPIPE>.
-
-=item sendto
-
-Usage:
-
-    $ok = $obj->sendto($buffer, $destsockaddr, $flags);
-    $ok = $obj->sendto($buffer, $destsockaddr);
-
-This method calls the send() builtin (four-argument form).  The
-C<$flags> parameter is defaulted to 0 if not supplied.  The
-return value from the send() builtin is returned.  This method
-makes no attempt to trap C<SIGPIPE>.
-
-=item SEND
-
-Usage:
-
-    $ok = $obj->SEND($buffer, $flags, $destsockaddr);
-    $ok = $obj->SEND($buffer, $flags);
-    $ok = $obj->SEND($buffer);
-
-This method calls the send() builtin (three- or four-argument
-form).  The C<$flags> parameter is defaulted to 0 if not supplied.
-If the C<$destsockaddr> value is missing or undefined, the three-
-argument form of the send() builtin will be used.  A defined
-C<$destsockaddr> will result in a four-argument send() call.
-The return value from the send() builtin is returned.  This method
-makes no attempt to trap C<SIGPIPE>.
-
-=item PRINT
-
-=item put
-
-Usage:
-
-    $ok = $obj->put(@whatever);
-    $ok = put $obj @whatever;
-
-This method uses the print() builtin to send the @whatever
-arguments to the filehandle associated with the object.  That
-filehandle is always marked for autoflushing by the C<open>
-method, so the method is in effect equivalent to this:
-
-    $ok = $obj->send(join($, , @whatever) . $\ , 0);
-
-However, since multiple fwrite() calls are sometimes involved in
-the actual use of print(), this method can be more efficient than
-the above code sample for large strings in the argument list.
-It's a bad idea except on stream sockets (C<SOCK_STREAM>)
-though, since the record boundaries are unpredictable through
-stdio.  This method makes no attempt to trap C<SIGPIPE>.
-
-=item get
-
-=item recv
-
-Usage:
-
-    $record = $obj->recv($maxlen, $flags, $whence);
-    $record = $obj->recv($maxlen, $flags);
-    $record = $obj->recv($maxlen);
-    $record = $obj->recv;
-
-This method calls the recv() builtin, and returns a buffer (if
-one is received) or C<undef> on eof or error.  If an eof on a
-stream socket is seen, C<$!> will be 0 on return.  If the
-C<$whence> argument is supplied, it will be filled in with the
-sending socket address if possible.  If the C<$flags> argument is
-not supplied, it defaults to 0.  If the C<$maxlen> argument is
-not supplied, it is defaulted to the receive buffer size of the
-associated filehandle (if known), or the preferred blocksize of
-the associated filehandle (if known, which it usually won't be),
-or 8192.
-
-=item RECV
-
-Usage:
-
-    $from = $obj->RECV($buffer, $maxlen, $flags);
-    $from = $obj->RECV($buffer, $maxlen);
-    $from = $obj->RECV($buffer);
-
-This method calls the recv() method with the arguments and return
-rearranged to match the recv() builtin.  This is for (eventual) support of
-tied filehandles.
-
-=item READLINE
-
-=item getline
-
-This is a simulation of C<E<lt>$filehandleE<gt>> that doesn't let
-stdio confuse the C<get>/C<recv> method.
-
-=item isopen
-
-Usage:
-
-    $ok = $obj->isopen;
-
-Returns true if the object currently has a socket attached to its
-associated filehandle, and false otherwise.  If this method has
-not been overridden by a derived class, the value is the saved
-return value of the call to the socket() builtin (if it was
-called).
-
-=item isconnected
-
-Usage:
-
-    $ok = $obj->isconnected;
-
-Returns true if the object's C<connect> method has been used
-successfully to establish a "session", and that session is still
-connected.  If this method has not been overridden by a derived
-class, the value is the saved return value of the call to the
-connect() builtin (if it was called).
-
-=item isbound
-
-Usage:
-
-    $ok = $obj->isbound;
-
-Returns true if the object's C<bind> method has been used
-successfully, and the binding is still in effect.  If this method
-has not been overridden by a derived class, the value is the
-saved return value of the call to the bind() builtin (if it was
-called).
-
-=item didlisten
-
-Usage:
-
-    $ok = $obj->didlisten;
-
-Returns true if the object's C<listen> method has been used
-successfully, and the object is still bound.  If this method has
-not been overridden by a derived class, the value is C<undef> on
-failure and the C<$maxqueue> value used for the listen() builtin
-on success.
-
-=item accept
-
-Usage:
-
-    $newobj = $obj->accept;
-
-Returns a new object in the same class as the given object if an
-accept() call succeeds, and C<undef> otherwise.  If the accept()
-call succeeds, the new object is marked as being open, connected,
-and bound.
-
-=item getsopt
-
-Usage:
-
-    @optvals = $obj->getsopt($level, $option);
-    @optvals = $obj->getsopt($optname);
-
-Returns the unpacked values from a call to the getsockopt()
-builtin.  In order to do the unpacking, the socket option must
-have been registered with the object.  See the discussion below
-in socket options.
-
-Since registered socket options are known by name as well as by
-their level and option values, it is possible to make calls using
-only option name.  If the name is not registered with the object,
-the return value is the same as that for C<getsopt $obj -1,-1>,
-which is an empty return array and $! set appropriately (should
-be C<EINVAL>).
-
-Examples:
-
-    ($sotype) = $obj->getsopt('SO_TYPE');
-    @malinger = $obj->getsopt(SOL_SOCKET, SO_LINGER);
-    ($sodebug) = $obj->getsopt('SOL_SOCKET', 'SO_DEBUG');
-
-=item getropt
-
-Usage:
-
-    $optsetting = $obj->getropt($level, $option);
-    $optsetting = $obj->getropt($optname);
-
-Returns the raw value from a call to the getsockopt() builtin.
-If both the C<$level> and C<$option> arguments are given as
-numbers, the getsockopt() call will be made even if the given
-socket option is not registered with the object.  Otherwise, the
-return value for unregistered objects will be undef with the
-value of $! set as described above for the C<getsopt> method.
-
-=item setsopt
-
-Usage:
-
-    $ok = $obj->setsopt($level, $option, @optvalues);
-    $ok = $obj->setsopt($optname, @optvalues);
-
-Returns the result from a call to the setsockopt() builtin.  In
-order to be able to pack the C<@optvalues>, the option must be
-registered with the object, just as for the C<getsopt> method,
-above.
-
-=item setropt
-
-Usage:
-
-    $ok = $obj->setropt($level, $option, $rawvalue);
-    $ok = $obj->setropt($optname, $rawvalue);
-
-Returns the result from a call to the setsockopt() builtin.  If
-the $level and $option arguments are both given as numbers, the
-setsockopt() call will be made even if the option is not
-registered with the object.  Otherwise, unregistered options will
-fail as for the C<setsopt> method, above.
-
-=item fhvec
-
-Usage:
-
-    $vecstring = $obj->fhvec;
-
-Returns a vector suitable as an argument to the 4-argument select()
-call.  This is for use in doing selects with multiple I/O streams.
-
-=item select
-
-Usage:
-
-    ($nfound, $timeleft, $rbool, $wbool, $xbool) =
-	$obj->select($doread, $dowrite, $doxcept, $timeout);
-    $nfound = $obj->select($doread, $dowrite, $doxcept, $timeout);
-
-Issues a 4-argument select() call for the associated I/O stream.
-All arguments are optional.  The $timeout argument is the same as
-the fourth argument to select().  The first three are booleans, used
-to determine whether the select() should include the object's I/O stream
-in the corresponding parameter to the select() call.  The return in list
-context is the standard two values from select(), follwed by booleans
-indicating whether the actual select() call found reading, writing, or
-exception to be true.  In scalar context, returns only the count of the
-number of matching conditions.  This is probably only useful when you're
-checking just one of the three possible conditions.
-
-=item ioctl
-
-Usage:
-
-    $rval = $obj->ioctl($func, $value);
-
-Returns the result of an ioctl() call on the associated I/O stream.
-
-=item fcntl
-
-Usage:
-
-    $rval = $obj->fcntl($func, $value);
-
-Returns the result of an fcntl() call on the associated I/O stream.
-
-=item format_addr
-
-Usage:
-
-    $string = $obj->format_addr($sockaddr);
-    $string = format_addr Module $sockaddr;
-
-Returns a formatted representation of the address.  This is a
-method so that it can be overridden by derived classes.  It is
-used to implement ``pretty-printing'' methods for source and
-destination addresses.
-
-=item format_local_addr
-
-Usage:
-
-    $string = $obj->format_local_addr;
-
-Returns a formatted representation of the local socket address
-associated with the object.
-
-=item format_remote_addr
-
-Usage:
-
-    $string = $obj->format_remote_addr;
-
-Returns a formatted representation of the remote socket address
-associated with the object.
+    $obj->unbind;
+
+Removes any saved binding for the object.  Unless the object is
+currently connected, this will result in a call to its C<close>
+method, in order to ensure that any previous binding is removed.
+Even if the object is connected, the C<srcaddrlist> object
+parameter is removed (via the object's C<delparams> method).  The
+return value from this method is indeterminate.
 
 =back
 
@@ -1478,6 +1637,24 @@ such.  However, these are the methods which are only useful for
 implementing derived classes, and not for the general user.
 
 =over
+
+=item ckeof
+
+Usage:
+
+    $wasiteof = $obj->ckeof;
+
+After a 0-length read in the get() routine, it calls this method to
+determine whether such a 0-length read meant EOF.  The default method
+supplied here checks for non-blocking sockets (if necessary), and
+for a C<SOCK_STREAM> socket.  If EOF_NONBLOCK is true, or if the
+C<VAL_O_NONBLOCK> flag was not set in the fcntl() flags for the
+socket, or if the error code was not VAL_EAGAIN, I<and> the socket
+is of type C<SOCK_STREAM>, then this method returns true.  It
+returns a false value otherwise.  This method is overridable for
+classes like C<Net::Dnet>, which support C<SOCK_SEQPACKET> and
+need to make a protocol-family-specific check to tell a 0-length
+packet from EOF.
 
 =item initsockopts
 
@@ -1535,22 +1712,6 @@ Example:
 
     $self->registerOptions('SOL_SOCKET', SOL_SOCKET+0, \%sockopts);
 
-=item registerParamKeys
-
-=item register_param_keys
-
-Usage:
-
-    $obj->registerParamKeys(\@keynames);
-
-This method registers the referenced keynames as valid parameters
-for C<setparams> and the like for this object.  The C<new>
-methods can store arbitrary parameter values, but the C<init>
-method will later ensure that all those keys eventually got
-registered.  This out-of-order setup is allowed because of
-possible cross-dependencies between the various parameters, so
-they have to be set before they can be validated (in some cases).
-
 =item registerParamHandlers
 
 =item register_param_handlers
@@ -1571,65 +1732,21 @@ being called from the C<delparams> method).  See the other
 discussion of validation routines in the C<setparams> method
 description, above.
 
-=item ckeof
+=item registerParamKeys
+
+=item register_param_keys
 
 Usage:
 
-    $wasiteof = $obj->ckeof;
+    $obj->registerParamKeys(\@keynames);
 
-After a 0-length read in the get() routine, it calls this method to
-determine whether such a 0-length read meant EOF.  The default method
-supplied here checks for non-blocking sockets (if necessary), and
-for a C<SOCK_STREAM> socket.  If EOF_NONBLOCK is true, or if the
-C<VAL_O_NONBLOCK> flag was not set in the fcntl() flags for the
-socket, or if the error code was not VAL_EAGAIN, I<and> the socket
-is of type C<SOCK_STREAM>, then this method returns true.  It
-returns a false value otherwise.  This method is overridable for
-classes like C<Net::Dnet>, which support C<SOCK_SEQPACKET> and
-need to make a protocol-family-specific check to tell a 0-length
-packet from EOF.
-
-=item fileno
-
-Usage:
-
-    $fnum = $obj->fileno;
-
-I've strongly resisted giving people direct access to the filehandle
-embedded in the object because of the problems of mixing C<stdio> input
-calls and traditional socket-level I/O.  However, if you're sure you can
-keep things straight, here are the rules under which it's safe to use the
-embedded filehandle:
-
-=over
-
-=item Z<>
-
-Don't use perl's own C<stdio> calls.  Stick to sysread() and recv().
-
-=item Z<>
-
-Don't use the object's C<getline> method, since that stores a read-ahead
-buffer in the object which only the object's own C<get>/C<recv> and
-C<getline> methods know to return to you.  (The object's C<select> method
-knows about the buffer enough to tell you that a read will succeed if
-there's saved data, though.)
-
-=item Z<>
-
-Please don't change the state of the socket behind my back.  That
-means no close(), shutdown(), connect(), bind(), or listen()
-built-ins.  Use the corresponding methods instead, or all bets
-are off.
-
-=back
-
-Given that, you can get at the filehandle in the object this way:
-
-    $fh = $obj->getfh;
-
-That C<$fh> is a glob ref, by the way, but that doesn't matter for calling
-the built-in I/O primitives.
+This method registers the referenced keynames as valid parameters
+for C<setparams> and the like for this object.  The C<new>
+methods can store arbitrary parameter values, but the C<init>
+method will later ensure that all those keys eventually got
+registered.  This out-of-order setup is allowed because of
+possible cross-dependencies between the various parameters, so
+they have to be set before they can be validated (in some cases).
 
 =back
 
@@ -1669,21 +1786,9 @@ module itself:
 
 =over
 
-=item PF
-
-Protocol family for this object
-
 =item AF
 
 Address family (will default from PF, and vice versa)
-
-=item type
-
-The socket type to create (C<SOCK_STREAM>, C<SOCK_DGRAM>, etc.)
-
-=item proto
-
-The protocol to pass to the socket() call (often defaulted to 0)
 
 =item dstaddr
 
@@ -1693,6 +1798,20 @@ The result of getpeername(), or an ephemeral proposed connect() address
 
 A reference to an array of socket addresses to try for connect()
 
+=item maxqueue
+
+An override of the default maximum queue depth parameter for
+listen().  This will be used if the $maxqueue argument to
+listen() is not supplied.
+
+=item PF
+
+Protocol family for this object
+
+=item proto
+
+The protocol to pass to the socket() call (often defaulted to 0)
+
 =item srcaddr
 
 The result of getsockname(), or an ephemeral proposed bind() address
@@ -1701,11 +1820,9 @@ The result of getsockname(), or an ephemeral proposed bind() address
 
 A reference to an array of socket addresses to try for bind()
 
-=item maxqueue
+=item type
 
-An override of the default maximum queue depth parameter for
-listen().  This will be used if the $maxqueue argument to
-listen() is not supplied.
+The socket type to create (C<SOCK_STREAM>, C<SOCK_DGRAM>, etc.)
 
 =back
 
@@ -1731,22 +1848,14 @@ Usage:
 
 The inverse of pack_sockaddr().
 
-=item VAL_O_NONBLOCK
+=item EOF_NONBLOCK
 
-Gives the value found by the F<Configure> script for setting a
-filehandle non-blocking.  The value available from the C<Config>
-module is a string representing the value found
-(C<$Config::Config{'o_nonblock'}>), whereas the value from
-C<VAL_O_NONBLOCK> is an integer, suitable for passing to
-sysopen() or for eventual use in fcntl().
-
-=item VAL_EAGAIN
-
-Gives the value of the error symbol found by the F<Configure>
-script which is set by a non-blocking filehandle when no data is
-available.  This differs from the value available from the
-C<Config> module (C<$Config::Config{'eagain'}>) in that the
-latter is a string, typically C<"EAGAIN">.
+Returns a boolean value dependin on whether a read from a
+non-blocking socket can distinguish an end-of-file condition from
+a no-data-available condition.  This corresponds to the value
+available from the C<Config> module as
+C<$Config::Config{'d_eofnblk'}>), except that C<EOF_NONBLOCK> is
+always defined.
 
 =item RD_NODATA
 
@@ -1756,14 +1865,22 @@ data available.  This is similar to the string representation of
 the value available from the C<Config> module as
 C<$Config::Config{'rd_nodata'}>.
 
-=item EOF_NONBLOCK
+=item VAL_EAGAIN
 
-Returns a boolean value dependin on whether a read from a
-non-blocking socket can distinguish an end-of-file condition from
-a no-data-available condition.  This corresponds to the value
-available from the C<Config> module as
-C<$Config::Config{'d_eofnblk'}>), except that C<EOF_NONBLOCK> is
-always defined.
+Gives the value of the error symbol found by the F<Configure>
+script which is set by a non-blocking filehandle when no data is
+available.  This differs from the value available from the
+C<Config> module (C<$Config::Config{'eagain'}>) in that the
+latter is a string, typically C<"EAGAIN">.
+
+=item VAL_O_NONBLOCK
+
+Gives the value found by the F<Configure> script for setting a
+filehandle non-blocking.  The value available from the C<Config>
+module is a string representing the value found
+(C<$Config::Config{'o_nonblock'}>), whereas the value from
+C<VAL_O_NONBLOCK> is an integer, suitable for passing to
+sysopen() or for eventual use in fcntl().
 
 =back
 
@@ -1883,8 +2000,8 @@ sub listen			# $self [, $maxq=SOMAXCONN] ; returns boolean
 	$maxq =~ /\D/ or !ref $self or !$$self{fhref};
     carp "Excess args for ${whoami}(@_) ignored" if @_ > 2;
     return undef unless $self->isbound or $self->bind;
-    $$self{didlisten} = $maxq;
-    listen($$self{fhref},$maxq) or undef $$self{didlisten};
+    $$self{'didlisten'} = $maxq;
+    listen($$self{fhref},$maxq) or undef $$self{'didlisten'};
 }
 
 sub didlisten			# $self [, @ignored] ; returns boolean
@@ -2068,7 +2185,7 @@ sub select			# $this [[, $read, $write, $xcept, $timeout]]
 	or return ();
     if (defined($$self{sockLineBuf}) && $doread && ($rvec ne $fhvec)) {
 	$nfound += 1;
-	$rvec = $fhvec;
+	$rvec |= $fhvec;
     }
     return $nfound unless wantarray;
     ($nfound, $timeleft,
@@ -2186,4 +2303,87 @@ sub RECV			# $self, $buf [,$maxlen] [,$flags]
     return unless defined $buf;
     $_[1] = $buf;
     $from;
+}
+
+sub TIEHANDLE			# $class, $host, $port [,\%options]
+{				# redirects via $class->new(...)
+    $_[0]->_trace(\@_,1);
+    my $class = shift;
+    my $self = $class->new(@_);
+    $self && $self->isconnected && $self;
+}
+
+sub PRINTF			# $self, $format [,@args]
+{				# returns boolean
+    $_[0]->_trace(\@_,5);
+    my $self = shift;
+    my $fmt = shift;
+    $self->put(sprintf($fmt,@_));
+}
+
+sub READ			# $self, $buffer, $length [,$offset]
+{				# returns $lenread or undef
+    my $whoami = $_[0]->_trace(\@_,5);
+    croak "Invalid args to ${whoami}, called"
+	if @_ < 3 or @_ > 4 or !ref($_[0]);
+    my $len = $_[2]+0;
+    croak "Negative buffer length in ${whoami}, called"
+	if $len < 0;
+    if (@_ > 3) {
+	$_[3] += 0;		# force offset to be numeric
+	croak "Buffer offset outside buffer contents in ${whoami}, called"
+	    if ($_[3] < 0 and $_[3]+length($_[1]) < 0);
+    }
+    my $buf = $_[0]->recv($len, 0);
+    $_[1] ||= '' unless defined $_[1];
+    return unless defined $buf;
+    my $xbuf;
+    $len -= length($buf);
+    while ($len > 0) {		# keep trying to fill the specified length
+	$xbuf = $_[0]->recv($len, 0);
+	last unless defined $xbuf;
+	$buf .= $xbuf;
+	$len -= length($xbuf);
+    }
+    if (@_ > 3) {
+	substr($_[1], $_[3]) = $buf;
+    }
+    else {
+	$_[1] = $buf;
+    }
+    length($buf);
+}
+
+sub GETC			# $self
+{				# returns $charstr or undef
+    my $whoami = $_[0]->_trace(\@_,6);
+    carp "Excess arguments to ${whoami} ignored"
+	if @_ > 1;
+    $_[0]->recv(1,0);
+}
+
+sub READLINE			# $self
+{				# returns $line, @lines, or undef
+    return $_[0]->getline unless wantarray and defined($/);
+    my $whoami = $_[0]->_trace(\@_,5);
+    my $self = shift;
+    my (@lines, $line);
+    carp "Excess arguments to ${whoami} ignored" if @_;
+    while (defined($line = $self->getline)) { push(@lines, $line) }
+    @lines;
+}
+
+sub SEND			# $self, $buf [,$flags] [,$where] ; bool
+{
+    my $whoami = $_[0]->_trace(\@_,3);
+    my ($self,$buf,$flags,$where,$fh) = @_;
+    croak "Invalid args to ${whoami}, called"
+	if @_ < 2 or !ref $self or !($fh = $$self{fhref});
+    $flags = 0 unless defined $flags;
+    carp "Excess arguments to ${whoami} ignored" if @_ > 4;
+    return getsockopt($fh,SOL_SOCKET,SO_TYPE) unless
+	$self->isopen or $self->open;	# EBADF error unless open
+    (defined $where) ?
+	CORE::send($fh, $buf, $flags, $where) :
+	CORE::send($fh, $buf, $flags);
 }
