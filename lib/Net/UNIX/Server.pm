@@ -1,4 +1,4 @@
-# Copyright 1997 Spider Boardman.
+# Copyright 1997,1998 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -16,13 +16,15 @@ package Net::UNIX::Server;
 use 5.004;
 
 use strict;
-use Carp;
+#use Carp;
+sub carp { require Carp; goto &Carp::carp; }
+sub croak { require Carp; goto &Carp::croak; }
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.80';
+    $VERSION = '0.81';
 }
 sub Version { "$myclass v$VERSION" }
 
@@ -181,6 +183,7 @@ sub new
     my $whoami = $_[0]->_trace(\@_,1);
     my($class,@Args,$self) = @_;
     $self = $class->SUPER::new(@Args);
+    $class = ref $class if ref $class;
     ($self || $class)->_trace(\@_,2," self" .
 			      (defined $self ? "=$self" : " undefined") .
 			      " after sub-new");

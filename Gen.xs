@@ -1,6 +1,6 @@
 /*
 
-# Copyright 1995,1996,1997 Spider Boardman.
+# Copyright 1995,1996,1997,1998 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -763,6 +763,7 @@ BOOT:
 #ifdef	VAL_EAGAIN
 	newXSconstUV("Net::Gen::VAL_EAGAIN", VAL_EAGAIN, file);
 #endif
+	newXSconstUV("Net::Gen::MSG_OOB", MSG_OOB, file);
 	newXSconstUV("Net::Gen::ENOENT", ENOENT, file);
 	newXSconstUV("Net::Gen::EINVAL", EINVAL, file);
 	newXSconstUV("Net::Gen::EBADF", EBADF, file);
@@ -802,6 +803,7 @@ BOOT:
 	newXSconstUV("Net::Gen::EPROTO", EPROTO, file);
 	newXSconstUV("Net::Gen::ENODATA", ENODATA, file);
 	newXSconstUV("Net::Gen::ENOSTR", ENOSTR, file);
+	newXSconstUV("Net::Gen::SOMAXCONN", SOMAXCONN, file);
 
 
 MODULE = Net::Gen		PACKAGE = Net::Gen

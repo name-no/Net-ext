@@ -1,4 +1,4 @@
-# Copyright 1995,1996,1997 Spider Boardman.
+# Copyright 1995,1996,1997,1998 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -16,22 +16,24 @@ package Net::Inet;
 use 5.004;			# new minimum Perl version for this package
 
 use strict;
-use Carp;
+# use Carp;
+sub croak { require Carp; goto &Carp::croak; }
+sub carp { require Carp; goto &Carp::carp; }
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
 my $myclass;
 
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.80';
+    $VERSION = '0.81';
 }
 
 sub Version () { "$myclass v$VERSION" }
 
 use AutoLoader;
 #use Exporter ();
-use Net::Gen 0.80 qw(:ALL);
-use Socket qw(!/^[a-z]/ /^inet_/);
+use Net::Gen 0.81 qw(:ALL);
+use Socket qw(!/^[a-z]/ /^inet_/ !SOMAXCONN);
 
 BEGIN {
     @ISA = qw(Net::Gen);
@@ -427,6 +429,7 @@ sub new				# $class, [\%params]
     my $whoami = $_[0]->_trace(\@_,1);
     my($class,@Args,$self) = @_;
     $self = $class->SUPER::new(@Args);
+    $class = ref $class if ref $class;
     $class->_trace(\@_,2,", self" .
 		   (defined $self ? "=$self" : " undefined") .
 		   " after sub-new");
@@ -436,21 +439,21 @@ sub new				# $class, [\%params]
 	# init object debug level
 	$self->setparams({'debug'=>$debug},-1);
 	if (%Keys) {
-	    $self->{Keys} = { %Keys } ;
+	    ${*$self}{Keys} = { %Keys } ;
 	}
 	else {
 	    # register our keys and their handlers
 	    $self->registerParamKeys(\@Keys);
 	    $self->registerParamHandlers(\%keyhandlers);
-	    %Keys = %{ $self->{Keys} } ;
+	    %Keys = %{ ${*$self}{Keys} } ;
 	}
 	if (%Sopts) {
-	    $self->{Sockopts} = { %Sopts } ;
+	    ${*$self}{Sockopts} = { %Sopts } ;
 	}
 	else {
 	    # register our socket options
-	    $self->registerOptions('IPPROTO_IP', IPPROTO_IP, \%sockopts);
-	    %Sopts = %{ $self->{Sockopts} } ;
+	    $self->registerOptions('IPPROTO_IP', IPPROTO_IP(), \%sockopts);
+	    %Sopts = %{ ${*$self}{Sockopts} } ;
 	}
 	# set our expected parameters
 	$self->setparams({PF => PF_INET, AF => AF_INET},-1);
@@ -537,7 +540,7 @@ sub _sethost			# $self,$key,$newval
 {
     my($self,$key,$newval) = @_;
     return "Invalid args to ${myclass}::_sethost(@_), called"
-	if @_ != 3 or ref($$self{Keys}{$key}) ne 'CODE';
+	if @_ != 3 or ref(${*$self}{Keys}{$key}) ne 'CODE';
     # check for call from delparams
     if (!defined $newval) {
 	my @delkeys;
@@ -598,7 +601,7 @@ sub _sethost			# $self,$key,$newval
     }
     # valid so far, get out if can't form addresses yet
     return '' unless
-	($port = $$self{Parms}{$pkey}) =~ /^\d+$/s or defined($cport) or
+	($port = ${*$self}{Parms}{$pkey}) =~ /^\d+$/s or defined($cport) or
 	    !defined $port and $pkey eq 'thisport'; # allow for 'bind'
     if (defined $cport) {
 	return $newval if $newval = &_setport($self,$pkey,$cport);
@@ -3559,7 +3562,7 @@ sub _setport			# ($self,$key,$newval)
 {
     my($self,$key,$newval) = @_;
     return "Invalid arguments to ${myclass}::_setport(@_), called"
-	if @_ != 3 || !exists($$self{Keys}{$key});
+	if @_ != 3 || !exists(${*$self}{Keys}{$key});
     my $whoami = $self->_trace(\@_,1);
     my($skey,$hkey,$pkey,$svc,$port,$proto,$type,$host,$reval);
     my($pname,$defport,@serv);
@@ -3567,8 +3570,8 @@ sub _setport			# ($self,$key,$newval)
     ($pkey = $key) =~ s/service$/port/;	# and one for the port
     ($hkey = $pkey) =~ s/port$/host/; # another for calling _sethost
     if (!defined $newval) {	# deleting a service or port
-	delete $$self{Parms}{$skey};
-	delete $$self{Parms}{$pkey} unless $self->isconnected;
+	delete ${*$self}{Parms}{$skey};
+	delete ${*$self}{Parms}{$pkey} unless $self->isconnected;
 	my @delkeys;
 	if ($pkey eq 'thisport') {
 	    @delkeys = qw(srcaddrlist srcaddr);
@@ -3609,8 +3612,8 @@ sub _setport			# ($self,$key,$newval)
     }
 
     $reval = $newval;		# make resetting $_[2] simple
-    $svc = $$self{Parms}{$skey}; # keep earlier values around (to preserve)
-    $port = $$self{Parms}{$pkey};
+    $svc = ${*$self}{Parms}{$skey}; # keep earlier values around (to preserve)
+    $port = ${*$self}{Parms}{$pkey};
     $port = undef if
 	defined($port) and $port =~ /\D/; # but stored ports must be numeric
     ($newval,$defport) = ($1,$2+0)
@@ -3645,18 +3648,18 @@ sub _setport			# ($self,$key,$newval)
 	return "Unknown service $newval, found";
     }
     $reval = (($key eq $skey) ? $svc : $port); # in case we get that far
-    $$self{Parms}{$skey} = $svc if $svc; # in case no port change
+    ${*$self}{Parms}{$skey} = $svc if $svc; # in case no port change
     $_[2] = $reval;
     print STDERR " - ${myclass}::_setport $self $skey $svc\n" if
 	$self->debug and $svc;
     print STDERR " - ${myclass}::_setport $self $pkey $port\n" if
 	$self->debug and defined $port;
-    return '' if defined($$self{Parms}{$pkey}) and
-	$$self{Parms}{$pkey} == $port; # nothing to update if same number
-    $$self{Parms}{$pkey} = $port; # in case was service key
+    return '' if defined(${*$self}{Parms}{$pkey}) and
+	${*$self}{Parms}{$pkey} == $port; # nothing to update if same number
+    ${*$self}{Parms}{$pkey} = $port; # in case was service key
     # check for whether we can ask _sethost to set {dst,src}addrlist now
     return '' unless
-	$host = $$self{Parms}{$hkey} or $hkey eq 'thishost';
+	$host = ${*$self}{Parms}{$hkey} or $hkey eq 'thishost';
     $host = '0' if !defined $host; # 'thishost' value was null
     $self->setparams({$hkey => $host},0,1); # try it
     '';				# return goodness from here
@@ -3666,8 +3669,8 @@ sub _setproto			# $this, $key, $newval
 {
     my($self,$key,$newval) = @_;
     if (!defined $newval) {	# delparams call?
-	delete $$self{Parms}{IPproto}; # make both go away at once
-	delete $$self{Parms}{proto};
+	delete ${*$self}{Parms}{IPproto}; # make both go away at once
+	delete ${*$self}{Parms}{proto};
 	return '';
     }
     my($pname,$proto);
@@ -3695,9 +3698,9 @@ sub _setproto			# $this, $key, $newval
 	    $pname = 'icmp';
 	}
     }
-    $$self{Parms}{IPproto} = $pname; # update our values
-    $$self{Parms}{proto} = $proto;
-    $_[2] = $$self{Parms}{$key}; # make sure the right value gets set
+    ${*$self}{Parms}{IPproto} = $pname; # update our values
+    ${*$self}{Parms}{proto} = $proto;
+    $_[2] = ${*$self}{Parms}{$key}; # make sure the right value gets set
     '';				# return goodness
 }
 
@@ -3736,14 +3739,13 @@ sub getsockinfo			# $this
 sub format_addr			# $this, $sockaddr, [numeric_only]
 {
     my($this,$sockaddr,$numeric) = @_;
-    my($name,$addr,$serv,$port,$rval) = $this->_addrinfo($sockaddr);
+    my($name,$addr,$serv,$port) = $this->_addrinfo($sockaddr);
     if ($numeric) {
-	$rval = "${addr}:${port}";
+	"${addr}:${port}";
     }
     else {
-	$rval = "${name}:${serv}";
+	"${name}:${serv}";
     }
-    $rval;
 }
 
 
@@ -4421,7 +4423,10 @@ sub bind			# $self, [\]@([host],[port])
 sub unbind			# $self
 {
     my($self,@args) = @_;
-    carp "Excess args to ${myclass}::unbind ignored" if @args;
+    if (@args) {
+	$whoami = $_[0]->_trace(\@_,0);
+	carp "Excess args to ${whoami} ignored";
+    }
     $self->delparams([qw(thishost thisport)]) || return undef;
     $self->SUPER::unbind;
 }

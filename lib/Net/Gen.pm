@@ -1,4 +1,4 @@
-# Copyright 1995,1996,1997 Spider Boardman.
+# Copyright 1995,1996,1997,1998 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -16,26 +16,31 @@ package Net::Gen;
 use 5.004;		# new minimum Perl version for this package
 
 use strict;
-use Carp;
+#use Carp; # no!  just require Carp when we want to croak.
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD $adebug);
 
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.80';
+    $VERSION = '0.81';
 }
 
 sub Version () { "$myclass v$VERSION" }
 
-use Socket qw(!/pack_sockaddr/);
+use Socket qw(!/pack_sockaddr/ !/^MSG_OOB$/ !SOMAXCONN);
 use AutoLoader;
 use Exporter ();
 use DynaLoader ();
 use Symbol qw(gensym);
 use SelectSaver ();
+use IO::Handle ();
+
+# Special wart for new_from_f{d,h}, since only the _fh flavour's already
+# known to AutoLoader.
+sub new_from_fd;  *new_from_fd = \&new_from_fh;
 
 BEGIN {
-    @ISA = qw(Exporter DynaLoader);
+    @ISA = qw(IO::Handle Exporter DynaLoader);
 
     @EXPORT = ();
 
@@ -108,7 +113,7 @@ sub AUTOLOAD
     my $val = constant($constname);
     if ($! != 0) {
 	if ($! =~ /Invalid/) {
-	    if (@_ && ref $_[0] && @_ < 3 && exists $_[0]->{Keys}{$constname})
+	    if (@_ && ref $_[0] && @_ < 3 && exists ${*{$_[0]}}{Keys}{$constname})
 	    {
 		no strict 'refs';	# allow us to define the sub
 		my $what = $constname;  # don't tie up $constname for closures
@@ -127,7 +132,8 @@ sub AUTOLOAD
 	    my $wh = $SIG{__WARN__};
 	    die "\n"
 		if ($wh and (ref($wh) eq 'CODE') and $wh == $nullsub);
-	    croak "Your vendor has not defined $callpkg macro $constname, used";
+	    require Carp;
+	    Carp::croak "Your vendor has not defined $callpkg macro $constname, used";
 	}
     }
 
@@ -146,11 +152,26 @@ sub AUTOLOAD
 }
 
 BEGIN {
-    bootstrap Net::Gen $VERSION; # do this now so the constant XSUBs really are
+# do this now so the constant XSUBs really are
+    $myclass->bootstrap($VERSION);
 }
 
 # Preloaded methods go here.  Autoload methods go after __END__, and are
 # processed by the autosplit program.
+
+# dummies for the Carp:: routines, which we'll re-invoke if we get called.
+
+sub croak
+{
+    require Carp;
+    goto &Carp::croak;
+}
+
+sub carp
+{
+    require Carp;
+    goto &Carp::carp;
+}
 
 
 # This package has the core 'generic' routines for fiddling with
@@ -257,7 +278,7 @@ sub _debug			# $this [, $newval] ; returns oldval
 sub debug			# $self [, $newval] ; returns oldval
 {
     my ($self,$newval) = @_;
-    my $oldval = $$self{Parms}{'debug'} if defined wantarray;
+    my $oldval = ${*$self}{Parms}{'debug'} if defined wantarray;
     $self->setparams({'debug'=>$newval}) if defined $newval;
     $oldval;
 }
@@ -265,12 +286,12 @@ sub debug			# $self [, $newval] ; returns oldval
 sub _trace			# $this , \@args, minlevel, [$moretext]
 {
     my ($this,$aref,$level,$msg) = @_;
-    my ($pkg,$rtn) = (caller(0))[0,3];
+    my ($rtn) = (caller(0))[3];
     local $^W=0;		# keep the arglist interpolation from carping
 #    $msg = '' unless defined $msg;
-    print STDERR "${pkg}::${rtn}(@{$aref||[]})${msg}\n"
+    print STDERR "${rtn}(@{$aref||[]})${msg}\n"
 	if $level and $this->_debug >= $level;
-    "${pkg}::${rtn}" if defined wantarray;
+    ${rtn};
 }
 
 sub _setdebug			# $self, $name, $newval
@@ -305,17 +326,17 @@ sub _setblocking		# $self, $name, $newval
     my ($self,$what,$newval) = @_;
     $newval = 1 unless defined $newval;
     # default previous value, just in case
-    $$self{Parms}{$what} = 1 unless defined $$self{Parms}{$what};
+    ${*$self}{Parms}{$what} = 1 unless defined ${*$self}{Parms}{$what};
     if ($newval) {
 	$_[2] = 1;	# canonicalise the new value
 	if (defined $F_GETFL and defined $F_SETFL and defined $nonblock_flag
 	    and $self->isopen) {
-	    if ((fcntl($$self{fhref}, $F_GETFL, 0) & VAL_O_NONBLOCK) ==
+	    if ((fcntl($self, $F_GETFL, 0) & VAL_O_NONBLOCK) ==
 		VAL_O_NONBLOCK) {
-		$$self{Parms}{$what} = 0;  # note previous status
+		${*$self}{Parms}{$what} = 0;  # note previous status
 		return 'Failed to clear non-blocking status'
-		    unless eval {fcntl($$self{fhref}, $F_SETFL,
-				       fcntl($$self{fhref}, $F_GETFL, 0) &
+		    unless eval {fcntl($self, $F_SETFL,
+				       fcntl($self, $F_GETFL, 0) &
 				       ~VAL_O_NONBLOCK)};
 	    }
 	}
@@ -327,12 +348,12 @@ sub _setblocking		# $self, $name, $newval
 	    return 'Non-blocking sockets unavailable in this configuration';
 	}
 	if ($self->isopen) {
-	    if ((fcntl($$self{fhref}, $F_GETFL, 0) & VAL_O_NONBLOCK) !=
+	    if ((fcntl($self, $F_GETFL, 0) & VAL_O_NONBLOCK) !=
 		VAL_O_NONBLOCK) {
-		$$self{Parms}{$what} = 1;  # note previous state
+		${*$self}{Parms}{$what} = 1;  # note previous state
 		return 'Failed to set non-blocking status'
-		    unless eval {fcntl($$self{fhref}, $F_SETFL,
-				       fcntl($$self{fhref}, $F_GETFL, 0) |
+		    unless eval {fcntl($self, $F_SETFL,
+				       fcntl($self, $F_GETFL, 0) |
 				       VAL_O_NONBLOCK)};
 	    }
 	}
@@ -371,6 +392,11 @@ my %Codekeys = (
 		'blocking' => \&_setblocking,
 		'timeout' => \&_settimeout,
 	       );
+# This hash remembers the original {Keys} settings after the first time.
+my %Keys;
+
+# This hash remembers the original socket option settings after the first time.
+my %Opts;
 
 sub registerParamKeys		# $self, \@keys
 {
@@ -378,7 +404,7 @@ sub registerParamKeys		# $self, \@keys
     my $whoami = $self->_trace(\@_,3);
     croak "Invalid arguments to ${whoami}(@_), called"
 	if @_ != 2 or ref $names ne 'ARRAY';
-    @{$$self{Keys}}{@$names} = (); # remember the names
+    @{${*$self}{Keys}}{@$names} = (); # remember the names
 }
 
 sub register_param_keys;	# helps with -w
@@ -403,7 +429,7 @@ sub registerParamHandlers	# $self, \@keys, [\]@handlers
     croak "Invalid handlers in ${whoami}(@_), called"
 	if @$handlers != @$names or grep(ref $_ ne 'CODE', @$handlers);
     # finally, all is validated, so set the bloody things
-    @{$$self{Keys}}{@$names} = @$handlers;
+    @{${*$self}{Keys}}{@$names} = @$handlers;
 }
 
 sub register_param_handlers;	# helps with -w
@@ -413,16 +439,10 @@ sub registerOptions		# $self, $levelname, $level, \%options
 {
     my ($self, $levname, $level, $opts) = @_;
     my $whoami = $self->_trace(\@_,3);
-    if (!defined($opts) and ref $level eq 'HASH' and ref $levname eq 'ARRAY') {
-	# workaround for parameter-passing bug in 5.000
-	$opts = $level;
-	$level = $$levname[1];
-	$levname = $$levname[0];
-    }
     croak "Invalid arguments to ${whoami}(@_), called"
 	if ref $opts ne 'HASH';
-    $$self{Sockopts}{$levname} = $opts;
-    $$self{Sockopts}{$level+0} = $opts;
+    ${*$self}{Sockopts}{$levname} = $opts;
+    ${*$self}{Sockopts}{$level+0} = $opts;
 }
 
 sub register_options;		# helps with -w
@@ -433,7 +453,7 @@ sub paramSaver			# $self, @params
 {
     my ($self, @params) = @_;
     my %setparams = $self->getparams(\@params);
-    my @delparams = map { exists $$self{Parms}{$_} ? () : ($_) } @params;
+    my @delparams = map { exists ${*$self}{Parms}{$_} ? () : ($_) } @params;
     bless [$self, \%setparams, \@delparams], 'Net::Gen::ParamSaver';
 }
 
@@ -460,14 +480,22 @@ sub new				# classname [, \%params]
     if (@_ > 2 and $parms and ref $parms eq 'HASH') {
 	croak "Invalid argument format to ${whoami}(@_), called";
     }
-    my $self = {};
+    $pack = ref $pack if ref $pack;
+    my $self = _genfh;
     bless $self,$pack;
     $pack->_trace(\@_,2,", self=$self after bless");
-    $$self{Parms} = \%parms;
-    $self->registerParamKeys(\@Keys); # register our keys
-    $self->registerParamHandlers(\%Codekeys);
-    $self->registerOptions(['SOL_SOCKET', SOL_SOCKET+0], \%sockopts);
-    $$self{fhref} = _genfh;
+    ${*$self}{Parms} = \%parms;
+    if (%Keys) {
+	${*$self}{Keys} = { %Keys };
+	${*$self}{Sockopts} = { %Opts };
+    }
+    else {
+	$self->registerParamKeys(\@Keys); # register our keys
+	$self->registerParamHandlers(\%Codekeys);
+	$self->registerOptions('SOL_SOCKET', SOL_SOCKET(), \%sockopts);
+	%Keys = %{${*$self}{Keys}};
+	%Opts = %{${*$self}{Sockopts}};
+    }
     if ($pack eq $myclass) {
 	unless ($self->init) {
 	    local $!;		# preserve errno
@@ -475,7 +503,7 @@ sub new				# classname [, \%params]
 	    undef $self;	# another statement needed for unwinding
 	}
     }
-    if ($pack->_debug) {
+    if (($self || $pack)->_debug) {
 	if (defined $self) {
 	    print STDERR "${whoami} returning self=$self\n";
 	}
@@ -504,30 +532,30 @@ sub setparams			# $this, \%newparams [, $newonly [, $check]]
 		if $self->debug;
 	(carp "Unknown parameter type $parm for a " . (ref $self) . " object")
 	    , $errs++, next
-		unless exists $$self{Keys}{$parm};
-	next if $newonly < 0 && defined $$self{Parms}{$parm};
+		unless exists ${*$self}{Keys}{$parm};
+	next if $newonly < 0 && defined ${*$self}{Parms}{$parm};
 	if (!$check)
 	{
 	    # this ungodly construct brought to you by -w
 	    next if
-		defined($$self{Parms}{$parm}) eq defined($newval)
+		defined(${*$self}{Parms}{$parm}) eq defined($newval)
 		    and
 			!defined($newval) ||
-			$$self{Parms}{$parm} eq $newval ||
-			    $$self{Parms}{$parm} !~ /\D/ &&
+			${*$self}{Parms}{$parm} eq $newval ||
+			    ${*$self}{Parms}{$parm} !~ /\D/ &&
 				$newval !~ /\D/ &&
-				    $$self{Parms}{$parm} == $newval
+				    ${*$self}{Parms}{$parm} == $newval
 	    ;
 	}
 	carp("Overwrite of $parm parameter for ".(ref $self)." object ignored")
 	    , $errs++, next
-		if $newonly > 0 && defined $$self{Parms}{$parm};
-	if (defined($$self{Keys}{$parm}) and
-	    (ref($$self{Keys}{$parm}) eq 'CODE')) {
-	    my $rval = &{$$self{Keys}{$parm}}($self,$parm,$newval);
+		if $newonly > 0 && defined ${*$self}{Parms}{$parm};
+	if (defined(${*$self}{Keys}{$parm}) and
+	    (ref(${*$self}{Keys}{$parm}) eq 'CODE')) {
+	    my $rval = &{${*$self}{Keys}{$parm}}($self,$parm,$newval);
 	    (carp $rval), $errs++, next if $rval;
 	}
-	$$self{Parms}{$parm} = $newval;
+	${*$self}{Parms}{$parm} = $newval;
     }
 
     $errs ? undef : 1;
@@ -539,11 +567,11 @@ sub delparams			# $self, \@paramnames ; returns bool
     $_[0]->_trace(\@_,1);
     my($self,$keysref) = @_;
     my(@k,%k);
-    @k = grep(exists $$self{Parms}{$_}, @$keysref);
+    @k = grep(exists ${*$self}{Parms}{$_}, @$keysref);
     return 1 unless @k;		# if no keys need deleting, succeed vacuously
     @k{@k} = ();		# a hash of undefs for the following
     return undef unless $self->setparams(\%k); # see if undef is allowed
-    delete @{$$self{Parms}}{@k};
+    delete @{${*$self}{Parms}}{@k};
     1;				# return goodness
 }
 
@@ -553,13 +581,13 @@ sub checkparams			# $self, (void) ; returns bool
     my $self = shift;
     carp "Excess arguments to ${whoami} ignored"
 	if @_;
-    my $curparms = $$self{Parms};
+    my $curparms = ${*$self}{Parms};
     $curparms = {} unless ref $curparms eq 'HASH';
     # make sure only the valid ones are set when we're done
-    $$self{Parms} = {};
-    my(@valkeys) = grep(exists $$self{Keys}{$_}, keys %$curparms);
+    ${*$self}{Parms} = {};
+    my(@valkeys) = grep(exists ${*$self}{Keys}{$_}, keys %$curparms);
     # this assignment allows for inter-key dependencies to be evaluated
-    @{$$self{Parms}}{@valkeys} =
+    @{${*$self}{Parms}}{@valkeys} =
 	@{$curparms}{@valkeys};
     # validate all current against the defined keys
     $self->setparams($curparms, 0, 1);
@@ -579,12 +607,12 @@ sub getparam			# $self, $key [, $default [, $defaultifundef]]
     carp "Excess arguments to ${whoami}($self) ignored"
 	if @_ > 4;
     if ($noundef) {
-	return $defval unless defined($$self{Parms}{$key});
+	return $defval unless defined(${*$self}{Parms}{$key});
     }
     else {
-	return $defval unless exists($$self{Parms}{$key});
+	return $defval unless exists(${*$self}{Parms}{$key});
     }
-    $$self{Parms}{$key};
+    ${*$self}{Parms}{$key};
 }
 
 sub getparams			# $self, \@keys [, $noundef]; returns (%hash)
@@ -599,14 +627,14 @@ sub getparams			# $self, \@keys [, $noundef]; returns (%hash)
     if (wantarray) {
 	# the actual list is wanted -- see which way to do it
 	if ($noundef) {
-	    map {defined $$self{Parms}{$_} ?
-		    ($_, $$self{Parms}{$_}) :
+	    map {defined ${*$self}{Parms}{$_} ?
+		    ($_, ${*$self}{Parms}{$_}) :
 		    () 
 		} @$aref;
 	}
 	else {
-	    map {exists $$self{Parms}{$_} ?
-		    ($_, $$self{Parms}{$_}) :
+	    map {exists ${*$self}{Parms}{$_} ?
+		    ($_, ${*$self}{Parms}{$_}) :
 		    () 
 		} @$aref;
 	}
@@ -614,17 +642,17 @@ sub getparams			# $self, \@keys [, $noundef]; returns (%hash)
     else {
 	# the list count is wanted -- see which way to do it
 	if ($noundef) {
-	    2 * grep {defined $$self{Parms}{$_}} @$aref;
+	    2 * grep {defined ${*$self}{Parms}{$_}} @$aref;
 	}
 	else {
-	    2 * grep {exists $$self{Parms}{$_}} @$aref;
+	    2 * grep {exists ${*$self}{Parms}{$_}} @$aref;
 	}
     }
 #    my @ret;
 #    foreach (@$aref) {
-#	push(@ret, $_, $$self{Parms}{$_})
-#	    if exists($$self{Parms}{$_}) and
-#		!$noundef || defined($$self{Parms}{$_});
+#	push(@ret, $_, ${*$self}{Parms}{$_})
+#	    if exists(${*$self}{Parms}{$_}) and
+#		!$noundef || defined(${*$self}{Parms}{$_});
 #    }
 #    wantarray ? @ret : 0+@ret;
 }
@@ -632,14 +660,14 @@ sub getparams			# $self, \@keys [, $noundef]; returns (%hash)
 
 sub condition			# $self ; return not useful
 {
-    my $fh = $_[0]->{fhref};
+    my $self = $_[0];
     my $sel = SelectSaver->new;
-    select($fh);
+    select($self);
     $| = 1;
     # $\ = "\015\012";
-    binmode($fh);
-    vec($_[0]->{FHVec} = '', fileno($fh), 1) = 1;
-    $_[0]->setparams({'blocking'=>$_[0]->getparam('blocking',1,1)},0,1);
+    binmode($self);
+    vec(${*$self}{FHVec} = '', fileno($self), 1) = 1;
+    $self->setparams({'blocking'=>$self->getparam('blocking',1,1)},0,1);
 }
 
 sub open			# $self [, @ignore] ; returns boolean
@@ -647,8 +675,7 @@ sub open			# $self [, @ignore] ; returns boolean
     $_[0]->_trace(\@_,2);
     my $self = shift;
     $self->stopio if $self->isopen;
-    my $fhref = $$self{fhref};
-    my($pf,$af,$type,$proto) = \@{$$self{Parms}}{qw(PF AF type proto)};
+    my($pf,$af,$type,$proto) = \@{${*$self}{Parms}}{qw(PF AF type proto)};
     $$pf = PF_UNSPEC unless defined $$pf;
     $$af = AF_UNSPEC unless defined $$af;
     $$type = 0 unless defined $$type;
@@ -659,49 +686,47 @@ sub open			# $self [, @ignore] ; returns boolean
     elsif (($$af == AF_UNSPEC) && ($$pf != PF_UNSPEC)) {
 	$$af = $$pf;
     }
-    if ($$self{'isopen'} = socket($fhref,$$pf,$$type,$$proto)) {
+    if (${*$self}{'isopen'} = socket($self,$$pf,$$type,$$proto)) {
 	# keep stdio output buffers out of my way
 	$self->condition;
     }
     $self->isopen;
 }
 
-# Establish a value for SOMAXCONN
-
-eval '&SOMAXCONN()' or eval 'sub SOMAXCONN () {5}'
-    or eval 'sub SOMAXCONN {5}'; # old bsd default if undefined
-
 # sub listen - autoloaded
 
 sub _tryconnect			# $self, $addr, $timeout ; returns boolean
 {
     my ($self,$addr,$timeout) = @_;
-    if ($$self{'isconnecting'}) {
-	if ($$self{Parms}{'dstaddr'} && ($$self{Parms}{'dstaddr'} ne $addr)) {
+    if (${*$self}{'isconnecting'}) {
+	if (${*$self}{Parms}{'dstaddr'} and
+	    (${*$self}{Parms}{'dstaddr'} ne $addr))
+	{
 	    $self->stopio;
 	    return undef unless $self->open;
 	    if ($self->getparam('srcaddr') || $self->getparam('srcaddrlist')
-		and !$self->isbound) {
+		and !$self->isbound)
+	    {
 		return undef unless $self->bind;
 	    }
 	}
     }
-    my $rval = connect($$self{fhref},$addr);
+    my $rval = connect($self,$addr);
     return $rval if $rval;
     return 1  if $! == EISCONN;
     return $rval unless $! == EWOULDBLOCK or $! == EINPROGRESS or
 	$! == EAGAIN or $! == EALREADY;
-    my $fhvec = $$self{FHVec};
-    $$self{'isconnecting'} = 1;
-    $$self{Parms}{'dstaddr'} = $addr;
+    my $fhvec = ${*$self}{FHVec};
+    ${*$self}{'isconnecting'} = 1;
+    ${*$self}{Parms}{'dstaddr'} = $addr;
     return $rval unless defined $timeout;
     my $nfound = select(undef,$fhvec,undef,$timeout);
     return $rval unless $nfound;
-    $$self{'isconnecting'} = 0;
+    ${*$self}{'isconnecting'} = 0;
     # Now, for the black magick of async sockets--re-try the connect
     # to see whether it already worked.  This is necessary in order to
     # get the right errno value for failed connections.
-    $rval = connect($$self{fhref},$addr);
+    $rval = connect($self,$addr);
     $rval = 1 if !$rval and $! == EISCONN;
     $rval;
 }
@@ -711,8 +736,8 @@ sub connect			# $self, [@ignored] ; returns boolean
     $_[0]->_trace(\@_,2);
     my $self = shift;
     $self->close if
-	$$self{'wasconnected'} || $$self{'isconnected'};
-    $$self{'wasconnected'} = 0;
+	${*$self}{'wasconnected'} || ${*$self}{'isconnected'};
+    ${*$self}{'wasconnected'} = 0;
     return undef unless $self->isopen or $self->open;
     if ($self->getparam('srcaddr') || $self->getparam('srcaddrlist')
 	and !$self->isbound) {
@@ -726,14 +751,14 @@ sub connect			# $self, [@ignored] ; returns boolean
 	    $saveblocking = $self->param_saver('blocking');
 	    $self->setparams({'blocking'=>0}) or undef $timeout;
 	}
-	if (defined($$self{Parms}{dstaddrlist}) and
-	    ref($$self{Parms}{dstaddrlist}) eq 'ARRAY' and
-	    !$$self{'isconnecting'})
+	if (defined(${*$self}{Parms}{dstaddrlist}) and
+	    ref(${*$self}{Parms}{dstaddrlist}) eq 'ARRAY' and
+	    !${*$self}{'isconnecting'})
 	{
 	    my $tryaddr;
-	    foreach $tryaddr (@{$$self{Parms}{dstaddrlist}}) {
+	    foreach $tryaddr (@{${*$self}{Parms}{dstaddrlist}}) {
 		$rval = _tryconnect($self, $tryaddr, $timeout);
-		$$self{Parms}{dstaddr} = $tryaddr  if $rval;
+		${*$self}{Parms}{dstaddr} = $tryaddr  if $rval;
 		last if $rval or
 		    defined $timeout && !$timeout
 		    and ($! == EINPROGRESS || $! == EWOULDBLOCK
@@ -741,12 +766,12 @@ sub connect			# $self, [@ignored] ; returns boolean
 	    }
 	}
 	else {
-	    $rval = _tryconnect($self, $$self{Parms}{dstaddr},
+	    $rval = _tryconnect($self, ${*$self}{Parms}{dstaddr},
 				$timeout);
 	}
 	$error = $!+0 unless $rval;
     }
-    $$self{'isconnected'} = $rval;
+    ${*$self}{'isconnected'} = $rval;
     if (!$rval) {
 	$! = $error;
 	return $rval;
@@ -759,11 +784,10 @@ sub getsockinfo			# $self, [@ignored] ; returns ?dest sockaddr?
 {
     $_[0]->_trace(\@_,4);
     my $self = shift;
-    my $fh = $$self{fhref};
     my ($sad,$dad);
 
-    $self->setparams({dstaddr => $dad}) if defined($dad = getpeername($fh));
-    $self->setparams({srcaddr => $sad}) if defined($sad = getsockname($fh));
+    $self->setparams({dstaddr => $dad}) if defined($dad = getpeername($self));
+    $self->setparams({srcaddr => $sad}) if defined($sad = getsockname($self));
     wantarray ?
 	((defined($sad) || defined($dad)) ? ($sad, $dad) : ()) :
 	$sad && $dad;
@@ -778,12 +802,11 @@ sub shutdown			# $self [, $how=2] ; returns boolean
     $how = 2 unless
 	defined $how && length $how && $how !~ /\D/ &&
 	    grep($how == $_, 0, 1, 2);
-    my $was = ($$self{'wasconnected'} |= $how+1);
-    my $fhref = $$self{fhref};
-    my $rval = shutdown($fhref,$how);
+    my $was = (${*$self}{'wasconnected'} |= $how+1);
+    my $rval = shutdown($self,$how);
     local $!;	# preserve shutdown()'s errno
-    $$self{'isconnecting'} = $$self{'isconnected'} = 0 if $was == 3 or
-	(!defined(getpeername($fhref)) && ($$self{'wasconnected'} = 3));
+    ${*$self}{'isconnecting'} = ${*$self}{'isconnected'} = 0 if $was == 3 or
+	(!defined(getpeername($self)) && (${*$self}{'wasconnected'} = 3));
     $rval;
 }
 
@@ -804,10 +827,10 @@ sub stopio			# $self [, @ignored] ; returns boolean
 {
     $_[0]->_trace(\@_,4);
     my $self = shift;
-    @$self{@CloseVars} = ();	# these flags no longer true
+    @{*$self}{@CloseVars} = ();	# these flags no longer true
     $self->delparams(\@CloseKeys); # connection values now invalid
     return 1 unless $self->isopen;
-    close($$self{fhref});
+    close($self);
 }
 
 # I/O enries
@@ -818,18 +841,32 @@ sub stopio			# $self [, @ignored] ; returns boolean
 sub send			# $self, $buf, [$flags, [$where]] : boolean
 {
     my $whoami = $_[0]->_trace(\@_,3);
-    my($self,$buf,$flags,$whither,$fh) = @_;
+    my($self,$buf,$flags,$whither) = @_;
     croak "Invalid args to ${whoami}, called"
-	if @_ < 2 or !ref $self or !($fh = $$self{fhref});
+	if @_ < 2 or !ref $self;
     $flags = 0 unless defined $flags;
     carp "Excess arguments to ${whoami} ignored" if @_ > 4;
     # send(2) requires connect(2)
-    $self->connect unless $self->isconnected or defined $whither;
-    return getsockopt($fh,SOL_SOCKET,SO_TYPE) unless
+    unless (defined $whither or $self->isconnected) {
+	if ($self->getparams([qw(dstaddrlist dstaddr)],1) > 0) {
+	    return undef unless $self->connect;
+	}
+	else {
+	    if ($flags & MSG_OOB) {
+		$whither = ${*$self}{lastOOBFrom};
+	    }
+	    else {
+		$whither = ${*$self}{lastRegFrom};
+	    }
+# Can't short-circuit this--need to get the right errno value.
+#	    return undef unless defined $whither or $self->connect;
+	}
+    }
+    return getsockopt($self,SOL_SOCKET,SO_TYPE) unless
 	$self->isopen;		# generate EBADF return if not open
     defined $whither
-	? send($fh, $buf, $flags, $whither)
-	: send($fh, $buf, $flags);
+	? send($self, $buf, $flags, $whither)
+	: send($self, $buf, $flags);
 }
 
 sub SEND;
@@ -839,7 +876,7 @@ sub put				# $self, @stuff ; returns boolean
 {
     $_[0]->_trace(\@_,3);
     my($self,@args) = @_;
-    print {$$self{fhref}} @args;
+    print {$self} @args;
 }
 
 sub PRINT;			# avoid -w error
@@ -853,16 +890,15 @@ sub ckeof			# $self ; returns boolean
     local $!;			# preserve this over fcntl() and such
     my $whoami = $_[0]->_trace(\@_,3);
     my($self) = @_;
-    my($fh);
     croak "Invalid args to ${whoami}, called"
-	if !@_ or !ref $self or !($fh = $$self{fhref});
+	if !@_ or !ref $self;
     # Bug out if we shouldn't have been called.
     return 1 if EOF_NONBLOCK or $saverr != $eagain;
     # Bug out early if not a socket where EOF is possible.
     return 0
-	unless unpack('I',getsockopt($fh,SOL_SOCKET,SO_TYPE)) == SOCK_STREAM;
+	unless unpack('I',getsockopt($self,SOL_SOCKET,SO_TYPE)) == SOCK_STREAM;
     # See whether need to test for non-blocking status.
-    my $flags = ($F_GETFL ? fcntl($fh,$F_GETFL,0+0) : undef);
+    my $flags = ($F_GETFL ? fcntl($self,$F_GETFL,0+0) : undef);
     if ((defined($flags) && defined($nonblock_flag))
 	? ($flags & VAL_O_NONBLOCK)
 	: 1)
@@ -877,37 +913,42 @@ sub recv			# $self, [$maxlen, [$flags, [$from]]] ;
 {				# returns $buf or undef
     my $whoami = $_[0]->_trace(\@_,3);
     my($self,$maxlen,$flags) = @_;
-    my($buf,$from,$fh,$xfrom) = '';
+    my($buf,$from,$xfrom) = '';
     croak "Invalid args to ${whoami}, called"
-	if !@_ or !ref $self or !($fh = $$self{fhref});
+	if !@_ or !ref $self;
     carp "Excess arguments to ${whoami} ignored"
 	if @_ > 4;
-    return getsockopt($fh,SOL_SOCKET,SO_TYPE) unless
+    return getsockopt($self,SOL_SOCKET,SO_TYPE) unless
 	$self->isopen or $self->open; # generate EBADF return if not open
-    $maxlen = unpack('I',getsockopt($fh,SOL_SOCKET,SO_RCVBUF)) ||
-	(stat $fh)[11] || 8192
+    $maxlen = unpack('I',getsockopt($self,SOL_SOCKET,SO_RCVBUF)) ||
+	(stat $self)[11] || 8192
 	    unless $maxlen;
     $flags = 0 unless defined $flags;
-    if (defined($$self{sockLineBuf}) && !$flags) {
-	$buf = $$self{sockLineBuf};
+    if (defined(${*$self}{sockLineBuf}) && !$flags) {
+	$buf = ${*$self}{sockLineBuf};
 	if (length($buf) > $maxlen) {
-	    $$self{sockLineBuf} = substr($buf, $maxlen);
+	    ${*$self}{sockLineBuf} = substr($buf, $maxlen);
 	    substr($buf, $maxlen) = '';
 	}
 	else {
-	    $$self{sockLineBuf} = undef;
+	    ${*$self}{sockLineBuf} = undef;
 	}
-	$_[3] = $$self{lastRegFrom} if @_ > 3;
+	$_[3] = ${*$self}{lastRegFrom} if @_ > 3;
 	return $buf;
     }
     $! = 0;			# ease EOF checking
-    $xfrom = $from = recv($fh,$buf,$maxlen,$flags);
+    $xfrom = $from = recv($self,$buf,$maxlen,$flags);
     my $errnum = $!+0;		# preserve possible recv failure
-    $xfrom = getpeername($fh) if defined($from) and $from eq '';
+    $xfrom = getpeername($self) if defined($from) and $from eq '';
     $from = $xfrom if defined($xfrom) and $from eq '' and $xfrom ne '';
-    $$self{lastFrom} = $from;
+    ${*$self}{lastFrom} = $from;
     $_[3] = $from if @_ > 3;
-    $$self{lastRegFrom} = $from if !$flags;
+    if ($flags & MSG_OOB) {
+	${*$self}{lastOOBFrom} = $from;
+    }
+    else {
+	${*$self}{lastRegFrom} = $from;
+    }
     $! = $errnum;		# restore possible failure in case we return
     return undef if !defined $from and (EOF_NONBLOCK or $errnum != $eagain);
     return $buf if length $buf;
@@ -931,14 +972,13 @@ sub getline			# $self ; returns like scalar(<$fhandle>)
     carp "Excess arguments to ${whoami} ignored"
 	if @_ > 1;
     my ($self) = @_;
-    my $fh;
     croak "Invalid arguments to ${whoami}, called"
-	if !@_ or !ref($self) or !($fh = $$self{fhref});
+	if !@_ or !ref($self);
     my ($rval, $buf, $tbuf);
-    $buf = $$self{sockLineBuf};
-    $$self{sockLineBuf} = undef; # keep get from returning this again
+    $buf = ${*$self}{sockLineBuf};
+    ${*$self}{sockLineBuf} = undef; # keep get from returning this again
     if (!defined($/)) {
-	$rval = <$fh>;		# return all of the input
+	$rval = <$self>;	# return all of the input
 	# what about non-blocking sockets here?!?
 	$self->shutdown(0);	# keep track of EOF
 	if (defined($buf) and defined($rval)) {
@@ -966,7 +1006,7 @@ sub getline			# $self ; returns like scalar(<$fhandle>)
 	$tbuf = substr($buf, length($rval));
 	# duplicate annoyance of paragraph mode
 	$tbuf =~ s/^\n+//s if $/ eq '';
-	$$self{sockLineBuf} = $tbuf if length($tbuf);
+	${*$self}{sockLineBuf} = $tbuf if length($tbuf);
 	return $rval;
     }
     else {
@@ -984,32 +1024,32 @@ sub DESTROY
 
 sub isopen			# $self [, @ignored] ; returns boolean
 {
-    #$_[0]->_trace(\@_,4," - ".($_[0]->{'isopen'} ? "yes" : "no"));
-    $_[0]->{'isopen'};
+    #$_[0]->_trace(\@_,4," - ".(${*{$_[0]}}{'isopen'} ? "yes" : "no"));
+    ${*{$_[0]}}{'isopen'};
 }
 
 sub isconnected			# $self [, @ignored] ; returns boolean
 {
-    #$_[0]->_trace(\@_,4," - ".($_[0]->{'isconnected'} ? "yes" : "no"));
-    $_[0]->{'isconnected'};
+    #$_[0]->_trace(\@_,4," - ".(${*{$_[0]}}{'isconnected'} ? "yes" : "no"));
+    ${*{$_[0]}}{'isconnected'};
 }
 
 sub isconnecting		# $self [, @ignored] ; returns boolean
 {
-    #$_[0]->_trace(\@_,4," - ".($_[0]->{'isconnecting'} ? "yes" : "no"));
-    $_[0]->{'isconnecting'};
+    #$_[0]->_trace(\@_,4," - ".(${*{$_[0]}}{'isconnecting'} ? "yes" : "no"));
+    ${*{$_[0]}}{'isconnecting'};
 }
 
 sub wasconnected		# $self [, @ignored] ; returns boolean
 {
-    #$_[0]->_trace(\@_,4," - ".($_[0]->{'wasconnected'} ? "yes" : "no"));
-    $_[0]->{'wasconnected'};
+    #$_[0]->_trace(\@_,4," - ".(${*{$_[0]}}{'wasconnected'} ? "yes" : "no"));
+    ${*{$_[0]}}{'wasconnected'};
 }
 
 sub isbound			# $self [, @ignored] ; returns boolean
 {
-    #$_[0]->_trace(\@_,4," - ".($_[0]->{'isbound'} ? "yes" : "no"));
-    $_[0]->{'isbound'};
+    #$_[0]->_trace(\@_,4," - ".(${*{$_[0]}}{'isbound'} ? "yes" : "no"));
+    ${*{$_[0]}}{'isbound'};
 }
 
 1;
@@ -1033,7 +1073,9 @@ socket-based communications.  It supports no particular protocol
 family directly, however, so it is of direct use primarily to
 implementors of other modules.  To this end, several housekeeping
 functions are provided for the use of derived classes, as well as
-several inheritable methods.
+several inheritable methods.  The C<Net::Gen> class does inherit
+from C<IO::Handle>, thus making its methods available.  See
+L<IO::Handle/METHODS> for details on those methods.
 
 Also provided in this distribution are C<Net::Inet>, C<Net::TCP>,
 C<Net::UDP>, and C<Net::UNIX>,
@@ -1048,8 +1090,8 @@ indication of their functional groupings:
 
 =item Creation and setup
 
-C<new>, C<new_from_fh>, C<init>, C<checkparams>, C<open>, C<connect>,
-C<bind>, C<listen>
+C<new>, C<new_from_fd>, C<new_from_fh>, C<init>, C<checkparams>,
+C<open>, C<connect>, C<bind>, C<listen>
 
 =item Parameter manipulation
 
@@ -1156,7 +1198,7 @@ Usage:
     $oldblocking = $obj->blocking($newvalue);
 
 The C<blocking> method is an example of an I<accessor> method.  The
-above usage examples are (morally) equivalent to the following calls,
+above usage examples are (effectively) equivalent to the following calls,
 respectively:
 
     $isblocking = $obj->getparam('blocking');
@@ -1236,7 +1278,7 @@ returned.
 Each of the attempts with the connect() builtin is timed out separately.
 If there is no C<timeout> parameter for the object, and the socket is
 blocking (which is the default), the timeout period is strictly at the
-mercy of you operating system.  If there is no C<timeout> parameter and the
+mercy of your operating system.  If there is no C<timeout> parameter and the
 socket is non-blocking, that's effectively the same as having a C<timeout>
 parameter value of C<0>.  If there is a C<timeout> parameter, the socket
 is made non-blocking temporarily (see L<"param_saver"> below), and the
@@ -1413,6 +1455,17 @@ Usage:
 This is a simulation of C<scalar(E<lt>$filehandleE<gt>)> that doesn't let
 stdio confuse the C<get>/C<recv> method.  As such, its return value is
 not necessarily a complete line when the socket is non-blocking.
+
+=item getlines
+
+Usage:
+
+    @lines = $obj->getlines;
+
+This is a lot like C<@lines = E<lt>$filehandleE<gt>>, except that it doesn't
+let stdio confuse the C<get>/C<recv> method.  It's unreliable on non-blocking
+sockets.  It will produce a fatal (but trappable) error if not called in
+list context.
 
 =item getparam
 
@@ -1614,13 +1667,15 @@ parameters will be performed.  (This is so that the derived class
 can add the parameter validation it needs to the object before
 allowing validation.)
 
+=item new_from_fd
+
 =item new_from_fh
 
 Usage:
 
     $obj = $classname->new_from_fh(*FH);
     $obj = $classname->new_from_fh(\*FH);
-    $obj = $classname->new_from_fh(fileno($fh));
+    $obj = $classname->new_from_fd(fileno($fh));
 
 Returns a newly-initialised object of the given class, open on a
 newly-dup()ed copy of the given filehandle or file descriptor.
@@ -1631,7 +1686,7 @@ C<getsockinfo> methods for the new object.
 
 Only real filehandles or file descriptor numbers are allowed as
 arguments.  This method makes no attempt to resolve filehandle
-names.
+names.  Yes, despite having two names, there's really just one method.
 
 =item open
 
@@ -1804,11 +1859,14 @@ Usage:
     $ok = $obj->send($buffer);
 
 This method calls the send() builtin (three- or four-argument
-form).  The C<$flags> parameter is defaulted to 0 if not supplied.
-If the C<$destsockaddr> value is missing or undefined, the three-
-argument form of the send() builtin will be used.  A defined
-C<$destsockaddr> will result in a four-argument send() call.
-The return value from the send() builtin is returned.  This method
+form).  The C<$flags> parameter is defaulted to 0 if not
+supplied.  If the C<$destsockaddr> value is missing or undefined,
+the three-argument form of the send() builtin will be used.  The
+C<$destsockaddr> parameter will be defaulted from the last recv()
+peer address for the same kind of message (depending on whether
+C<MSG_OOB> is set in the C<$flags> parameter).  A defined
+C<$destsockaddr> will result in a four-argument send() call.  The
+return value from the send() builtin is returned.  This method
 makes no attempt to trap C<SIGPIPE>.
 
 =item sendto
@@ -2317,7 +2375,7 @@ sub setparam			# $self, $name, $value, [newonly, [docheck]] ;
     carp "Excess arguments to ${whoami} ignored"
 	if @_ > 5;
     croak "Invalid arguments to ${whoami}, called"
-	if @_ < 3 or not ref $self or not exists $$self{Keys}{$key};
+	if @_ < 3 or not ref $self or not exists ${*$self}{Keys}{$key};
     $self->setparams({$key => $val}, $newonly, $docheck);
 }
 
@@ -2328,25 +2386,25 @@ sub bind			# $self [, @ignored] ; returns boolean
     $self->close if
 	$self->wasconnected || $self->isconnected || $self->isconnecting ||
 	    $self->isbound;
-    return $$self{'isbound'} = undef unless $self->isopen or $self->open;
-    $self->setsopt('SO_REUSEADDR', 1) if $$self{Parms}{reuseaddr};
+    return ${*$self}{'isbound'} = undef unless $self->isopen or $self->open;
+    $self->setsopt('SO_REUSEADDR', 1) if ${*$self}{Parms}{reuseaddr};
     my $rval;
-    if ($$self{Parms}{srcaddrlist}) {
+    if (${*$self}{Parms}{srcaddrlist}) {
 	my $tryaddr;
-	foreach $tryaddr (@{$$self{Parms}{srcaddrlist}}) {
-	    next unless $rval = bind($$self{fhref}, $tryaddr);
-	    $$self{Parms}{srcaddr} = $tryaddr;
+	foreach $tryaddr (@{${*$self}{Parms}{srcaddrlist}}) {
+	    next unless $rval = bind($self, $tryaddr);
+	    ${*$self}{Parms}{srcaddr} = $tryaddr;
 	    last;
 	}
     }
-    elsif (defined($$self{Parms}{srcaddr}) and
-	   length $$self{Parms}{srcaddr}) {
-	$rval = bind($$self{fhref}, $$self{Parms}{srcaddr});
+    elsif (defined(${*$self}{Parms}{srcaddr}) and
+	   length ${*$self}{Parms}{srcaddr}) {
+	$rval = bind($self, ${*$self}{Parms}{srcaddr});
     }
     else {
-	$rval = bind($$self{fhref}, pack_sockaddr($$self{Parms}{AF},''));
+	$rval = bind($self, pack_sockaddr(${*$self}{Parms}{AF},''));
     }
-    $$self{'isbound'} = $rval;
+    ${*$self}{'isbound'} = $rval;
     return $rval unless $rval;
     $self->getsockinfo;
     $self->isbound;
@@ -2372,17 +2430,17 @@ sub listen			# $self [, $maxq=SOMAXCONN] ; returns boolean
     my ($self,$maxq) = @_;
     $maxq = $self->getparam('maxqueue',SOMAXCONN,1) unless defined $maxq;
     croak "Invalid args for ${whoami}(@_), called" if
-	$maxq =~ /\D/ or !ref $self or !$$self{fhref};
+	$maxq =~ /\D/ or !ref $self or !$self;
     carp "Excess args for ${whoami}(@_) ignored" if @_ > 2;
     return undef unless $self->isbound or $self->bind;
-    $$self{'didlisten'} = $maxq;
-    listen($$self{fhref},$maxq) or undef $$self{'didlisten'};
+    ${*$self}{'didlisten'} = $maxq;
+    listen($self,$maxq) or undef ${*$self}{'didlisten'};
 }
 
 sub didlisten			# $self [, @ignored] ; returns boolean
 {
-    #$_[0]->_trace(\@_,4," - ".($_[0]->{'didlisten'} ? "yes" : "no"));
-    $_[0]->{'didlisten'};
+    #$_[0]->_trace(\@_,4," - ".(${*{$_[0]}}{'didlisten'} ? "yes" : "no"));
+    ${*{$_[0]}}{'didlisten'};
 }
 
 sub TIESCALAR
@@ -2397,7 +2455,8 @@ sub FETCH
 {
     $_[0]->_trace(\@_,2);
     my $self = shift;
-    $self->getline;
+    my $line = $self->READLINE;
+    $line;
 }
 
 sub STORE
@@ -2419,7 +2478,7 @@ sub _findxopt			# $self, $realp, @args ;
 	# if numeric, it had better be the level
 	$level = ((substr($level, 0, 1) eq '0') ? oct($level) : $level+0);
     }
-    $aref = $$self{Sockopts}{$level};
+    $aref = ${*$self}{Sockopts}{$level};
     if (!$aref) {
 	# here, we have to search for the ruddy thing by keyword
 	# if level was numeric, punt by trying to force EINVAL
@@ -2433,13 +2492,13 @@ sub _findxopt			# $self, $realp, @args ;
 	    unshift(@args, $aref);
 	    return @args;
 	}
-	return getsockopt($$self{fhref},-1,-1) unless $level =~ /\D/;
+	return getsockopt($self,-1,-1) unless $level =~ /\D/;
 	$what = $level;
-	foreach $level (keys %{$$self{Sockopts}}) {
-	    next unless ref($$self{Sockopts}{$level}) eq 'HASH';
-	    last if $aref = $$self{Sockopts}{$level}{$what};
+	foreach $level (keys %{${*$self}{Sockopts}}) {
+	    next unless ref(${*$self}{Sockopts}{$level}) eq 'HASH';
+	    last if $aref = ${*$self}{Sockopts}{$level}{$what};
 	}
-	$$self{Sockopts}{$what} = $aref if ref $aref eq 'ARRAY';
+	${*$self}{Sockopts}{$what} = $aref if ref $aref eq 'ARRAY';
     }
     elsif (ref $aref eq 'HASH') {
 	$what = shift @args;
@@ -2449,7 +2508,7 @@ sub _findxopt			# $self, $realp, @args ;
 	$aref = $$aref{$what};
     }
     # force EINVAL (I hope) if unrecognized value
-    return getsockopt($$self{fhref},-1,-1) unless ref $aref eq 'ARRAY';
+    return getsockopt($self,-1,-1) unless ref $aref eq 'ARRAY';
     ($aref,@args);
 }
 
@@ -2463,7 +2522,7 @@ sub _getxopt			# $this, $realp, [$level,] $what
     $what = $$aref[1];
     $level = $$aref[2];
     $format = $$aref[0];
-    $rval = getsockopt($$self{fhref},$level+0,$what+0);
+    $rval = getsockopt($self,$level+0,$what+0);
     if ($self->_debug > 3) {
 	@args = unpack($format,$rval) if defined $rval;
 	print STDERR " - getsockopt $self,$level,$what => ";
@@ -2507,7 +2566,7 @@ sub _setxopt			# $this, $realp, [$level,] $what, @vals
     print STDERR " - setsockopt $self,$level,$what,",
 	join($",unpack($format,$rval)),"\n"
 	    if $self->_debug > 3;
-    setsockopt($$self{fhref},$level+0,$what+0,$rval);
+    setsockopt($self,$level+0,$what+0,$rval);
 }
 
 sub setsopt			# $this, [$level,] $what, @vals
@@ -2527,24 +2586,23 @@ sub setropt			# $this, [$level,] $what, $realvalue
 sub fileno			# $this
 {
 #    $_[0]->_trace(\@_,4);
-    fileno($_[0]->{fhref});
+    fileno($_[0]);
 }
 
 sub getfh			# $this
 {
 #    $_[0]->_trace(\@_,4);
-    $_[0]->{fhref};
+    $_[0];
 }
 
 sub fhvec			# $this
 {
     $_[0]->_trace(\@_,4);
     my($self) = @_;
-    my $fh = $$self{fhref};
-    return getsockopt($fh,SOL_SOCKET,SO_TYPE) unless
+    return getsockopt($self,SOL_SOCKET,SO_TYPE) unless
 	$self->isopen and
-	    defined(fileno($fh)); # return EBADF unless open
-    $$self{FHVec};		# already setup by condition()
+	    defined(fileno($self)); # return EBADF unless open
+    ${*$self}{FHVec};		# already setup by condition()
 }
 
 sub select			# $this [[, $read, $write, $xcept, $timeout]]
@@ -2556,10 +2614,10 @@ sub select			# $this [[, $read, $write, $xcept, $timeout]]
     $rvec = $doread ? $fhvec : undef;
     $wvec = $dowrite ? $fhvec : undef;
     $xvec = $doxcept ? $fhvec : undef;
-    $timer = 0 if $doread and defined($$self{sockLineBuf});
+    $timer = 0 if $doread and defined(${*$self}{sockLineBuf});
     ($nfound, $timeleft) = select($rvec, $wvec, $xvec, $timer)
 	or return ();
-    if (defined($$self{sockLineBuf}) && $doread && ($rvec ne $fhvec)) {
+    if (defined(${*$self}{sockLineBuf}) && $doread && ($rvec ne $fhvec)) {
 	$nfound += 1;
 	$rvec |= $fhvec;
     }
@@ -2577,7 +2635,7 @@ sub ioctl			# $this, @args
 	if @_ < 3;
     carp "Excess arguments to ${whoami} ignored"
 	if @_ > 3;
-    ioctl($_[0]->{fhref}, $_[1], $_[2]);
+    ioctl($_[0], $_[1], $_[2]);
 }
 
 sub fcntl			# $this, @args
@@ -2587,7 +2645,7 @@ sub fcntl			# $this, @args
 	if @_ < 3;
     carp "Excess arguments to ${whoami} ignored"
 	if @_ > 3;
-    fcntl($_[0]->{fhref}, $_[1], $_[2]);
+    fcntl($_[0], $_[1], $_[2]);
 }
 
 sub format_addr			# $thunk, $sockaddr
@@ -2634,17 +2692,24 @@ sub new_from_fh			# classname, $filehandle
     }
     my $self = $pack->new();
     return undef unless $self;
-    return undef unless open($$self{fhref}, "+<&$fh");
-    $$self{'isopen'} = 1;
-    $$self{'isconnected'} = 1 if getpeername($$self{fhref});
-    $rfh = getsockname($$self{fhref});
+    unless (open($self, "+<&$fh")) {
+	{
+	    local $!;
+	    undef $self;
+	    undef $self;
+	}
+	return $self;
+    }
+    ${*$self}{'isopen'} = 1;
+    ${*$self}{'isconnected'} = 1 if getpeername($self);
+    $rfh = getsockname($self);
     if (defined $rfh and length $rfh) {
 	($fh, $rfh) = unpack_sockaddr($rfh);
-	$$self{AF} = $fh if defined $fh and length $fh and $fh ne '0';
-	$$self{'isbound'} = defined $rfh and $rfh =~ /[^\0]/;
+	${*$self}{AF} = $fh if defined $fh and length $fh and $fh ne '0';
+	${*$self}{'isbound'} = defined $rfh and $rfh =~ /[^\0]/;
     }
     ($rfh) = $self->getsopt('SO_TYPE');
-    $$self{type} = $rfh if defined $rfh;
+    ${*$self}{type} = $rfh if defined $rfh;
     $self->getsockinfo;
     $self->isopen && $self;
 }
@@ -2659,21 +2724,35 @@ sub accept			# $self ; returns new (ref $self) or undef
     my $ns = $xclass->new;
     return undef unless $ns;
     $ns->stopio;		# make sure we can use the filehandle
-    $$ns{Parms} = { %{$$self{Parms}} };
+    $$ns{Parms} = { %{${*$self}{Parms}} };
     $ns->checkparams;
     {
 	my ($timeout,$fhvec,$saveblocking) =
-	    ($$self{Parms}{'timeout'}, $$self{FHVec});
+	    (${*$self}{Parms}{'timeout'}, ${*$self}{FHVec});
 	if (defined $timeout) {
 	    $saveblocking = $self->param_saver('blocking');
 	    $self->setparams({'blocking'=>0});
 	    my $nfound = select($fhvec, undef, undef, $timeout);
 	}
-	return undef unless accept($$ns{fhref},$$self{fhref});
+	unless (accept($$ns{fhref},$self)) {
+	    {
+		local $!;
+		undef $ns;
+		undef $ns;
+	    }
+	    return $ns;
+	}
     }
     $$ns{'isopen'} = $$ns{'isbound'} = $$ns{'isconnected'} = 1;
     $ns->getsockinfo;
-    return undef unless $ns->isconnected;
+    unless ($ns->isconnected) {
+	{
+	    local $!;
+	    undef $ns;
+	    undef $ns;
+	}
+	return $ns;
+    }
     $ns->condition;
     $ns;
 }
@@ -2703,7 +2782,8 @@ sub PRINTF			# $self, $format [,@args]
     $_[0]->_trace(\@_,5);
     my $self = shift;
     my $fmt = shift;
-    printf {$$self{fhref}} $fmt,@_;
+    local $\ = '';		# currently not per-file
+    $self->PRINT(sprintf $fmt,@_);
 }
 
 sub READ			# $self, $buffer, $length [,$offset]
@@ -2761,15 +2841,24 @@ sub READLINE			# $self
     @lines;
 }
 
+sub getlines			# $self
+{
+    my $whoami = $_[0]->_trace(\@_,6);
+    croak "Invalid call to $whoami" unless @_ == 1;
+    croak "Not in list context calling $whoami" unless wantarray;
+    $_[0]->READLINE;
+}
+    
+
 sub sendto			# $self, $buf, $where, [$flags] ; returns bool
 {
     my $whoami = $_[0]->_trace(\@_,3);
-    my($self,$buf,$whither,$flags,$fh) = @_;
+    my($self,$buf,$whither,$flags) = @_;
     croak "Invalid args to ${whoami}, called"
-	if @_ < 3 or !ref $self or !($fh = $$self{fhref});
+	if @_ < 3 or !ref $self;
     $flags = 0 unless defined $flags;
     carp "Excess arguments to ${whoami} ignored" if @_ > 4;
-    return getsockopt($fh,SOL_SOCKET,SO_TYPE) unless
+    return getsockopt($self,SOL_SOCKET,SO_TYPE) unless
 	$self->isopen or $self->open;	# generate EBADF return if not open
-    CORE::send($fh, $buf, $flags, $whither);
+    CORE::send($self, $buf, $flags, $whither);
 }

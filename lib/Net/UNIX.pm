@@ -1,4 +1,4 @@
-# Copyright 1995,1996,1997 Spider Boardman.
+# Copyright 1995,1996,1997,1998 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -16,20 +16,22 @@ package Net::UNIX;
 use 5.004;			# new minimum Perl version for this package
 
 use strict;
-use Carp;
+#use Carp;
+sub carp { require Carp; goto &Carp::carp; }
+sub croak { require Carp; goto &Carp::croak; }
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.80';
+    $VERSION = '0.81';
 }
 sub Version { "$myclass v$VERSION" }
 
 use AutoLoader;
 #use Exporter ();
 use Net::Gen qw(/pack_sockaddr$/);
-use Socket qw(!pack_sockaddr_un !unpack_sockaddr_un);
+use Socket qw(!pack_sockaddr_un !unpack_sockaddr_un !SOMAXCONN);
 
 BEGIN {
     @ISA = qw(Net::Gen);
@@ -127,6 +129,7 @@ sub new				# $class, [\%params]
     my $whoami = $_[0]->_trace(\@_,1);
     my($class,@Args,$self) = @_;
     $self = $class->SUPER::new(@Args);
+    $class = ref $class if ref $class;
     ($self || $class)->_trace(\@_,2,", self" .
 			      (defined $self ? "=$self" : " undefined") .
 			      " after sub-new");
@@ -165,18 +168,18 @@ sub _setbindpath		# $self, 'thispath', $path
     my $ix;
     if (!defined($path)) {
 	# removing, so cooperate
-	delete $$self{Parms}{srcaddrlist};
+	delete ${*$self}{Parms}{srcaddrlist};
 	return '';
     }
     # canonicalize the path to be of the right length, if possible
     $path = _canonpath($path);
     $ix = index($path, "\0");	# check for NUL-termination
     if (!$ix) {			# empty path is not a bind
-	delete $$self{Parms}{srcaddrlist};
+	delete ${*$self}{Parms}{srcaddrlist};
 	$_[2] = undef;
     }
     else {
-	$$self{Parms}{srcaddrlist} =
+	${*$self}{Parms}{srcaddrlist} =
 	    [pack_sockaddr_un($self->getparam('AF',AF_UNIX,1), $path)];
     }
     '';
@@ -188,7 +191,7 @@ sub _setconnpath		# $self, 'destpath', $path
     my $ix;
     if (!defined($path)) {
 	# removing, so cooperate
-	delete $$self{Parms}{dstaddrlist};
+	delete ${*$self}{Parms}{dstaddrlist};
 	return '';
     }
     # canonicalize the path to be of the right length, if possible
@@ -198,7 +201,7 @@ sub _setconnpath		# $self, 'destpath', $path
 	"$what parameter has no path: $path";
     }
     else {			# just try it here
-	$$self{Parms}{dstaddrlist} =
+	${*$self}{Parms}{dstaddrlist} =
 	    [pack_sockaddr_un($self->getparam('AF',AF_UNIX,1), $path)];
 	'';
     }
@@ -239,12 +242,7 @@ sub _init			# $self, whatpath[, $path][, \%params]
 sub init			# $self [, $destpath][, \%params]
 {
     my ($self,@args) = @_;
-    unless ($self->_init('destpath',@args)) {
-	local $!;	# preserve returned errno
-	undef $self;	# around the side-effects of close inside of perl
-	return undef;
-    }
-    $self;
+    $self->_init('destpath',@args);
 }
 
 sub connect			# $self [, $destpath] [, \%newparams]

@@ -1,9 +1,11 @@
 What it is:
 
-	modules Net::Gen, Net::Inet, Net::TCP, Net::UDP, and Net::UNIX.
+	Modules Net::Gen, Net::Inet, Net::TCP, Net::UDP, and Net::UNIX.
 	Net::Gen is not a good name, I know that, but what's in it
 	really belongs in Socket, I think.  In any case, I'm open to
-	votes for a better name.
+	votes for a better name.  Well, I would be, but it's appeared in
+	a Perl Resource Kit from O'Reilly & Associates, so maybe it's
+	pretty well cast in stone after all now.  C'est la guerre.
 
 What's different from other offerings:
 
@@ -20,20 +22,23 @@ What's different from other offerings:
 
 What's still missing:
 
-	Support for non-blocking sockets is untested at best.  The
-	select, fhvec, ioctl, and fcntl methods are crude hacks.
+	Support for non-blocking sockets is under-tested at best.  The
+	select, fhvec, ioctl, and fcntl methods aren't necessarily all
+	one would wish.
 
 	A proper set of regression & verification tests.
 
-	Proper handling of timeout options.  Timed connect() seems
-	to be working now, but there's no direct support for, say,
-	sending as much of a block of data as possible in a given
-	timeout period.
+	Proper handling of timeout options.  Timed connect() and
+	accept() seem to be working now, but there's no direct support
+	for, say, sending as much of a block of data as possible in a
+	given timeout period.
 
 	Configuration testing to get the include files right on more
 	systems, and to manage to find the constants which at least some
 	Linux systems have as enums rather than as #defines.  (I think I
-	have this one covered now, but it isn't proved yet.)
+	have this one covered now, but that isn't proved yet.)  Other
+	UNIX variants may need tweaking, and I've no idea whether it'll
+	work on Win32 Perl.
 
 	Better support (besides the plethora of protocol constants) for
 	raw socket communications (required for the ICMP values to be
@@ -85,12 +90,13 @@ If it doesn't build (yet) on your system/configuration/version, see if
 you can figure out why, following those guidelines.  Future users will
 thank you, too.
 
-Finally, the next release point of this code will be making major changes
-to the internal implementation.  Be warned.  If you're sticking to the
-documented interfaces the way you should be doing, it shouldn't matter
-to you.
+Finally, previous releases of this code had a significantly different
+internal implementation, which was slower (but worked in earlier versions
+of perl5 than this code ever could have).  If you were using the internals
+of the implementation rather than sticking to the documented interfaces,
+you will have some work to do before your derived classes will work again.
 
-# Copyright 1995,1996,1997 Spider Boardman.
+# Copyright 1995,1996,1997,1998 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software

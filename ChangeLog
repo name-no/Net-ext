@@ -1,3 +1,51 @@
+Released as version 0.81.
+
+Thu Jan 29 00:17:08 1998  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* README: Updated description & copyright.
+
+	* ALL: Don't C<use Carp>!  Defer loading carp until we need it.
+  	Done by providing carp & croak subs in the modules, and having
+ 	them be defined as C<require Carp> followed by the appropriate
+ 	C<goto &Carp::routine>.
+
+	* lib/Net/Inet.pm: Cease getting SOMAXCONN from Socket.pm.
+
+Wed Jan 28 23:47:57 1998  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* Gen.xs: Added SOMAXCONN as a constant XSUB.
+
+	* Makefile.PL: Added just-in-case default define for SOMAXCONN, so
+ 	that it can be a constant XSUB, too, rather then defined by eval()
+ 	in Gen.pm.
+
+	* lib/Net/Gen.pm: Eliminated various redundant copies of the form
+ 	C<$fh = $self>.  Fix to generate proper errno in ->send when we
+ 	aren't connected and we have no dest-addr arg by just doing the
+ 	send anyway.  Removed eval() for SOMAXCONN, and stopped inheriting
+ 	it from Socket.pm.  We'll use another constant XSUB for it.
+
+Wed Dec 24 01:16:18 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.pm: Converted from hashref with dependent globref to
+ 	globref with associated hashref.  Made to inherit from IO::Handle
+ 	so that the I/O will behave as people expect.  Updated the other
+ 	modules to compensate.  Removed some workarounds to 5.000 and
+ 	5.001 behaviour, since I'm requiring 5.004 (and finally noticed
+ 	that the old workarounds were still in place).
+
+Thu Dec 18 16:21:21 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/UDP.pm: Added unbuffered options for ->PRINT() and
+	->READLINE() via object parameters unbuffered_{input,output,IO}.
+
+	* lib/Net/Gen.pm: Added default to reply address for ->send().
+	Added tracking of OOB peer address in ->recv().
+
+	* Gen.xs: Add MSG_OOB constant XSUB.
+
+	* Makefile.PL: Added %defdefines entry for MSG_OOB.
+
 Released as 0.80.  Next release will re-implement with a different internal
 representation.  Be warned.  Use the documented interfaces only.
 

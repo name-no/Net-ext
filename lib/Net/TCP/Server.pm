@@ -1,4 +1,4 @@
-# Copyright 1997 Spider Boardman.
+# Copyright 1997,1998 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -16,13 +16,15 @@ package Net::TCP::Server;
 use 5.004;
 
 use strict;
-use Carp;
+#use Carp;
+sub carp { require Carp; goto &Carp::carp; }
+sub croak { require Carp; goto &Carp::croak; }
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.80';
+    $VERSION = '0.81';
 }
 sub Version () { "$myclass v$VERSION" }
 
@@ -188,6 +190,7 @@ sub new				# classname, [[hostspec,] service,] [\%params]
     my $self = $xclass->SUPER::new(@Args);
     return undef unless $self;
     $self->setparams({reuseaddr => 1}, -1);
+    $xclass = ref $xclass if ref $xclass;
     if ($xclass eq $myclass) {
 	unless ($self->init(@Args)) {
 	    local $!;		# protect returned errno value

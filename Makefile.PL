@@ -249,10 +249,16 @@ my %defdefines = (
 	TH_ACK			=>		'0x10',
 	TH_URG			=>		'0x20',
 
+# This one doesn't really belong here, except for its venerable status as
+# the default in older BSD code.
+
+	SOMAXCONN		=>		'5',
+
 );
 
-# Add some errno values, just to make life simpler by knowing that
-# the symbols will be defined, even if they've been defaulted to 0.
+# Add some errno values (and related stuff), just to make life simpler by
+# knowing that the symbols will be defined, even if they've been defaulted
+# to 0.
 
 my @errdefs = qw(EINPROGRESS EALREADY ENOTSOCK EDESTADDRREQ
 		 EMSGSIZE EPROTOTYPE ENOPROTOOPT EPROTONOSUPPORT
@@ -262,6 +268,7 @@ my @errdefs = qw(EINPROGRESS EALREADY ENOTSOCK EDESTADDRREQ
 		 ESHUTDOWN ETOOMANYREFS ETIMEDOUT
 		 ECONNREFUSED EHOSTDOWN EHOSTUNREACH
 		 ENOSR ETIME EBADMSG EPROTO ENODATA ENOSTR
+		 MSG_OOB
 		);
 
 @defdefines{@errdefs} = ('0') x @errdefs;
