@@ -45,6 +45,9 @@ extern "C" {
 #include "sockadapt.h"
 #endif
 
+#ifdef BAD_TCP_MSS
+# undef TCP_MSS
+#endif
 
 #include "netgen.h"
 
@@ -268,7 +271,7 @@ char * file;
     CV *cv;
     OP *svop;
     cv = newXS(name, cv_constant, file);
-    sv_setpvn((SV*)cv, "", 0);		/* prototype it as () */
+    sv_setsv((SV*)cv, &sv_no);		/* prototype it as () */
     if (SvTEMP(valsv))			/* Don't let mortality get you down. */
 	SvREFCNT_inc(valsv);		/* Give it an afterlife.  :-> */
     svop = newSVOP(OP_CONST, 0, valsv);	/* does SvREADONLY_on */
@@ -649,11 +652,11 @@ bool
 IPOPT_COPIED(ipopt)
 	U8	ipopt
 
-bool
+U8
 IPOPT_CLASS(ipopt)
 	U8	ipopt
 
-bool
+U8
 IPOPT_NUMBER(ipopt)
 	U8	ipopt
 

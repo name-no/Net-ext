@@ -21,7 +21,8 @@ WriteMakefile(
     'DISTNAME'	=> 'Net-ext',
     'VERSION_FROM' => 'lib/Net/Gen.pm', # finds $VERSION
     'LIBS'	=> [''],   # e.g., '-lm' 
-    'DEFINE'	=> '',     # e.g., '-DHAVE_SOMETHING' 
+    'DEFINE'	=> '',     # e.g., '-DHAVE_SOMETHING'
+			   # DEFINE is modified by hint-files.
     'INC'	=> '',     # e.g., '-I/usr/include/other' 
     'dist'	=> {
 		COMPRESS	=>	'gzip -9fNv',

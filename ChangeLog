@@ -1,3 +1,20 @@
+Released as version 0.83.
+
+Sun Mar 15 16:52:11 1998  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.pm: Added CLOSE, EOF, and WRITE for tied fh's.
+
+	* MANIFEST: Added hints/linux.pl.
+
+	* hints/linux.pl: Added to avoid TCP_MSS problems on Linux 2.0.30.
+
+	* Gen.xs: Updated to undefine TCP_MSS before including netgen.h
+	if BAD_TCP_MSS is defined.  Fixed return types for IPOPT_CLASS
+	and IPOPT_NUMBER.
+
+	* Makefile.PL: Added note that DEFINE is expected to be overridden
+	by hint files.
+
 Released as version 0.82.
 
 Sat Feb  7 14:56:06 1998  Spider Boardman  <spider@Orb.Nashua.NH.US>

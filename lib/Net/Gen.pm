@@ -22,7 +22,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD $adebug);
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.82';
+    $VERSION = '0.83';
 }
 
 sub Version () { "$myclass v$VERSION" }
@@ -823,6 +823,9 @@ sub close			# $self [, @ignored] ; returns boolean
     $self->stopio;
 }
 
+sub CLOSE;
+*CLOSE = \&close;
+
 sub stopio			# $self [, @ignored] ; returns boolean
 {
     $_[0]->_trace(\@_,4);
@@ -1124,6 +1127,7 @@ C<format_addr>, C<format_local_addr>, C<format_remote_addr>
 =item Tied filehandle support
 
 C<SEND>, C<PRINT>, C<PRINTF>, C<RECV>, C<READLINE>, C<READ>, C<GETC>,
+C<WRITE>, C<CLOSE>, C<EOF>,
 C<TIEHANDLE>
 
 =item Tied scalar support
@@ -1221,9 +1225,12 @@ directly.)
 
 =item close
 
+=item CLOSE
+
 Usage:
 
     $ok = $obj->close;
+    $ok = close(TIEDFH);
 
 The C<close> method is like a call to the C<shutdown> method
 followed by a call to the C<stopio> method.  It is the standard
@@ -1332,6 +1339,19 @@ successfully, and the object is still bound.  If this method has
 not been overridden by a derived class, the value is C<undef> on
 failure and the C<$maxqueue> value used for the listen() builtin
 on success.
+
+=item EOF
+
+Usage:
+
+    $iseof = $obj->EOF();
+    $iseof = eof(TIEDFH);
+
+Provided for tied filehandle support.  Determines whether select()
+says that a read would work immediately, and tries it if so.
+If the read was tried and returned an eof condition, 1 is returned.
+The return is 0 on read errors or when select() said that a read
+would block.
 
 =item fcntl
 
@@ -2012,6 +2032,19 @@ Returns true for if the object has had a successful connect() completion
 since it was last opened.  Returns false after a close() or on a new
 object.
 
+=item WRITE
+
+Usage:
+
+    $nwritten = $obj->WRITE($buf, $len);
+    $nwritten = $obj->WRITE($buf, $len, $offset);
+    $nwritten = syswrite(TIEDFH, $buf, $len);
+    $nwritten = syswrite(TIEDFH, $buf, $len, $offset);
+
+This method exists for support of syswrite() on tied filehandles.
+It calls the syswrite() builtin on the underlying filehandle with the
+same parameters.
+
 =back
 
 =head2 Protected Methods
@@ -2131,6 +2164,17 @@ method will later ensure that all those keys eventually got
 registered.  This out-of-order setup is allowed because of
 possible cross-dependencies between the various parameters, so
 they have to be set before they can be validated (in some cases).
+
+=item _accessor
+
+Usage:
+
+    $value = $obj->_accessor($what);
+    $oldvalue = $obj->_accessor($what, $newvalue);
+
+This method implements the use of the known parameter keys as get/set
+methods.  It's used by the customised AUTOLOAD to generate such accessor
+functions as they're referenced.  See L<"blocking"> above for an example.
 
 =back
 
@@ -2724,7 +2768,7 @@ sub accept			# $self ; returns new (ref $self) or undef
     my $ns = $xclass->new;
     return undef unless $ns;
     $ns->stopio;		# make sure we can use the filehandle
-    $$ns{Parms} = { %{${*$self}{Parms}} };
+    ${*$ns}{Parms} = { %{${*$self}{Parms}} };
     $ns->checkparams;
     {
 	my ($timeout,$fhvec,$saveblocking) =
@@ -2734,7 +2778,7 @@ sub accept			# $self ; returns new (ref $self) or undef
 	    $self->setparams({'blocking'=>0});
 	    my $nfound = select($fhvec, undef, undef, $timeout);
 	}
-	unless (accept($$ns{fhref},$self)) {
+	unless (accept($ns, $self)) {
 	    {
 		local $!;
 		undef $ns;
@@ -2861,4 +2905,42 @@ sub sendto			# $self, $buf, $where, [$flags] ; returns bool
     return getsockopt($self,SOL_SOCKET,SO_TYPE) unless
 	$self->isopen or $self->open;	# generate EBADF return if not open
     CORE::send($self, $buf, $flags, $whither);
+}
+
+sub EOF				# $self ; returns bool
+{
+    my $whoami = $_[0]->_trace(\@_,3);
+    my ($self,$buf) = @_;
+    croak "Invalid args to ${whoami}, called" if @_ != 1 or !ref $self;
+    return getsockopt($self,SOL_SOCKET,SO_TYPE) unless
+	$self->isopen;			# generate EBADF return if not open
+    return 0 if defined ${*$self}{sockLineBuf}; # not EOF if can still read
+    my $fhvec = ${*$self}{FHVec};
+    my $nfound = select($fhvec, undef, undef, 0);
+    return 0 unless $nfound;
+    $buf = $self->recv;
+    return 1 if ! $! and !defined $buf;
+    ${*$self}{sockLineBuf} = $buf;
+    0;
+}
+
+sub WRITE			# $self,$buffer,$len[,$offset] ; returns length
+{
+    my $whoami = $_[0]->_trace(\@_,3);
+    my ($self,$buf,$len,$offset,$blen) = @_;
+    croak "Invalid args to ${whoami}, called" if @_ < 3 or @_ > 4 or
+	!ref $self;
+    $offset = 0 if @_ == 3;
+    $blen = length $buf;
+    if ($offset < 0) {
+	$offset += $blen;
+	croak "Offset outside of string in ${whoami}, called" if
+	    $offset < 0;
+    }
+    croak "Offset outside of string in ${whoami}, called" if
+	$offset > $blen;
+    return getsockopt($self,SOL_SOCKET,SO_TYPE) unless
+	$self->isopen;			# generate EBADF return if not open
+    $len = $blen - $offset if $len > $blen - $offset;
+    syswrite($self, $buf, $len, $offset);
 }

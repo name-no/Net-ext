@@ -4,6 +4,7 @@ MANIFEST
 MANIFEST.SKIP
 Makefile.PL
 README
+hints/linux.pl
 lib/Net/Gen.pm
 lib/Net/Inet.pm
 lib/Net/TCP.pm
