@@ -13,7 +13,7 @@
 
 
 package Net::UNIX;
-use 5.00393;			# new minimum Perl version for this package
+use 5.004;			# new minimum Perl version for this package
 
 use strict;
 use Carp;
@@ -21,8 +21,8 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
 my $myclass;
 BEGIN {
-    $myclass = &{+sub {(caller(0))[0]}};
-    $VERSION = '0.77';
+    $myclass = __PACKAGE__;
+    $VERSION = '0.79';
 }
 sub Version { "$myclass v$VERSION" }
 
@@ -127,7 +127,9 @@ sub new				# $class, [\%params]
     my $whoami = $_[0]->_trace(\@_,1);
     my($class,@Args,$self) = @_;
     $self = $class->SUPER::new(@Args);
-    ($self || $class)->_trace(\@_,2,", self=$self after sub-new");
+    ($self || $class)->_trace(\@_,2,", self" .
+			      (defined $self ? "=$self" : " undefined") .
+			      " after sub-new");
     if ($self) {
 	# register our keys and their handlers
 	$self->registerParamKeys(\@Keys) if @Keys;
@@ -135,10 +137,25 @@ sub new				# $class, [\%params]
 	# register our socket options
 	# none for AF_UNIX?
 	# set our expected parameters
-	$self->setparams({PF => PF_UNIX, AF => AF_UNIX},-1);
-	$self = $self->init(@Args) if $class eq $myclass;
+	$self->setparams({PF => PF_UNIX, AF => AF_UNIX,
+			  type => SOCK_DGRAM},
+			 -1);
+	if ($class eq $myclass) {
+	    unless ($self->init(@Args)) {
+		local $!;	# protect errno
+		undef $self;	# from the side-effects of this
+		undef $self;	# another statement needed for unwinding
+	    }
+	}
     }
-    print STDERR "${myclass}::new returning self=$self\n" if $debug;
+    if ($debug) {
+	if ($self) {
+	    print STDERR "${myclass}::new returning self=$self\n";
+	}
+	else {
+	    print STDERR "${myclass}::new returning undef\n";
+	}
+    }
     $self;
 }
 
@@ -202,17 +219,18 @@ sub _init			# $self, whatpath[, $path][, \%params]
 	if @args == 2 and !$parms or @args > 2 or !$what;
     $parms ||= {};
     $$parms{$what} = $path if defined $path;
-    return unless $self->SUPER::init($parms);
+    return undef unless $self->SUPER::init($parms);
+    if (scalar %$parms) {
+	return undef unless $self->setparams($parms);
+    }
     if ($self->getparams([qw(srcaddr srcaddrlist dstaddr dstaddrlist)],1) >0) {
-	$self->setparams({type=>SOCK_DGRAM},-1);
-	return unless $self->isopen or $self->open;
-	$self->setsopt('SO_REUSEADDR',1)
-	    if (ref $self) =~ /::Server$/;
+	return undef unless $self->isopen or $self->open;
 	if ($self->getparams([qw(srcaddr srcaddrlist)],1) > 0) {
-	    return unless $self->isbound or $self->bind;
+	    return undef unless $self->isbound or $self->bind;
 	}
 	if ($self->getparams([qw(dstaddr dstaddrlist)],1) > 0) {
-	    return unless $self->isconnected or $self->connect;
+	    return undef unless $self->isconnected or $self->connect or
+		$self->isconnecting;
 	}
     }
     $self;
@@ -221,7 +239,12 @@ sub _init			# $self, whatpath[, $path][, \%params]
 sub init			# $self [, $destpath][, \%params]
 {
     my ($self,@args) = @_;
-    $self->_init('destpath',@args);
+    unless ($self->_init('destpath',@args)) {
+	local $!;	# preserve returned errno
+	undef $self;	# around the side-effects of close inside of perl
+	return undef;
+    }
+    $self;
 }
 
 1;
@@ -234,7 +257,7 @@ use vars qw(@ISA);
 
 my $srvpkg;
 BEGIN {
-    $srvpkg = &{+sub {(caller(0))[0]}};
+    $srvpkg = __PACKAGE__;
     @ISA = $myclass;
 }
 
@@ -243,20 +266,39 @@ sub new
     my $whoami = $_[0]->_trace(\@_,1);
     my($class,@Args,$self) = @_;
     $self = $class->SUPER::new(@Args);
-    ($class || $self)->_trace(\@_,2," self=$self after sub-new");
+    ($self || $class)->_trace(\@_,2," self" .
+			      (defined $self ? "=$self" : " undefined") .
+			      " after sub-new");
     if ($self) {
-	$self = $self->init(@Args) if $class eq $myclass;
+	$self->setparams({reuseaddr => 1}, -1);
+	if ($class eq $srvpkg) {
+	    unless ($self->init(@Args)) {
+		local $!;	# preserve errno
+		undef $self;	# against the side-effects of this
+		undef $self;	# another statement needed for unwinding
+	    }
+	}
     }
-    ($class || $self)->_trace(0,1," returning self=$self");
+    ($self || $class)->_trace(0,1," returning " .
+			      (defined $self ? "self=$self" : "undefined"));
     $self;
 }
 
 sub init			# $self [, $thispath][, \%params]
 {
     my ($self,@args) = @_;
-    return unless $self->_init('thispath',@args);
-    return unless
-	$self->isconnected or $self->didlisten or $self->listen;
+    unless ($self->_init('thispath',@args)) {
+	local $!;	# preserve returned errno
+	undef $self;	# around the side-effects of close inside of perl
+	return undef;
+    }
+    if ($self->isbound) {
+	unless ($self->isconnected or $self->didlisten or $self->listen) {
+	    local $!;
+	    undef $self;
+	    return undef;
+	}
+    }
     $self;
 }
 

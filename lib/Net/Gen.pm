@@ -13,7 +13,7 @@
 
 
 package Net::Gen;
-use 5.00399;		# new minimum Perl version for this package
+use 5.004;		# new minimum Perl version for this package
 
 use strict;
 use Carp;
@@ -22,7 +22,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD $adebug);
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.78';
+    $VERSION = '0.79';
 }
 
 sub Version () { "$myclass v$VERSION" }
@@ -39,25 +39,43 @@ BEGIN {
 
     @EXPORT = ();
 
-    @EXPORT_OK = qw(
-	pack_sockaddr
-	unpack_sockaddr
-	VAL_O_NONBLOCK
-	VAL_EAGAIN
-	RD_NODATA
-	EOF_NONBLOCK
-);
+    @EXPORT_OK = qw(pack_sockaddr
+		    unpack_sockaddr
+		    VAL_O_NONBLOCK
+		    VAL_EAGAIN
+		    RD_NODATA
+		    EOF_NONBLOCK
+		    EINPROGRESS EALREADY ENOTSOCK EDESTADDRREQ
+		    EMSGSIZE EPROTOTYPE ENOPROTOOPT EPROTONOSUPPORT
+		    ESOCKTNOSUPPORT EOPNOTSUPP EPFNOSUPPORT EAFNOSUPPORT
+		    EADDRINUSE EADDRNOTAVAIL ENETDOWN ENETUNREACH ENETRESET
+		    ECONNABORTED ECONNRESET ENOBUFS EISCONN ENOTCONN
+		    ESHUTDOWN ETOOMANYREFS ETIMEDOUT
+		    ECONNREFUSED EHOSTDOWN EHOSTUNREACH
+		    ENOSR ETIME EBADMSG EPROTO ENODATA ENOSTR
+		    EAGAIN EWOULDBLOCK
+		   );
 
     %EXPORT_TAGS = (
 	NonBlockVals => [qw(EOF_NONBLOCK RD_NODATA VAL_EAGAIN VAL_O_NONBLOCK)],
 	routines	=> [qw(pack_sockaddr unpack_sockaddr)],
+	errnos	=> [qw(EINPROGRESS EALREADY ENOTSOCK EDESTADDRREQ
+		       EMSGSIZE EPROTOTYPE ENOPROTOOPT EPROTONOSUPPORT
+		       ESOCKTNOSUPPORT EOPNOTSUPP EPFNOSUPPORT EAFNOSUPPORT
+		       EADDRINUSE EADDRNOTAVAIL ENETDOWN ENETUNREACH ENETRESET
+		       ECONNABORTED ECONNRESET ENOBUFS EISCONN ENOTCONN
+		       ESHUTDOWN ETOOMANYREFS ETIMEDOUT
+		       ECONNREFUSED EHOSTDOWN EHOSTUNREACH
+		       ENOSR ETIME EBADMSG EPROTO ENODATA ENOSTR
+		       EAGAIN EWOULDBLOCK
+		      )],
 	ALL	=> [@EXPORT, @EXPORT_OK],
     );
 }
 
 my %loaded;
 
-;# since I use these values in ckeof(), I need to predeclare them here
+# since I use these values in ckeof(), I need to predeclare them here
 
 sub EOF_NONBLOCK 	();
 sub RD_NODATA		();
@@ -65,9 +83,9 @@ sub VAL_EAGAIN		();
 sub VAL_O_NONBLOCK	();
 
 my $nullsub = sub {};		# handy null warning handler
-;# If the warning handler is this exact code ref, don't bother calling
-;# croak in the AUTOLOAD constant section, since we're being called from
-;# inside the eval in initsockopts().
+# If the warning handler is this exact code ref, don't bother calling
+# croak in the AUTOLOAD constant section, since we're being called from
+# inside the eval in initsockopts().
 
 sub AUTOLOAD
 {
@@ -96,10 +114,10 @@ sub AUTOLOAD
     unless ($loaded{$AUTOLOAD}) {
 	local($^W) = 0;		# suppress warning for sub redefined, etc.
 	*{$AUTOLOAD} = sub () { $val };
-;#	eval "sub $AUTOLOAD { $val }";
+#	eval "sub $AUTOLOAD () { $val }";
 	$loaded{$AUTOLOAD} = 1;
     }
-;#    $DB::sub = $AUTOLOAD if $DB::sub;  # pp_goto does this if debugging now.
+#    $DB::sub = $AUTOLOAD if $DB::sub;  # pp_goto does this if debugging now.
     goto &$AUTOLOAD;
 }
 
@@ -111,13 +129,13 @@ BEGIN {
 # processed by the autosplit program.
 
 
-;# This package has the core 'generic' routines for fiddling with
-;# sockets.
+# This package has the core 'generic' routines for fiddling with
+# sockets.
 
-# initsockopts - set up the socket options of a user of this module
-# the structure of a sockopt hash is like this:
+# initsockopts - Set up the socket options of a class using this module.
+# The structure of a sockopt hash is like this:
 # %sockopts = ( OPTION => ['pack_string', $option_number, $option_level,
-#				$number_of_elements] ... );
+#				$number_of_elements], ... );
 # The option level and number are for calling [gs]etsockopt, and
 # the number of elements is for some (weak) consistency checking.
 # The pack/unpack template is used by $obj->getsopt and setsopt.
@@ -126,7 +144,7 @@ BEGIN {
 # have filled in the ones which can.  It will also have duplicated
 # the entries to be indexed by option value as well as by option name.
 
-my %evalopts;			# avoid an eval per sockopt
+my %evalopts;			# avoid compiling an eval per sockopt
 
 sub initsockopts		# $class, $level+0, \%sockopts
 {
@@ -149,14 +167,14 @@ sub initsockopts		# $class, $level+0, \%sockopts
 	$$opts{$oval} = $$opts{$opt};
 	$oval = $$opts{$opt}[0];
 	@oval = unpack($oval, pack($oval, 0));
-	$$opts{$opt}[3] = 0+@oval;
+	$$opts{$opt}[3] = scalar @oval;
     }
 }
 
 
 my %sockopts;
 
-;# The known socket options (from Socket.pm)
+# The known socket options (from Socket.pm)
 
 %sockopts = (
 	     # First, the simple flag options
@@ -188,7 +206,7 @@ my %sockopts;
 	     # Out of known socket options
 	     );
 
-$myclass->initsockopts( SOL_SOCKET, \%sockopts );
+$myclass->initsockopts( SOL_SOCKET(), \%sockopts );
 
 
 sub _genfh ()			# (void), returns orphan globref with HV slot.
@@ -200,7 +218,7 @@ sub _genfh ()			# (void), returns orphan globref with HV slot.
 
 my $debug = 0;			# module-wide debug hack -- don't use
 
-;# On the other hand, per-object debugging isn't so bad....
+# On the other hand, per-object debugging isn't so bad....
 
 sub _debug			# $this [, $newval] ; returns oldval
 {
@@ -224,7 +242,8 @@ sub _trace			# $this , \@args, minlevel, [$moretext]
 {
     my ($this,$aref,$level,$msg) = @_;
     my ($pkg,$rtn) = (caller(0))[0,3];
-    $msg = '' unless defined $msg;
+    local $^W=0;		# keep the arglist interpolation from carping
+#    $msg = '' unless defined $msg;
     print STDERR "${pkg}::${rtn}(@{$aref||[]})${msg}\n"
 	if $level and $this->_debug >= $level;
     "${pkg}::${rtn}" if defined wantarray;
@@ -240,16 +259,74 @@ sub _setdebug			# $self, $name, $newval
     '';			# return goodness
 }
 
-;# try to work even in places where Fcntl.xs doesn't.
+# try to work even in places where Fcntl.xs doesn't.
 
 my ($F_GETFL,$F_SETFL) =
     eval 'use Fcntl qw(F_GETFL F_SETFL);(F_GETFL,F_SETFL)';
 my $nonblock_flag = eval 'pack("I",VAL_O_NONBLOCK)';
 my $eagain = eval 'VAL_EAGAIN';
 
+sub _setblocking		# $self, $name, $newval
+{
+    my ($self,$what,$newval) = @_;
+    $newval = 1 unless defined $newval;
+    # default previous value, just in case
+    $$self{Parms}{$what} = 1 unless defined $$self{Parms}{$what};
+    if ($newval) {
+	$_[2] = 1;	# canonicalise the new value
+	if (defined $F_GETFL and defined $F_SETFL and defined $nonblock_flag
+	    and $self->isopen) {
+	    if ((fcntl($$self{fhref}, $F_GETFL, 0) & VAL_O_NONBLOCK) ==
+		VAL_O_NONBLOCK) {
+		$$self{Parms}{$what} = 0;  # note previous status
+		return 'Failed to clear non-blocking status'
+		    unless eval {fcntl($$self{fhref}, $F_SETFL,
+				       fcntl($$self{fhref}, $F_GETFL, 0) &
+				       ~VAL_O_NONBLOCK)};
+	    }
+	}
+    }
+    else {
+	$_[2] = 0;	# canonicalise the new value
+	unless (defined $F_GETFL and defined $F_SETFL and
+		defined $nonblock_flag) {
+	    return 'Non-blocking sockets unavailable in this configuration';
+	}
+	if ($self->isopen) {
+	    if ((fcntl($$self{fhref}, $F_GETFL, 0) & VAL_O_NONBLOCK) !=
+		VAL_O_NONBLOCK) {
+		$$self{Parms}{$what} = 1;  # note previous state
+		return 'Failed to set non-blocking status'
+		    unless eval {fcntl($$self{fhref}, $F_SETFL,
+				       fcntl($$self{fhref}, $F_GETFL, 0) |
+				       VAL_O_NONBLOCK)};
+	    }
+	}
+    }
+    '';		# return goodness if got this far
+}
+
+sub _settimeout			# $self, $what, $newval
+{
+    my ($self,$what,$newval) = @_;
+    unless (defined $newval) {
+	return '';		# It's always OK to delete a timeout.
+    }
+    if (!length($newval) or $newval =~ /\D/) {
+	"Parameter $what must be a non-negative integer or undefined";
+    }
+    else {
+	'';
+    }
+}
 
 my @Keys = qw(PF AF type proto dstaddr dstaddrlist srcaddr srcaddrlist
-	      maxqueue);
+	      maxqueue reuseaddr);
+my %Codekeys = (
+		'debug' => \&_setdebug,
+		'blocking' => \&_setblocking,
+		'timeout' => \&_settimeout,
+	       );
 
 sub registerParamKeys		# $self, \@keys
 {
@@ -307,6 +384,27 @@ sub registerOptions		# $self, $levelname, $level, \%options
 sub register_options;		# helps with -w
 *register_options = \&registerOptions; # alias form preferred by many
 
+# pseudo-subclass for saving parameters (ParamSaver, inspired by SelectSaver)
+sub paramSaver			# $self, @params
+{
+    my ($self, @params) = @_;
+    my %setparams = $self->getparams(\@params);
+    my @delparams = map { exists $$self{Parms}{$_} ? () : ($_) } @params;
+    bless [$self, \%setparams, \@delparams], 'Net::Gen::ParamSaver';
+}
+
+sub param_saver;		# aliases
+*param_saver = \&paramSaver;
+sub ParamSaver;
+*ParamSaver = \&paramSaver;
+
+sub Net::Gen::ParamSaver::DESTROY
+{
+    local $!;	# just to be sure we don't clobber it
+    $_[0]->[0]->setparams($_[0]->[1]);
+    $_[0]->[0]->delparams($_[0]->[2]);
+}
+
 sub new				# classname [, \%params]
 {				# -or- $classname [, @ignored]
     my $whoami = $_[0]->_trace(\@_,1);
@@ -314,6 +412,7 @@ sub new				# classname [, \%params]
     my %parms;
     %parms = ( %$parms ) if $parms and ref $parms eq 'HASH';
     $parms{'debug'} = $pack->_debug unless defined $parms{'debug'};
+    $parms{'blocking'} = 1 unless defined $parms{'blocking'};
     if (@_ > 2 and $parms and ref $parms eq 'HASH') {
 	croak "Invalid argument format to ${whoami}(@_), called";
     }
@@ -322,11 +421,24 @@ sub new				# classname [, \%params]
     $pack->_trace(\@_,2,", self=$self after bless");
     $$self{Parms} = \%parms;
     $self->registerParamKeys(\@Keys); # register our keys
-    $self->registerParamHandlers({'debug'=>\&_setdebug});
+    $self->registerParamHandlers(\%Codekeys);
     $self->registerOptions(['SOL_SOCKET', SOL_SOCKET+0], \%sockopts);
     $$self{fhref} = _genfh;
-    $self = $self->init if $pack eq $myclass;
-    print STDERR "${whoami} returning self=$self\n" if $pack->_debug;
+    if ($pack eq $myclass) {
+	unless ($self->init) {
+	    local $!;		# preserve errno
+	    undef $self;	# against the side-effects of this
+	    undef $self;	# another statement needed for unwinding
+	}
+    }
+    if ($pack->_debug) {
+	if (defined $self) {
+	    print STDERR "${whoami} returning self=$self\n";
+	}
+	else {
+	    print STDERR "${whoami} returning undef\n";
+	}
+    }
     $self;
 }
 
@@ -343,8 +455,9 @@ sub setparams			# $this, \%newparams [, $newonly [, $check]]
     $newonly ||= 0;		# undefined or zero is equiv now (-w problem)
     my ($parm,$newval);
     while (($parm,$newval) = each %$newparams) {
-	print STDERR "${myclass}::setparams $self $parm $newval\n"
-	    if $self->debug;
+	print STDERR "${myclass}::setparams $self $parm" .
+	    (defined $newval ? " $newval" : "") . "\n"
+		if $self->debug;
 	(carp "Unknown parameter type $parm for a " . (ref $self) . " object")
 	    , $errs++, next
 		unless exists $$self{Keys}{$parm};
@@ -385,7 +498,7 @@ sub delparams			# $self, \@paramnames ; returns bool
     @k = grep(exists $$self{Parms}{$_}, @$keysref);
     return 1 unless @k;		# if no keys need deleting, succeed vacuously
     @k{@k} = ();		# a hash of undefs for the following
-    return unless $self->setparams(\%k); # see if undef is allowed
+    return undef unless $self->setparams(\%k); # see if undef is allowed
     delete @{$$self{Parms}}{@k};
     1;				# return goodness
 }
@@ -482,6 +595,7 @@ sub condition			# $self ; return not useful
     # $\ = "\015\012";
     binmode($fh);
     vec($_[0]->{FHVec} = '', fileno($fh), 1) = 1;
+    $_[0]->setparams({'blocking'=>$_[0]->getparam('blocking',1,1)},0,1);
 }
 
 sub open			# $self [, @ignore] ; returns boolean
@@ -514,11 +628,39 @@ eval '&SOMAXCONN()' or eval 'sub SOMAXCONN {5}'; # old bsd default if undefined
 
 # sub listen - autoloaded
 
+sub _tryconnect			# $self, $addr, $timeout ; returns boolean
+{
+    my ($self,$addr,$timeout) = @_;
+    if ($$self{'isconnecting'}) {
+	$self->stopio;
+	return undef unless $self->open;
+	if ($self->getparam('srcaddr') || $self->getparam('srcaddrlist')
+	    and !$self->isbound) {
+	    return undef unless $self->bind;
+	}
+    }
+    my $rval = connect($$self{fhref},$addr);
+    return $rval if $rval;
+    return $rval unless $! == EWOULDBLOCK or $! == EINPROGRESS;
+    my $fhvec = $$self{FHVec};
+    $$self{'isconnecting'} = 1;
+    $$self{Parms}{'dstaddr'} = $addr;
+    return $rval unless defined $timeout;
+    my $nfound = select(undef,$fhvec,undef,$timeout);
+    return $rval unless $nfound;
+    $$self{'isconnecting'} = 0;
+    # Now, for the black magick of async sockets--re-try the connect
+    # to see whether it already worked.
+    connect($$self{fhref},$addr);
+}
+
 sub connect			# $self, [@ignored] ; returns boolean
 {
     $_[0]->_trace(\@_,2);
     my $self = shift;
-    $self->close if $$self{wasconnected} || $$self{'isconnected'};
+    $self->close if
+	$$self{wasconnected} || $$self{'isconnected'} ||
+	    $$self{'isconnecting'};
     $$self{wasconnected} = 0;
     return undef unless $self->isopen or $self->open;
     if ($self->getparam('srcaddr') || $self->getparam('srcaddrlist')
@@ -526,19 +668,34 @@ sub connect			# $self, [@ignored] ; returns boolean
 	return undef unless $self->bind;
     }
     my $rval;
-    if (defined($$self{Parms}{dstaddrlist}) and
-	ref($$self{Parms}{dstaddrlist}) eq 'ARRAY') {
-	my $tryaddr;
-	foreach $tryaddr (@{$$self{Parms}{dstaddrlist}}) {
-	    next unless $rval = connect($$self{fhref}, $tryaddr);
-	    $$self{Parms}{dstaddr} = $tryaddr;
-	    last;
+    my $error = 0;	# errno to propagate if failing
+    {
+	my ($saveblocking,$timeout);
+	if (defined ($timeout = $self->getparam('timeout'))) {
+	    $saveblocking = $self->param_saver('blocking');
+	    $self->setparams({'blocking'=>0}) or undef $timeout;
 	}
-    }
-    else {
-	$rval = connect($$self{fhref}, $$self{Parms}{dstaddr});
+	if (defined($$self{Parms}{dstaddrlist}) and
+	    ref($$self{Parms}{dstaddrlist}) eq 'ARRAY') {
+	    my $tryaddr;
+	    foreach $tryaddr (@{$$self{Parms}{dstaddrlist}}) {
+		$rval = _tryconnect($self, $tryaddr, $timeout);
+		next unless $rval;
+		$$self{Parms}{dstaddr} = $tryaddr;
+		last;
+	    }
+	}
+	else {
+	    $rval = _tryconnect($self, $$self{Parms}{dstaddr},
+				$timeout);
+	}
+	$error = $!+0 unless $rval;
     }
     $$self{'isconnected'} = $rval;
+    if (!$rval) {
+	$! = $error;
+	return $rval;
+    }
     $self->getsockinfo;
     $self->isconnected;
 }
@@ -561,19 +718,23 @@ sub shutdown			# $self [, $how=2] ; returns boolean
 {
     $_[0]->_trace(\@_,3);
     my $self = shift;
-    return 1 unless $self->isconnected;
+    return 1 unless $self->isconnected or $self->isconnecting;
     my $how = shift;
-    $how = 2 unless defined $how && grep($how == $_, 0, 1, 2);
+    $how = 2 unless
+	defined $how && length $how && $how !~ /\D/ &&
+	    grep($how == $_, 0, 1, 2);
     my $was = ($$self{wasconnected} |= $how+1);
     my $fhref = $$self{fhref};
     my $rval = shutdown($fhref,$how);
-    $$self{'isconnected'} = 0 if $was == 3 or
+    local $!;	# preserve shutdown()'s errno
+    $$self{'isconnecting'} = $$self{'isconnected'} = 0 if $was == 3 or
 	(!defined(getpeername($fhref)) && ($$self{wasconnected} = 3));
     $rval;
 }
 
 
-my @CloseVars = qw(FHVec isopen isbound didlisten wasconnected);
+my @CloseVars = qw(FHVec isopen isbound didlisten wasconnected isconnected
+		   isconnecting);
 my @CloseKeys = qw(srcaddr dstaddr);
 
 sub close			# $self [, @ignored] ; returns boolean
@@ -591,7 +752,8 @@ sub stopio			# $self [, @ignored] ; returns boolean
 {
     $_[0]->_trace(\@_,4);
     my $self = shift;
-    $$self{'isconnected'} = 0;	# lie to avoid shutdown call
+    # lie to avoid shutdown call
+    $$self{'isconnecting'} = $$self{'isconnected'} = 0;
     $self->close;
 }
 
@@ -636,6 +798,8 @@ sub put				# $self, @stuff ; returns boolean
 
 sub PRINT;			# avoid -w error
 *PRINT = \&put;			# alias that may someday be used for tied FH
+sub print;			# avoid -w error
+*print = \&put;			# maybe-useful alias
 
 sub ckeof			# $self ; returns boolean
 {
@@ -696,6 +860,7 @@ sub recv			# $self, [$maxlen, [$flags, [$from]]] ;
     $$self{lastFrom} = $from;
     $_[3] = $from if @_ > 3;
     $$self{lastRegFrom} = $from if !$flags;
+    $! = $errnum;		# restore possible failure in case we return
     return undef if !defined $from and (EOF_NONBLOCK or $errnum != $eagain);
     return $buf if length $buf;
     # At this point, we had a 0-length read with no error (or EAGAIN).
@@ -784,6 +949,12 @@ sub isconnected			# $self [, @ignored] ; returns boolean
     $_[0]->{'isconnected'};
 }
 
+sub isconnecting		# $self [, @ignored] ; returns boolean
+{
+    #$_[0]->_trace(\@_,4," - ".($_[0]->{'isconnecting'} ? "yes" : "no"));
+    $_[0]->{'isconnecting'};
+}
+
 sub isbound			# $self [, @ignored] ; returns boolean
 {
     #$_[0]->_trace(\@_,4," - ".($_[0]->{'isbound'} ? "yes" : "no"));
@@ -831,7 +1002,8 @@ C<bind>, C<listen>
 
 =item Parameter manipulation
 
-C<setparams>, C<setparam>, C<delparams>, C<delparam>, C<getparams>, C<getparam>
+C<setparams>, C<setparam>, C<delparams>, C<delparam>, C<getparams>,
+C<getparam>, C<param_saver>
 
 =item Low-level control
 
@@ -880,7 +1052,9 @@ Usage:
 Returns a new object in the same class as the given object if an
 accept() call succeeds, and C<undef> otherwise.  If the accept()
 call succeeds, the new object is marked as being open, connected,
-and bound.
+and bound.  This can fail unexpectedly if the listening socket is
+non-blocking or if the object has a C<timeout> parameter.  See the
+discussion of non-blocking sockets and timeouts in L</connect> below.
 
 =item bind
 
@@ -902,7 +1076,7 @@ C<srcaddrlist> parameter is not set to an array reference, if the
 C<srcaddr> parameter is a non-null string, it will be used.
 Finally, if neither C<srcaddrlist> nor C<srcaddr> is suitably
 set, the C<AF> parameter will be used to construct a C<sockaddr>
-struct which will be mostly zeroed, and the bind() will be
+structure which will be mostly zeroed, and the bind() will be
 attempted with that.  If the bind() fails, C<undef> will be
 returned at this point.  Otherwise, a call to the C<getsockinfo>
 method will be made, and then the value from a call to the
@@ -946,6 +1120,9 @@ Usage:
 an open() or accept().  (In other words, the C<open> and C<accept>
 methods call the C<condition> method.)
 Sets the socket to be autoflushed and marks it binmode().
+Attempts to set the socket blocking or non-blocking, depending on the
+state of the object's C<blocking> parameter.  (It may update that parameter
+if the socket's state cannot be made to match.)
 No useful value is returned.
 
 =item connect
@@ -955,7 +1132,7 @@ Usage:
     $ok = $obj->connect;
 
 Attempts to establish a connection for the object.  First, if the
-object is currently connected or has been connected since the
+object is currently connected (or connecting) or has been connected since the
 last time it was opened, its C<close> method is called.  Then, if
 the object is not currently open, its C<open> method is called.
 If it's not open after that, C<undef> is returned.  If it is
@@ -975,6 +1152,17 @@ Finally, a call is made to the object's C<getsockinfo> method,
 and then the value from a call to its C<isconnected> method is
 returned.
 
+Each of the attempts with the connect() builtin is timed out separately.
+If there is no C<timeout> parameter for the object, and the socket is
+blocking (which is the default), the timeout period is strictly at the
+mercy of you operating system.  If there is no C<timeout> parameter and the
+socket is non-blocking, that's effectively the same as having a C<timeout>
+parameter value of C<0>.  If there is a C<timeout> parameter, the socket
+is made non-blocking temporarily (see L</"param_saver"> below), and the
+indicated timeout value will be used to limit the connection attempt.  An
+attempt is made to preserve any meaningful $! values when all connection
+attempts have failed.
+
 Note that the derived classes tend to provide additional
 capabilities which make the C<connect> method easier to use than
 the above description would indicate.
@@ -985,7 +1173,7 @@ Usage:
 
     $ok = $obj->delparam($keyname);
 
-Sugar-coated call to the C<delparams> method.  Functions just like it.
+Sugar-coated call to the C<delparams> method.
 
 =item delparams
 
@@ -1085,7 +1273,7 @@ This method uses the C<recv> method with a $flags argument of 0 and
 a $maxlen argument of 1 to emulate the getc() builtin.  Like that builtin,
 it returns a string representing the character read when successful,
 and undef on eof or errors.  This method exists for the support of tied
-filehandles.
+filehandles.  It's unreliable for non-blocking sockets.
 
 =item getfh
 
@@ -1132,7 +1320,8 @@ Usage:
     $line = $obj->getline;
 
 This is a simulation of C<scalar(E<lt>$filehandleE<gt>)> that doesn't let
-stdio confuse the C<get>/C<recv> method.
+stdio confuse the C<get>/C<recv> method.  As such, its return value is
+not necessarily a complete line when the socket is non-blocking.
 
 =item getparam
 
@@ -1160,8 +1349,10 @@ Returns a hash (I<not> a reference) consisting of the key-value
 pairs corresponding to the specified keyname list.  Only those
 keys which exist in the current parameter list of the object will
 be returned.  If the C<$noundefs> parameter is present and true,
-then existing keys with undefined values will be suppressed like
-non-existent keys.
+then existing keys with undefined values will be suppressed as with
+non-existent keys.  If called in a scalar context, returns the
+number of values which would have been returned in array context.
+(This is twice the number of key-value pairs, in case that wasn't clear.)
 
 =item getropt
 
@@ -1186,7 +1377,8 @@ Usage:
 This is a simulation of C<scalar(E<lt>$filehandleE<gt>)> that doesn't let
 stdio confuse the C<get>/C<recv> method.  (The C<gets> method is just
 an alias for the C<getline> method, for partial compatibility with
-the POSIX module.)
+the POSIX module.)  This method is deprecated.  Use the C<getline> method
+by that name, instead.  The C<gets> method may disappear in a future release.
 
 =item getsockinfo
 
@@ -1277,6 +1469,17 @@ connected.  If this method has not been overridden by a derived
 class, the value is the saved return value of the call to the
 connect() builtin (if it was called).
 
+=item isconnecting
+
+Usage:
+
+    $ok = $obj->isconnecting;
+
+Returns true if the object's C<connect> method has been used
+with a timeout or on a non-blocking socket, and the connect() did
+not complete.  (In other words, the failure from the connect() builtin
+indicated that the operation was still in progress.)
+
 =item isopen
 
 Usage:
@@ -1348,12 +1551,38 @@ parameters to determine the desired protocol family, socket type,
 and protocol number.  If the object was already open, its
 C<stopio> method will be called before socket() is called again.
 The object parameters consulted (and possibly updated) are C<PF>,
-C<AF>, C<proto>, and C<type>.  Returns true if the socket() call
+C<AF>, C<proto>, C<type>, and C<blocking>.  Returns true if the socket() call
 results in an open filehandle, C<undef> otherwise.
+
+=item param_saver
+
+=item paramSaver
+
+Usage:
+
+    my $savedstuff = $obj->param_saver(@param_names);
+    my $savedstuff = $obj->paramSaver(@param_names);
+
+Saves the values (or lack thereof) for the indicated parameter names
+by wrapping them (and the original object)
+in an object blessed into an alternate package.  When this `saver' object
+is destroyed (typically because the `my' variable went out of scope),
+the previous values of the parameters for the original object will be
+restored.  This allows for temporary changes to an object's parameter
+settings without the worry of whether an inopportune die() will prevent
+the restoration of the original settings.
+
+An example (from the C<connect> method):
+
+    my $saveblocking = $self->param_saver('blocking');
+
+(This is used when there is a C<timeout> parameter for the object.)
+
+=item print
 
 =item PRINT
 
-See L</put>, as this method is just an alias for the C<pub> method.
+See L</put> for details, as this method is just an alias for the C<put> method.
 The C<PRINT> alias is for the support of tied filehandles.
 
 =item PRINTF
@@ -1363,7 +1592,8 @@ Usage:
     $ok = $obj->PRINTF($format, @args);
     $ok = printf TIEDFH $format, @args;
 
-This method is exactly equivalent to C<$obj-E<gt>put(sprintf $format,@args)>.
+This method uses the printf() builtin to send the @args avlues to the
+filehandle associated with the object, using the $format format string.
 It exists for the support of tied filehandles.
 
 =item put
@@ -1385,7 +1615,9 @@ the actual use of print(), this method can be more efficient than
 the above code sample for large strings in the argument list.
 It's a bad idea except on stream sockets (C<SOCK_STREAM>)
 though, since the record boundaries are unpredictable through
-stdio.  This method makes no attempt to trap C<SIGPIPE>.
+C<stdio>.  It's also a bad idea on non-blocking sockets, since the amount
+of data actually written to the socket is unknown.
+This method makes no attempt to trap C<SIGPIPE>.
 
 =item READ
 
@@ -1415,6 +1647,7 @@ on tied filehandles.  In scalar context, it uses the C<getline> method.
 In array context, it reads all remaining input on the socket (until eof, which
 makes this unsuitable for connectionless socket types such as UDP), and
 splits it into lines based on the current value of the $/ variable.
+The return value is unreliable for non-blocking sockets.
 
 =item RECV
 
@@ -1425,7 +1658,7 @@ Usage:
     $from = $obj->RECV($buffer);
 
 This method calls the recv() method with the arguments and return
-rearranged to match the recv() builtin.  This is for (eventual) support of
+rearranged to match the recv() builtin.  This is for the support of
 tied filehandles.
 
 =item recv
@@ -1536,7 +1769,7 @@ optional), but in all cases the keys to be set are checked
 against those registered with the object.  If the C<$newonly>
 parameter is negative, the value from the hashref will only be
 set if there is not already a defined value associated with that
-key, but skipping the setting of the value is silent.  If the
+key, but the skipping of the setting of the value is silent.  If the
 C<$newonly> parameter is not negative or if there is no existing
 defined value, if the C<$checkup> parameter is false then the
 setting of the new value is skipped if the new value is identical
@@ -1582,7 +1815,7 @@ Usage:
 
 Returns the result from a call to the setsockopt() builtin.  In
 order to be able to pack the C<@optvalues>, the option must be
-registered with the object, just as for the C<getsopt> method,
+registered with the object, just as described in L</getsopt>
 above.
 
 =item shutdown
@@ -1599,7 +1832,7 @@ shutdown() builtin, which in turn should be as described in the
 shutdown(2) manpage.  If the C<$how> parameter is not present,
 it is assumed to be 2.
 
-Returns 1 if nothing to do, otherwise propagates the return from
+Returns 1 if it has nothing to do, otherwise propagates the return from
 the shutdown() builtin.
 
 =item stopio
@@ -1790,6 +2023,15 @@ module itself:
 
 Address family (will default from PF, and vice versa)
 
+=item blocking
+
+Set to 0 when a socket has been marked as non-blocking, and to 1
+otherwise.  If it's C<undef>, it'll be treated as though it were
+set to 1.  The use of anything which even looks like C<stdio>
+calls on non-blocking sockets as at your own risk.  If you don't know
+how to work with non-blocking sockets already, the results of trying
+them may surprise you.
+
 =item dstaddr
 
 The result of getpeername(), or an ephemeral proposed connect() address
@@ -1812,6 +2054,11 @@ Protocol family for this object
 
 The protocol to pass to the socket() call (often defaulted to 0)
 
+=item reuseaddr
+
+A boolean, indicating whether the C<bind> method should do a
+setsockopt() call to set C<SO_REUSEADDR> to 1
+
 =item srcaddr
 
 The result of getsockname(), or an ephemeral proposed bind() address
@@ -1819,6 +2066,12 @@ The result of getsockname(), or an ephemeral proposed bind() address
 =item srcaddrlist
 
 A reference to an array of socket addresses to try for bind()
+
+=item timeout
+
+The maximum time to wait for connect() attempts to succeed.
+See the discussion of timeouts and non-blocking sockets
+in L</connect> above.
 
 =item type
 
@@ -1848,9 +2101,15 @@ Usage:
 
 The inverse of pack_sockaddr().
 
+=item E*
+
+Various socket-related C<errno> values.  See L</":errnos"> for the list.
+These routines will always be defined, but they will return 0 if the
+corresponding error symbol was not found on your system.
+
 =item EOF_NONBLOCK
 
-Returns a boolean value dependin on whether a read from a
+Returns a boolean value depending on whether a read from a
 non-blocking socket can distinguish an end-of-file condition from
 a no-data-available condition.  This corresponds to the value
 available from the C<Config> module as
@@ -1896,6 +2155,14 @@ None.
 
 C<VAL_O_NONBLOCK> C<VAL_EAGAIN> C<RD_NODATA> C<EOF_NONBLOCK>
 C<pack_sockaddr> C<unpack_sockaddr>
+C<EADDRINUSE> C<EADDRNOTAVAIL> C<EAFNOSUPPORT> C<EAGAIN>
+C<EALREADY> C<EBADMSG> C<ECONNABORTED> C<ECONNREFUSED>
+C<ECONNRESET> C<EDESTADDRREQ> C<EHOSTDOWN> C<EHOSTUNREACH>
+C<EINPROGRESS> C<EISCONN> C<EMSGSIZE> C<ENETDOWN> C<ENETRESET>
+C<ENETUNREACH> C<ENOBUFS> C<ENODATA> C<ENOPROTOOPT> C<ENOSR>
+C<ENOSTR> C<ENOTCONN> C<ENOTSOCK> C<EOPNOTSUPP> C<EPFNOSUPPORT>
+C<EPROTO> C<EPROTONOSUPPORT> C<EPROTOTYPE> C<ESHUTDOWN>
+C<ESOCKTNOSUPPORT> C<ETIME> C<ETIMEDOUT> C<ETOOMANYREFS> C<EWOULDBLOCK>
 
 =item tags
 
@@ -1911,6 +2178,17 @@ C<EOF_NONBLOCK> C<RD_NODATA> C<VAL_EAGAIN> C<VAL_O_NONBLOCK>
 =item :routines
 
 C<pack_sockaddr> C<unpack_sockaddr>
+
+=item :errnos
+
+C<EADDRINUSE> C<EADDRNOTAVAIL> C<EAFNOSUPPORT> C<EAGAIN>
+C<EALREADY> C<EBADMSG> C<ECONNABORTED> C<ECONNREFUSED>
+C<ECONNRESET> C<EDESTADDRREQ> C<EHOSTDOWN> C<EHOSTUNREACH>
+C<EINPROGRESS> C<EISCONN> C<EMSGSIZE> C<ENETDOWN> C<ENETRESET>
+C<ENETUNREACH> C<ENOBUFS> C<ENODATA> C<ENOPROTOOPT> C<ENOSR>
+C<ENOSTR> C<ENOTCONN> C<ENOTSOCK> C<EOPNOTSUPP> C<EPFNOSUPPORT>
+C<EPROTO> C<EPROTONOSUPPORT> C<EPROTOTYPE> C<ESHUTDOWN>
+C<ESOCKTNOSUPPORT> C<ETIME> C<ETIMEDOUT> C<ETOOMANYREFS> C<EWOULDBLOCK>
 
 =item :ALL
 
@@ -1954,8 +2232,10 @@ sub bind			# $self [, @ignored] ; returns boolean
     $_[0]->_trace(\@_,2);
     my $self = shift;
     $self->close if
-	$$self{wasconnected} || $self->isconnected || $self->isbound;
+	$$self{wasconnected} || $self->isconnected || $self->isconnecting ||
+	    $self->isbound;
     return $$self{'isbound'} = undef unless $self->isopen or $self->open;
+    $self->setsopt('SO_REUSEADDR', 1) if $$self{Parms}{reuseaddr};
     my $rval;
     if ($$self{Parms}{srcaddrlist}) {
 	my $tryaddr;
@@ -2029,6 +2309,7 @@ sub STORE
 {
     $_[0]->_trace(\@_,2);
     my $self = shift;
+    return if @_ == 1 and !defined $_[0];	# "undef $x"
     $self->put(@_);
 }
 
@@ -2150,13 +2431,13 @@ sub setropt			# $this, [$level,] $what, $realvalue
 
 sub fileno			# $this
 {
-;#    $_[0]->_trace(\@_,4);
+#    $_[0]->_trace(\@_,4);
     fileno($_[0]->{fhref});
 }
 
 sub getfh			# $this
 {
-;#    $_[0]->_trace(\@_,4);
+#    $_[0]->_trace(\@_,4);
     $_[0]->{fhref};
 }
 
@@ -2285,7 +2566,16 @@ sub accept			# $self ; returns new (ref $self) or undef
     $ns->stopio;		# make sure we can use the filehandle
     $$ns{Parms} = { %{$$self{Parms}} };
     $ns->checkparams;
-    return undef unless accept($$ns{fhref},$$self{fhref});
+    {
+	my ($timeout,$fhvec,$saveblocking) =
+	    ($$self{Parms}{'timeout'}, $$self{FHVec});
+	if (defined $timeout) {
+	    $saveblocking = $self->param_saver('blocking');
+	    $self->setparams({'blocking'=>0});
+	    my $nfound = select($fhvec, undef, undef, $timeout);
+	}
+	return undef unless accept($$ns{fhref},$$self{fhref});
+    }
     $$ns{'isopen'} = $$ns{'isbound'} = $$ns{'isconnected'} = 1;
     $ns->getsockinfo;
     return undef unless $ns->isconnected;
@@ -2300,7 +2590,7 @@ sub RECV			# $self, $buf [,$maxlen] [,$flags]
     croak "Invalid arguments to ${whoami}, called"
 	if @_ < 2 or @_ > 4 or !ref($_[0]);
     $buf = $_[0]->recv($_[2], $_[3], $from);
-    return unless defined $buf;
+    return undef unless defined $buf;
     $_[1] = $buf;
     $from;
 }
@@ -2318,7 +2608,7 @@ sub PRINTF			# $self, $format [,@args]
     $_[0]->_trace(\@_,5);
     my $self = shift;
     my $fmt = shift;
-    $self->put(sprintf($fmt,@_));
+    printf {$$self{fhref}} $fmt,@_;
 }
 
 sub READ			# $self, $buffer, $length [,$offset]
@@ -2336,7 +2626,10 @@ sub READ			# $self, $buffer, $length [,$offset]
     }
     my $buf = $_[0]->recv($len, 0);
     $_[1] ||= '' unless defined $_[1];
-    return unless defined $buf;
+    unless (defined $buf) {
+	return undef if $!;
+	return 0;
+    }
     my $xbuf;
     $len -= length($buf);
     while ($len > 0) {		# keep trying to fill the specified length

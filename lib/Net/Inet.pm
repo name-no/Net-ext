@@ -13,7 +13,7 @@
 
 
 package Net::Inet;
-use 5.00399;			# new minimum Perl version for this package
+use 5.004;			# new minimum Perl version for this package
 
 use strict;
 use Carp;
@@ -23,14 +23,14 @@ my $myclass;
 
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.77';
+    $VERSION = '0.79';
 }
 
 sub Version () { "$myclass v$VERSION" }
 
 use AutoLoader;
 #use Exporter ();
-use Net::Gen 0.75 qw(:ALL);
+use Net::Gen 0.79 qw(:ALL);
 use Socket qw(!/^[a-z]/ /^inet_/);
 
 BEGIN {
@@ -432,7 +432,9 @@ sub new				# $class, [\%params]
     my $whoami = $_[0]->_trace(\@_,1);
     my($class,@Args,$self) = @_;
     $self = $class->SUPER::new(@Args);
-    $class->_trace(\@_,2,", self=$self after sub-new");
+    $class->_trace(\@_,2,", self" .
+		   (defined $self ? "=$self" : " undefined") .
+		   " after sub-new");
     if ($self) {
 	dump if $debug > 1 and
 	    ref $self ne $class || "$self" !~ /HASH/;
@@ -457,8 +459,19 @@ sub new				# $class, [\%params]
 	}
 	# set our expected parameters
 	$self->setparams({PF => PF_INET, AF => AF_INET},-1);
-	$self = $self->init(@Args) if $class eq $myclass;
-	$self->_trace([],1," returning self=$self");
+	if ($class eq $myclass) {
+	    unless ($self->init(@Args)) {
+		local $!;	# protect returned errno value
+		undef $self;	# against close problems inside perl
+		undef $self;	# another statement needed for sequencing
+	    }
+	}
+	if ($self) {
+	    $self->_trace([],1," returning self=$self");
+	}
+	else {
+	    $class->_trace([],1," returning self=(undef)");
+	}
     }
     else {
 	$class->_trace([],1," returning self=(undef)");
@@ -504,9 +517,14 @@ sub init			# $self, [\%params || @speclist]
 	    return undef;	# and refuse to make less object than requested
 	}
     }
+    if ($self->getparam('srcaddrlist')) {
+	# have enough object already to attempt the binding
+	return undef unless $self->bind; # make no less object than requested
+    }
     if ($self->getparam('dstaddrlist')) {
 	# have enough object already to attempt the connection
-	return undef unless $self->connect; # make no less object than requested
+	return undef unless $self->connect or
+	    $self->isconnecting;	# make no less object than requested
     }
     # I think this is all we need here ?
     $self;
@@ -3704,19 +3722,19 @@ sub getsockinfo			# $this
 {
     my($self) = @_;
     my($rem,$lcl,$port,$serv,$name,$addr);
-    $rem = $self->SUPER::getsockinfo;
+    ($lcl,$rem) = $self->SUPER::getsockinfo;
     if (defined $rem and length($rem)) {
 	($name, $addr, $serv, $port) = $self->_addrinfo($rem);
 	$self->setparams({remhost => $name, remaddr => $addr,
 			  remservice => $serv, remport => $port});
     }
-    $lcl = $self->getparam('srcaddr');
     if (defined $lcl and length($lcl)) {
 	($name, $addr, $serv, $port) = $self->_addrinfo($lcl);
 	$self->setparams({lclhost => $name, lcladdr => $addr,
 			  lclservice => $serv, lclport => $port});
     }
-    $rem;
+    wantarray ? ((defined $lcl || defined $rem) ? ($lcl,$rem) : ())
+	: $rem;
 }
 
 sub format_addr			# $this, $sockaddr, [numeric_only]
@@ -4033,23 +4051,23 @@ object parameter.
 =item remaddr
 
 The remote IP address stashed by the C<getsockinfo> method after a
-successful bind() or connect() call.
+successful connect() call.
 
 =item remhost
 
 The remote hostname stashed by the C<getsockinfo> method after a
-successful bind() or connect(), as resolved from the F<remaddr>
+successful connect() call, as resolved from the F<remaddr>
 object parameter.
 
 =item remport
 
 The remote port number stashed by the C<getsockinfo> method after a
-successful bind() or connect() call.
+successful connect() call.
 
 =item remservice
 
 The remote service name stashed by the C<getsockinfo> method after
-a successful bind() or connect(), as resolved from the F<remport>
+a successful connect() call, as resolved from the F<remport>
 object parameter.
 
 =back
@@ -4394,7 +4412,7 @@ sub setdebug			# $this, [bool, [norecurse]]
 sub bind			# $self, [\]@([host],[port])
 {
     my($self,@args) = @_;
-    return if @args and not $self->_hostport('this',@args);
+    return undef if @args and not $self->_hostport('this',@args);
     $self->SUPER::bind;
 }
 

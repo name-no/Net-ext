@@ -13,7 +13,7 @@
 
 
 package Net::TCP;
-use 5.00393;			# new minimum Perl version for this package
+use 5.004;			# new minimum Perl version for this package
 
 use strict;
 use Carp;
@@ -21,8 +21,8 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
 my $myclass;
 BEGIN {
-    $myclass = &{+sub {(caller(0))[0]}};
-    $VERSION = '0.77';
+    $myclass = __PACKAGE__;
+    $VERSION = '0.79';
 }
 sub Version () { "$myclass v$VERSION" }
 
@@ -125,7 +125,9 @@ sub new
     my $whoami = $_[0]->_trace(\@_,1);
     my($class,@args) = @_;
     my $self = $class->SUPER::new(@args);
-    ($self || $class)->_trace(\@_,2,", self=$self after sub-new");
+    ($self || $class)->_trace(\@_,2,", self" .
+			      (defined $self ? "=$self" : " undefined") .
+			      " after sub-new");
     if ($self) {
 	;# no new keys for TCP?
 	# register our socket options
@@ -134,9 +136,16 @@ sub new
 	$self->setparams({IPproto => 'tcp',
 			  type => SOCK_STREAM,
 			  proto => IPPROTO_TCP},-1);
-	$self = $self->init(@args) if $class eq $myclass;
+	if ($class eq $myclass) {
+	    unless ($self->init(@args)) {
+		local $!;	# protect returned errno value
+		undef $self;	# against excess closes in perl core
+		undef $self;	# another statement needed for sequencing
+	    }
+	}
     }
-    ($self || $class)->_trace(0,1," returning self=$self");
+    ($self || $class)->_trace(0,1," returning " .
+			      (defined $self ? "self=$self" : "undef"));
     $self;
 }
 
@@ -156,9 +165,9 @@ package Net::TCP::Server;	# here to ease creating server sockets
 
 @Net::TCP::Server::ISA = qw(Net::TCP);
 
-my $svclass = 'Net::TCP::Server';
+my $svclass = __PACKAGE__;
 
-# When autosplit/autoload & inherticance work together (5.002 or 5.003),
+# When autosplit/autoload & inherticance work together,
 # every routine in this (sub-)class should be autoloaded.
 # Problem is, AutoLoader won't let me mix packages, so this class can't
 # autoload right now.
@@ -172,8 +181,15 @@ sub new				# classname, [[hostspec,] service,] [\%params]
 	unshift(@Args, undef);	# thishost spec
     }
     my $self = $xclass->SUPER::new(@Args);
-    return unless $self;
-    $self = $self->init(@Args) if $xclass eq $svclass;
+    return undef unless $self;
+    $self->setparams({reuseaddr => 1}, -1);
+    if ($xclass eq $svclass) {
+	unless ($self->init(@Args)) {
+	    local $!;		# protect returned errno value
+	    undef $self;	# against excess closes in perl core
+	    undef $self;	# another statement needed for sequencing
+	}
+    }
     $self;
 }
 
@@ -186,7 +202,6 @@ sub init			# $self, [@stuff] ; returns updated $self
     }
     return unless $self->_hostport('this',\@Args);
     return unless $self->SUPER::init;
-    $self->setsopt('SO_REUSEADDR',1);
     if ($self->getparam('srcaddrlist') && !$self->isbound) {
 	return unless $self->bind;
     }

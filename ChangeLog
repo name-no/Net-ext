@@ -1,3 +1,53 @@
+Released as 0.79.
+
+Wed Nov 26 00:57:12 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/UDP.pm: Added localisation of $! around undef'ing $self
+ 	to preserve the errno value in the ->new method.
+
+	* lib/Net/TCP.pm: Added localisation of $! around undef'ing $self
+ 	to preserve the errno value in the ->new method.
+
+	* lib/Net/Inet.pm: Added localisation of $! around undef'ing $self
+ 	to preserve the errno value in the ->new method.
+
+	* lib/Net/UNIX.pm: Fixed 'type' param initialisation so that
+	the 'new' routine doesn't return undef because ->open failed.
+	Added localisation of $! around undef'ing $self to preserve
+	the errno value in the ->new and ->init methods.
+
+	* lib/Net/Gen.pm: Added ->isconnecting method, and added timeouts
+ 	and the blocking object parameter.  Added localisation of $!
+  	around undef'ing $self to preserve the errno value in the ->new
+ 	and ->init methods.  Tweaked STORE method to avoid passing undef
+ 	to ->put.
+
+Tue Nov 25 00:24:59 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* Gen.xs: Added socket-related errno values to the Net::Gen UV
+ 	constant definitions.
+
+	* Makefile.PL: Added socket-related errno values to be defaulted
+ 	to 0 if not present in sys/errno.h or net/errno.h.
+
+	* lib/Net/TCP.pm: Made server-new set the reuseaddr parameter.
+
+	* lib/Net/UNIX.pm: Cleaned up some interpolations of undef for -w.
+	Made server-new set the reuseaddr parameter.
+
+	* lib/Net/UDP.pm: Slight doc tweak.
+
+	* lib/Net/Inet.pm: Cleaned up some interpolations of undef for -w.
+
+	* lib/Net/Gen.pm: Added reuseaddr param key.  Added :errnos tag
+ 	for socket-related errno values, and added those errnos to
+ 	@EXPORT_OK.
+
+Mon Nov 24 23:39:23 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.pm: Cleaned up some interpolations of undef for -w.
+  	Fixed some doc typos.
+
 Released as 0.78.
 
 Mon Jul 14 21:28:00 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>

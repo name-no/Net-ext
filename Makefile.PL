@@ -1,3 +1,4 @@
+#!perl
 use 5.004;
 use ExtUtils::MakeMaker qw(WriteMakefile $Verbose);
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
@@ -249,6 +250,21 @@ my %defdefines = (
 	TH_URG			=>		'0x20',
 
 );
+
+# Add some errno values, just to make life simpler by knowing that
+# the symbols will be defined, even if they've been defaulted to 0.
+
+my @errdefs = qw(EINPROGRESS EALREADY ENOTSOCK EDESTADDRREQ
+		 EMSGSIZE EPROTOTYPE ENOPROTOOPT EPROTONOSUPPORT
+		 ESOCKTNOSUPPORT EOPNOTSUPP EPFNOSUPPORT EAFNOSUPPORT
+		 EADDRINUSE EADDRNOTAVAIL ENETDOWN ENETUNREACH ENETRESET
+		 ECONNABORTED ECONNRESET ENOBUFS EISCONN ENOTCONN
+		 ESHUTDOWN ETOOMANYREFS ETIMEDOUT
+		 ECONNREFUSED EHOSTDOWN EHOSTUNREACH
+		 ENOSR ETIME EBADMSG EPROTO ENODATA ENOSTR
+		);
+
+@defdefines{@errdefs} = ('0') x @errdefs;
 
 # Here for macros with 1 argument, which will be _A here.
 

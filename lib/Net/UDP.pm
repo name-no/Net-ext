@@ -13,7 +13,7 @@
 
 
 package Net::UDP;
-use 5.00393;			# new minimum Perl version for this package
+use 5.004;			# new minimum Perl version for this package
 
 use strict;
 use Carp;
@@ -21,8 +21,8 @@ use vars qw($VERSION @ISA);
 
 my $myclass;
 BEGIN {
-    $myclass = &{+sub {(caller(0))[0]}};
-    $VERSION = '0.77';
+    $myclass = __PACKAGE__;
+    $VERSION = '0.79';
 }
 sub Version () { "$myclass v$VERSION" }
 
@@ -52,7 +52,13 @@ sub new
 	$self->setparams({type => SOCK_DGRAM,
 			  proto => IPPROTO_UDP,
 			  IPproto => 'udp'}, -1);
-	$self = $self->init(@args) if $class eq $myclass;
+	if ($class eq $myclass) {
+	    unless ($self->init(@args)) {
+		local $!;	# protect returned errno value
+		undef $self;	# against excess closes in perl core
+		undef $self;	# another statement needed for sequencing
+	    }
+	}
     }
     $self;
 }
@@ -137,7 +143,7 @@ Tieing of scalars to a UDP handle is supported by inheritance
 from the C<TIESCALAR> method of C<Net::Gen>.  That method only
 succeeds if a call to a C<new> method results in an object for
 which the C<isconnected> method returns true, which is why it is
-mentioned in connection with this module.
+mentioned in regard to this module.
 
 Example:
 

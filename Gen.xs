@@ -57,6 +57,18 @@ extern "C" {
 #define	MIN(_A,_B)	(((_A)<(_B))?(_A):(_B))
 #endif
 
+/* Default EAGAIN and EWOULDBLOCK from each other, punting to 0 if neither
+ * is available.
+ */
+#ifndef	EAGAIN
+#ifndef	EWOULDBLOCK
+#define	EWOULDBLOCK	0
+#endif
+#define	EAGAIN		EWOULDBLOCK
+#endif
+#ifndef	EWOULDBLOCK
+#define	EWOULDBLOCK	EAGAIN
+#endif
 
 static U32
 constant(name)
@@ -673,6 +685,42 @@ BOOT:
 #ifdef	VAL_EAGAIN
 	newXSconstUV("Net::Gen::VAL_EAGAIN", VAL_EAGAIN, file);
 #endif
+	newXSconstUV("Net::Gen::EAGAIN", EAGAIN, file);
+	newXSconstUV("Net::Gen::EWOULDBLOCK", EWOULDBLOCK, file);
+	newXSconstUV("Net::Gen::EINPROGRESS", EINPROGRESS, file);
+	newXSconstUV("Net::Gen::EALREADY", EALREADY, file);
+	newXSconstUV("Net::Gen::ENOTSOCK", ENOTSOCK, file);
+	newXSconstUV("Net::Gen::EDESTADDRREQ", EDESTADDRREQ, file);
+	newXSconstUV("Net::Gen::EMSGSIZE", EMSGSIZE, file);
+	newXSconstUV("Net::Gen::EPROTOTYPE", EPROTOTYPE, file);
+	newXSconstUV("Net::Gen::ENOPROTOOPT", ENOPROTOOPT, file);
+	newXSconstUV("Net::Gen::EPROTONOSUPPORT", EPROTONOSUPPORT, file);
+	newXSconstUV("Net::Gen::ESOCKTNOSUPPORT", ESOCKTNOSUPPORT, file);
+	newXSconstUV("Net::Gen::EOPNOTSUPP", EOPNOTSUPP, file);
+	newXSconstUV("Net::Gen::EPFNOSUPPORT", EPFNOSUPPORT, file);
+	newXSconstUV("Net::Gen::EAFNOSUPPORT", EAFNOSUPPORT, file);
+	newXSconstUV("Net::Gen::EADDRINUSE", EADDRINUSE, file);
+	newXSconstUV("Net::Gen::EADDRNOTAVAIL", EADDRNOTAVAIL, file);
+	newXSconstUV("Net::Gen::ENETDOWN", ENETDOWN, file);
+	newXSconstUV("Net::Gen::ENETUNREACH", ENETUNREACH, file);
+	newXSconstUV("Net::Gen::ENETRESET", ENETRESET, file);
+	newXSconstUV("Net::Gen::ECONNABORTED", ECONNABORTED, file);
+	newXSconstUV("Net::Gen::ECONNRESET", ECONNRESET, file);
+	newXSconstUV("Net::Gen::ENOBUFS", ENOBUFS, file);
+	newXSconstUV("Net::Gen::EISCONN", EISCONN, file);
+	newXSconstUV("Net::Gen::ENOTCONN", ENOTCONN, file);
+	newXSconstUV("Net::Gen::ESHUTDOWN", ESHUTDOWN, file);
+	newXSconstUV("Net::Gen::ETOOMANYREFS", ETOOMANYREFS, file);
+	newXSconstUV("Net::Gen::ETIMEDOUT", ETIMEDOUT, file);
+	newXSconstUV("Net::Gen::ECONNREFUSED", ECONNREFUSED, file);
+	newXSconstUV("Net::Gen::EHOSTDOWN", EHOSTDOWN, file);
+	newXSconstUV("Net::Gen::EHOSTUNREACH", EHOSTUNREACH, file);
+	newXSconstUV("Net::Gen::ENOSR", ENOSR, file);
+	newXSconstUV("Net::Gen::ETIME", ETIME, file);
+	newXSconstUV("Net::Gen::EBADMSG", EBADMSG, file);
+	newXSconstUV("Net::Gen::EPROTO", EPROTO, file);
+	newXSconstUV("Net::Gen::ENODATA", ENODATA, file);
+	newXSconstUV("Net::Gen::ENOSTR", ENOSTR, file);
 
 
 MODULE = Net::Gen		PACKAGE = Net::Gen
