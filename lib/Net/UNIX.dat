@@ -11,7 +11,7 @@
 # IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
 # WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
-# rcsid: "@(#) $Id: UNIX.dat,v 1.20 2000/01/19 07:49:40 spider Exp $"
+# rcsid: "@(#) $Id: UNIX.dat,v 1.21 2000/08/05 20:33:14 spider Exp $"
 
 package Net::UNIX;
 use 5.004_04;			# new minimum Perl version for this package
@@ -23,7 +23,7 @@ sub croak { require Carp; goto &Carp::croak; }
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS *AUTOLOAD);
 
 BEGIN {
-    $VERSION = '0.93';
+    $VERSION = '0.933';
     eval "sub Version { __PACKAGE__ . ' v$VERSION' }";
 }
 
@@ -334,13 +334,16 @@ Net::UNIX - UNIX-domain sockets interface module
 =head1 DESCRIPTION
 
 The C<Net::UNIX> module provides services for UNIX-domain socket
-communication.  It is layered atop the C<Net::Gen> module, which
+communication.  It is layered atop the
+L<C<Net::Gen>|Net::Gen>
+module, which
 is part of the same distribution.
 
 =head2 Public Methods
 
 The following methods are provided by the C<Net::UNIX> module
-itself, rather than just being inherited from C<Net::Gen>.
+itself, rather than just being inherited from
+L<C<Net::Gen>|Net::Gen>.
 
 =over 4
 
@@ -370,7 +373,7 @@ The examples above show the indirect object syntax which many prefer,
 as well as the guaranteed-to-be-safe static method call.  There
 are occasional problems with the indirect object syntax, which
 tend to be rather obscure when encountered.  See
-E<lt>URL:http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.htmlE<gt>
+http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.html
 for details.
 
 =item init
@@ -437,7 +440,9 @@ Usage:
     $ok = print $tied_fh @args;
 
 This method, intended to be used with tied filehandles, behaves like one
-of two inherited methods from the C<Net::Gen> class, depending on the
+of two inherited methods from the
+L<C<Net::Gen>|Net::Gen>
+class, depending on the
 setting of the object parameter C<unbuffered_output> and whether the
 socket is a SOCK_STREAM (stream) socket or a datagram socket (the
 default).  If that parameter is false (the default) or the socket
@@ -461,7 +466,7 @@ Usage:
     @lines_or_datagrams = readline(TIED_FH);
 
 This method, intended to be used with tied filehandles, behaves
-like one of two inherited methods from the C<Net::Gen> class,
+like one of two inherited methods from the L<C<Net::Gen>|Net::Gen> class,
 depending on the setting of the object parameter
 C<unbuffered_input> and whether the socket is a SOCK_STREAM (stream) socket
 or a datagram socket (the default).  If that parameter is false (the default)
@@ -489,7 +494,8 @@ There are no socket options known to the C<Net::UNIX> module itself.
 =head2 Known Object Parameters
 
 The following object parameters are registered by the C<Net::UNIX> module
-(as distinct from being inherited from C<Net::Gen>):
+(as distinct from being inherited from
+L<C<Net::Gen>|Net::Gen>):
 
 =over 4
 
@@ -523,7 +529,8 @@ value at the same time during C<new> calls.
 =head2 TIESCALAR
 
 Tieing of scalars to a UNIX-domain handle is supported by
-inheritance from the C<TIESCALAR> method of C<Net::Gen>.  That
+inheritance from the C<TIESCALAR> method of
+L<C<Net::Gen>|Net::Gen/TIESCALAR>.  That
 method only succeeds if a call to a C<new> method results in an
 object for which the C<isconnected> method returns a true result.
 Thus, for C<Net::UNIX>, C<TIESCALAR> will not succeed unless the
@@ -536,7 +543,8 @@ C<FETCH> method).
 
 =head2 TIEHANDLE support
 
-As inherited from C<Net::Gen>, with the addition of
+As inherited from
+L<C<Net::Gen>|Net::Gen/TIEHANDLE>, with the addition of
 unbuffered datagram I/O options for the C<FETCH>, C<READLINE>,
 and C<PRINT> methods.
 
@@ -612,7 +620,8 @@ just yet.)
 
 =head1 SEE ALSO
 
-Net::Gen(3), Net::UNIX::Server(3)
+L<Net::Gen(3)|Net::Gen>,
+L<Net::UNIX::Server(3)|Net::UNIX::Server>
 
 =head1 AUTHOR
 

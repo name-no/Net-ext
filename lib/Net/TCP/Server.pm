@@ -11,7 +11,7 @@
 # IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
 # WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
-# rcsid: "@(#) $Id: Server.dat,v 1.14 2000/01/19 07:49:40 spider Exp $"
+# rcsid: "@(#) $Id: Server.dat,v 1.15 2000/08/05 20:33:14 spider Exp $"
 
 package Net::TCP::Server;
 use 5.004_04;
@@ -23,7 +23,7 @@ sub croak { require Carp; goto &Carp::croak; }
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
 BEGIN {
-    $VERSION = '0.93';
+    $VERSION = '0.933';
     eval "sub Version () { __PACKAGE__ . ' v$VERSION' }";
 }
 
@@ -135,16 +135,21 @@ Net::TCP::Server - TCP sockets interface module for listeners and servers
 =head1 DESCRIPTION
 
 The C<Net::TCP::Server> module provides services for TCP communications
-over sockets.  It is layered atop the C<Net::TCP>, C<Net::Inet>,
-and C<Net::Gen>
+over sockets.  It is layered atop the
+L<C<Net::TCP>|Net::TCP>,
+L<C<Net::Inet>|Net::Inet>,
+and
+L<C<Net::Gen>|Net::Gen>
 modules, which are part of the same distribution.
 
 =head2 Public Methods
 
 The following methods are provided by the C<Net::TCP::Server> module
-itself, rather than just being inherited from C<Net::TCP>,
-C<Net::Inet>, or
-C<Net::Gen>.
+itself, rather than just being inherited from
+L<C<Net::TCP>|Net::TCP>,
+L<C<Net::Inet>|Net::Inet>,
+or
+L<C<Net::Gen>|Net::Gen>.
 
 =over 4
 
@@ -174,7 +179,7 @@ The examples above show the indirect object syntax which many prefer,
 as well as the guaranteed-to-be-safe static method call.  There
 are occasional problems with the indirect object syntax, which
 tend to be rather obscure when encountered.  See
-E<lt>URL:http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.htmlE<gt>
+http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.html
 for details.
 
 Simple example for server setup:
@@ -239,7 +244,9 @@ just yet.)
 
 =head1 SEE ALSO
 
-Net::TCP(3), Net::Inet(3), Net::Gen(3)
+L<Net::TCP(3)|Net::TCP>,
+L<Net::Inet(3)|Net::Inet>,
+L<Net::Gen(3)|Net::Gen>
 
 =head1 AUTHOR
 

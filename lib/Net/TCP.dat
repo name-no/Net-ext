@@ -11,7 +11,7 @@
 # IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
 # WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
-# rcsid: "@(#) $Id: TCP.dat,v 1.23 2000/01/19 07:49:40 spider Exp $"
+# rcsid: "@(#) $Id: TCP.dat,v 1.24 2000/08/05 20:33:14 spider Exp $"
 
 package Net::TCP;
 use 5.004_04;			# new minimum Perl version for this package
@@ -23,7 +23,7 @@ sub croak { require Carp; goto &Carp::croak; }
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS *AUTOLOAD);
 
 BEGIN {
-    $VERSION = '0.93';
+    $VERSION = '0.933';
     eval "sub Version () { __PACKAGE__ . ' v$VERSION' }";
 }
 
@@ -189,14 +189,19 @@ Net::TCP - TCP sockets interface module
 =head1 DESCRIPTION
 
 The C<Net::TCP> module provides services for TCP communications
-over sockets.  It is layered atop the C<Net::Inet> and C<Net::Gen>
+over sockets.  It is layered atop the
+L<C<Net::Inet>|Net::Inet>
+and
+L<C<Net::Gen>|Net::Gen>
 modules, which are part of the same distribution.
 
 =head2 Public Methods
 
 The following methods are provided by the C<Net::TCP> module
-itself, rather than just being inherited from C<Net::Inet> or
-C<Net::Gen>.
+itself, rather than just being inherited from
+L<C<Net::Inet>|Net::Inet>
+or
+L<C<Net::Gen>|Net::Gen>.
 
 =over 4
 
@@ -219,7 +224,7 @@ will be performed.  (This is so that the derived class can add
 the parameter validation it needs to the object before allowing
 the validation.)  Otherwise, it will cause the parameters to be
 validated by calling its C<init> method, which C<Net::TCP>
-inherits from C<Net::Inet>.  In particular, this means that if
+inherits from L<C<Net::Inet>|Net::Inet>.  In particular, this means that if
 both a host and a service are given, then an object will only be
 returned if a connect() call was successful (or is still in progress,
 if the object is non-blocking).
@@ -228,7 +233,7 @@ The examples above show the indirect object syntax which many prefer,
 as well as the guaranteed-to-be-safe static method call.  There
 are occasional problems with the indirect object syntax, which
 tend to be rather obscure when encountered.  See
-E<lt>URL:http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.htmlE<gt>
+http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.html
 for details.
 
 =back
@@ -256,7 +261,8 @@ There are no object parameters registered by the C<Net::TCP> module itself.
 =head2 TIESCALAR
 
 Tieing of scalars to a TCP handle is supported by inheritance
-from the C<TIESCALAR> method of C<Net::Gen>.  That method only
+from the C<TIESCALAR> method of
+L<C<Net::Gen>|Net::Gen/TIESCALAR>.  That method only
 succeeds if a call to a C<new> method results in an object for
 which the C<isconnected> method returns true, which is why it is
 mentioned in connection with this module.
@@ -329,7 +335,9 @@ just yet.)
 
 =head1 SEE ALSO
 
-Net::Inet(3), Net::Gen(3), Net::TCP::Server(3)
+L<Net::Inet(3)|Net::Inet>,
+L<Net::Gen(3)|Net::Gen>,
+L<Net::TCP::Server(3)|Net::TCP::Server>
 
 =head1 AUTHOR
 

@@ -11,7 +11,7 @@
 # IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
 # WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
-# rcsid: "@(#) $Id: UDP.dat,v 1.19 2000/01/19 07:49:40 spider Exp $"
+# rcsid: "@(#) $Id: UDP.dat,v 1.20 2000/08/05 20:33:14 spider Exp $"
 
 package Net::UDP;
 use 5.004_04;			# new minimum Perl version for this package
@@ -23,7 +23,7 @@ sub croak { require Carp; goto &Carp::croak; }
 use vars qw($VERSION @ISA *AUTOLOAD);
 
 BEGIN {
-    $VERSION = '0.93';
+    $VERSION = '0.933';
     eval "sub Version () { __PACKAGE__ . ' v$VERSION' }";
 }
 
@@ -127,14 +127,19 @@ Net::UDP - UDP sockets interface module
 =head1 DESCRIPTION
 
 The C<Net::UDP> module provides services for UDP communications
-over sockets.  It is layered atop the C<Net::Inet> and C<Net::Gen>
+over sockets.  It is layered atop the
+L<C<Net::Inet>|Net::Inet>
+and
+L<C<Net::Gen>|Net::Gen>
 modules, which are part of the same distribution.
 
 =head2 Public Methods
 
 The following methods are provided by the C<Net::UDP> module
-itself, rather than just being inherited from C<Net::Inet> or
-C<Net::Gen>.
+itself, rather than just being inherited from
+L<C<Net::Inet>|Net::Inet>
+or
+L<C<Net::Gen>|Net::Gen>.
 
 =over 4
 
@@ -158,7 +163,8 @@ will be performed.  (This is so that the derived class can add
 the parameter validation it needs to the object before allowing
 the validation.)  Otherwise, it will cause the parameters to be
 validated by calling its C<init> method, which C<Net::UDP>
-inherits from C<Net::Inet>.  In particular, this means that if
+inherits from
+L<C<Net::Inet>|Net::Inet/init>.  In particular, this means that if
 both a host and a service are given, that an object will only be
 returned if a connect() call was successful.
 
@@ -166,7 +172,7 @@ The examples above show the indirect object syntax which many prefer,
 as well as the guaranteed-to-be-safe static method call.  There
 are occasional problems with the indirect object syntax, which
 tend to be rather obscure when encountered.  See
-E<lt>URL:http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.htmlE<gt>
+http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.html
 for details.
 
 =item PRINT
@@ -177,7 +183,8 @@ Usage:
     $ok = print $tied_fh @args;
 
 This method, intended to be used with tied filehandles, behaves like one
-of two inherited methods from the C<Net::Gen> class, depending on the
+of two inherited methods from the
+L<C<Net::Gen>|Net::Gen> class, depending on the
 setting of the object parameter C<unbuffered_output>.  If that parameter
 is false (the default), then the normal print() builtin is used.
 If the C<unbuffered_output> parameter is true, then each print()
@@ -200,7 +207,7 @@ Usage:
     @lines_or_datagrams = readline(TIED_FH);
 
 This method, intended to be used with tied filehandles, behaves
-like one of two inherited methods from the C<Net::Gen> class,
+like one of two inherited methods from the L<C<Net::Gen>|Net::Gen> class,
 depending on the setting of the object parameter
 C<unbuffered_input>.  If that parameter is false (the default),
 then this method does line-buffering of its input as defined by
@@ -224,7 +231,10 @@ There are no object parameters registered by the C<Net::UDP> module itself.
 =head2 Known Object Parameters
 
 The following object parameters are registered by the C<Net::UDP> module
-(as distinct from being inherited from C<Net::Gen> or C<Net::Inet>):
+(as distinct from being inherited from
+L<C<Net::Gen>|Net::Gen>
+or
+L<C<Net::Inet>|Net::Inet>):
 
 =over 4
 
@@ -236,7 +246,7 @@ of the $/ variable.  The default is false, which causes the C<READLINE>
 interface to return lines split at boundaries as appropriate for $/.
 (The C<READLINE> method for tied filehandles is the C<E<lt>FHE<gt>>
 operation.)  Note that calling the C<READLINE> method
-in list context is likely to hang.
+in list context is likely to hang for UDP sockets.
 
 =item unbuffered_output
 
@@ -257,7 +267,8 @@ value at the same time during C<new> calls.
 =head2 TIESCALAR support
 
 Tieing of scalars to a UDP handle is supported by inheritance
-from the C<TIESCALAR> method of C<Net::Gen>.  That method only
+from the C<TIESCALAR> method of
+L<C<Net::Gen>|Net::Gen/TIESCALAR>.  That method only
 succeeds if a call to a C<new> method results in an object for
 which the C<isconnected> method returns true, which is why it is
 mentioned in regard to this module.
@@ -279,8 +290,30 @@ C<FETCH> method).
 
 =head2 TIEHANDLE support
 
-As inherited from C<Net::Inet> and C<Net::Gen>, with the addition of
+As inherited from
+L<C<Net::Inet>|Net::Inet>
+and
+L<C<Net::Gen>|Net::Gen/TIEHANDLE>,
+with the addition of
 unbuffered I/O options for the C<READLINE> and C<PRINT> methods.
+
+Example:
+
+    tie *FH,'Net::UDP',{unbuffered_IO => 1, thisport => $n, thishost => 0}
+	or die;
+    while (<FH>) {
+	last if is_shutdown_msg($_);
+	print FH response($_);
+    }
+    untie *FH;
+
+This shows how to make a UDP-based filehandle return (and send) datagrams
+even when used in the usual perlish paradigm.  For some applications,
+this can be helpful to avoid cluttering the message processing code with
+the details of handling datagrams.  In particular, this example relies on
+the underlying support for replying to the last address in a recvfrom()
+for datagram sockets, thus hiding the details of tracking and using
+that information.
 
 =head2 Exports
 
@@ -294,7 +327,8 @@ just yet.)
 
 =head1 SEE ALSO
 
-Net::Inet(3), Net::Gen(3)
+L<Net::Inet(3)|Net::Inet>,
+L<Net::Gen(3)|Net::Gen>
 
 =head1 AUTHOR
 

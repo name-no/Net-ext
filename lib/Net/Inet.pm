@@ -11,7 +11,7 @@
 # IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
 # WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
-# rcsid: "@(#) $Id: Inet.dat,v 1.24 2000/01/19 07:49:40 spider Exp $"
+# rcsid: "@(#) $Id: Inet.dat,v 1.25 2000/08/05 20:33:14 spider Exp $"
 
 package Net::Inet;
 use 5.004_04;			# new minimum Perl version for this package
@@ -24,7 +24,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD);
 
 
 BEGIN {
-    $VERSION = '0.93';
+    $VERSION = '0.933';
     eval "sub Version () { __PACKAGE__ . ' v$VERSION' }";
 }
 
@@ -3787,8 +3787,12 @@ Net::Inet - Internet socket interface module
 
 The C<Net::Inet> module provides basic services for handling
 socket-based communications for the Internet protocol family.  It
-inherits from C<Net::Gen>, and is a base for C<Net::TCP> and
-C<Net::UDP>.
+inherits from
+L<C<Net::Gen>|Net::Gen>,
+and is a base for
+L<C<Net::TCP>|Net::TCP>
+and
+L<C<Net::UDP>|Net::UDP>.
 
 =head2 Public Methods
 
@@ -3821,7 +3825,7 @@ The examples above show the indirect object syntax which many prefer,
 as well as the guaranteed-to-be-safe static method call.  There
 are occasional problems with the indirect object syntax, which
 tend to be rather obscure when encountered.  See
-E<lt>URL:http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.htmlE<gt>
+http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.html
 for details.
 
 =item init
@@ -3922,7 +3926,8 @@ C<format_addr> method for the C<dstaddr> object parameter.
 
 =item getsockinfo
 
-An augmented form of C<Net::Gen::getsockinfo>.  Aside from
+An augmented form of
+L<C<Net::Gen::getsockinfo>|Net::Gen/getsockinfo>.  Aside from
 updating more object parameters, it behaves the same as that in
 the base class.  The additional object parameters which get set
 are C<lcladdr>, C<lclhost>, C<lclport>, C<lclservice>,
@@ -3974,7 +3979,8 @@ object parameter, and vice versa.
 
 =item proto
 
-Used the same way as with C<Net::Gen>, but has a handler attached
+Used the same way as with L<C<Net::Gen>|Net::Gen/proto>,
+but has a handler attached
 to keep it in sync with C<IPproto>.
 
 =item thishost
@@ -4409,6 +4415,22 @@ name with a default port number will succeed (by using the
 supplied default) even if the translation with getservbyname()
 fails.
 
+For example:
+
+    $obj->setparam('destservice', 'http(80)');
+
+This always succeeds, although if your F</etc/services> file (or
+equivalent for non-UNIX systems) maps "http" to something other than
+port 80, you'll get that other port.
+
+For a contrasting example:
+
+    $obj->setparam('destservice', 80);
+
+This will fail, despite the numeric value, if your F</etc/services> file
+(or equivalent) is behind the times and has no mapping to a service name
+for port 80.
+
 =head1 THREADING STATUS
 
 This module has been tested with threaded perls, and should be as thread-safe
@@ -4417,7 +4439,9 @@ just yet.)
 
 =head1 SEE ALSO
 
-Net::Gen(3), Net::TCP(3), Net::UDP(3)
+L<Net::Gen(3)|Net::Gen>,
+L<Net::TCP(3)|Net::TCP>,
+L<Net::UDP(3)|Net::UDP>
 
 =head1 AUTHOR
 

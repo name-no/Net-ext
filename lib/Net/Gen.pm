@@ -11,7 +11,7 @@
 # IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
 # WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
-# rcsid: "@(#) $Id: Gen.dat,v 1.38 2000/02/20 23:51:21 spider Exp spider $"
+# rcsid: "@(#) $Id: Gen.dat,v 1.40 2000/08/05 20:33:14 spider Exp $"
 
 
 package Net::Gen;
@@ -23,7 +23,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS
 	    %_missing $AUTOLOAD $adebug);
 
 BEGIN {
-    $VERSION = '0.932';
+    $VERSION = '0.933';
     eval "sub Version () { __PACKAGE__ . ' v$VERSION' }";
 }
 
@@ -1282,14 +1282,20 @@ implementors of other modules.  To this end, several housekeeping
 functions are provided for the use of derived classes, as well as
 several inheritable methods.  The C<Net::Gen> class does inherit
 from C<IO::Handle>, thus making its methods available.  See
-L<IO::Handle/METHODS> for details on those methods.  However, some
+L<C<IO::Handle::METHODS>|IO::Handle/METHODS>
+for details on those methods.  However, some
 of those methods are overridden, so be sure to check the methods
 described below to be sure.  (In particular, the C<fcntl> and C<ioctl>
 methods are overridden.)
 
-Also provided in this distribution are C<Net::Inet>, C<Net::TCP>,
-C<Net::TCP::Server>,
-C<Net::UDP>, C<Net::UNIX>, and C<Net::UNIX::Server>,
+Also provided in this distribution are
+L<C<Net::Inet>|Net::Inet>,
+L<C<Net::TCP>|Net::TCP>,
+L<C<Net::TCP::Server>|Net::TCP::Server>,
+L<C<Net::UDP>|Net::UDP>,
+L<C<Net::UNIX>|Net::UNIX>,
+and
+L<C<Net::UNIX::Server>|Net::UNIX::Server>,
 which are layered atop C<Net::Gen>.
 
 =head2 Public Methods
@@ -1579,6 +1585,15 @@ Usage:
     $rval = $obj->fcntl($func, $value);
 
 Returns the result of an fcntl() call on the associated I/O stream.
+
+=item FETCH
+
+Usage:
+
+    $data = $TIED_SCALAR;
+
+This is for the support of the C<TIESCALAR> interface.  It returns
+the result of a call to the C<READLINE> method on the underlying object.
 
 =item fhvec
 
@@ -2240,6 +2255,49 @@ primarily for the use of server modules which need to avoid
 C<shutdown> calls at inappropriate times.  This method calls the
 C<delparams> method for the keys of C<srcaddr> and C<dstaddr>.
 
+=item STORE
+
+Usage:
+
+    $TIED_SCALAR = $data;
+
+Provided for the support of tied scalars.  Results in a call to the
+C<put> method, unless there's exactly one arg and it's C<undef>.
+In that case, since this normally results from C<undef $TIED_SCALAR>,
+it's ignored.
+
+=item TIEHANDLE
+
+Usage:
+
+    tie *FH, $package, @options or die;
+    print FH $out_data;
+    print $in_data while defined($in_data = <FH>);
+    untie *FH;
+
+Tieing of a filehandle to a network handle is supported by this base
+However, this method only succeeds if the related call to the C<new>
+method returns an object for which the C<isconnected> method returns
+true.  Thus, the most useful example is in
+L<C<Net::UDP>|Net::UDP/"TIEHANDLE support">.
+
+=item TIESCALAR
+
+Usage:
+
+    tie $x, $package, @options or die;
+    $x = $out_data;
+    print $in_data while defined($in_data = $x);
+    untie $x;
+
+Tieing of scalars to a network handle is supported by this base class.
+However, this method only succeeds if the related call to the C<new>
+method returns an object for which the C<isconnected> method returns
+true.  Thus, the useful examples are in
+L<C<Net::TCP>|Net::TCP/TIESCALAR>
+and
+L<C<Net::UDP>|Net::UDP/"TIESCALAR support">.
+
 =item unbind
 
 Usage:
@@ -2483,7 +2541,11 @@ listen() is not supplied.
 This parameter is set true to keep the C<connect> method from
 really calling the connect() built-in if the socket has not
 had an source address specified and it is not bound.  This
-is used by the C<Net::UNIX> and C<Net::UDP> modules to keep
+is used by the
+L<Net::UNIX|Net::UNIX>
+and
+L<Net::UDP|Net::UDP>
+modules to keep
 from exercising a bug in some socket implementations with respect
 to how datagram sockets are handled.  (This was specifically done
 in response to quirks of Solaris 2.5.1.)  Instead, the C<connect>
@@ -2715,7 +2777,9 @@ just yet.)
 
 =head1 SEE ALSO
 
-Net::Inet(3), Net::UNIX(3), Net::Dnet(3)
+L<Net::Inet(3)|Net::Inet>,
+L<Net::UNIX(3)|Net::UNIX>,
+Net::Dnet(3)
 
 =head1 AUTHOR
 
