@@ -11,7 +11,7 @@
 # IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
 # WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
-# rcsid: "@(#) $Id: Gen.dat,v 1.42 2002/03/30 10:17:03 spider Exp $"
+# rcsid: "@(#) $Id: Gen.dat,v 1.44 2002/04/10 11:27:18 spider Exp $"
 
 
 package Net::Gen;
@@ -23,7 +23,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS
 	    %_missing $AUTOLOAD $adebug);
 
 BEGIN {
-    $VERSION = '1.0';
+    $VERSION = '1.011';
     eval "sub Version () { __PACKAGE__ . ' v$VERSION' }";
 }
 
@@ -3011,9 +3011,10 @@ sub setropt
 }
 
 #& BINMODE($this)
-sub BINMODE
+sub BINMODE : locked method
 {
-    # void
+    # Need to allow for PerlIO layers here
+    @_ > 1 ? binmode($_[0], $_[1]) : 1;
 }
 
 #& FILENO($this) : {$int | undef}

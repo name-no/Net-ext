@@ -20,7 +20,7 @@
  * which they don't recognize, so do it the old-fashioned way.
  */
 
-static char const rcsid[] = "@(#) $Id: Gen.xs,v 1.23 2002/03/30 10:05:39 spider Exp $";
+static char const rcsid[] = "@(#) $Id: Gen.xs,v 1.24 2002/04/10 11:05:58 spider Exp $";
 
 #ifdef __cplusplus
 extern "C" {
@@ -336,6 +336,7 @@ MODULE = Net::Gen		PACKAGE = Net::Gen
 PROTOTYPES: ENABLE
 
 BOOT:
+    {
 	HV *missing = perl_get_hv("Net::Gen::_missing", GV_ADDMULTI);
 
 
@@ -676,7 +677,7 @@ bool
 ICMP_INFOTYPE(icmp_code)
 	U8	icmp_code
 
-SV *
+void
 _pack_sockaddr_in(family,port,address)
 	U8	family
 	U16	port
@@ -685,7 +686,7 @@ _pack_sockaddr_in(family,port,address)
 	struct sockaddr_in sin;
 	char * adata;
 	STRLEN adlen;
-    CODE:
+    PPCODE:
 	Zero(&sin, sizeof sin, char);
 	sin.sin_family = family;
 	adata = SvPV(address, adlen);
@@ -701,6 +702,7 @@ _pack_sockaddr_in(family,port,address)
 	    sv_catpvn(adsv, adata, adlen);
 	    ST(0) = adsv;
 	}
+	XSRETURN(1);
 
 void
 unpack_sockaddr_in(sad)
@@ -1265,7 +1267,10 @@ BOOT:
 
 MODULE = Net::Gen		PACKAGE = Net::Gen
 
-SV *
+BOOT:
+    }
+
+void
 pack_sockaddr(family,address)
 	U8	family
 	SV *	address
@@ -1273,7 +1278,7 @@ pack_sockaddr(family,address)
 	struct sockaddr sad;
 	char * adata;
 	STRLEN adlen;
-    CODE:
+    PPCODE:
 	Zero(&sad, sizeof sad, char);
 	sad.sa_family = family;
 	adata = SvPV(address, adlen);
@@ -1287,6 +1292,7 @@ pack_sockaddr(family,address)
 	    Copy(adata, &sad.sa_data, adlen, char);
 	    ST(0) = sv_2mortal(newSVpv((char*)&sad, sizeof sad));
 	}
+	XSRETURN(1);
 
 void
 unpack_sockaddr(sad)

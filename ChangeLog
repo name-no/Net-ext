@@ -1,3 +1,21 @@
+Release as v1.011.
+
+Wed Apr 10 06:18:05 2002  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.dat: Re-version because of klutzed PAUSE upload.
+
+Release as v1.01.
+
+Wed Apr 10 06:18:05 2002  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.dat (BINMODE): Allow for PerlIO layers in binmode()
+	calls.
+
+	* Gen.xs: Update for 'loose' compiler I was using, exposed by
+	complaints from users.  I don't think xsubpp should be re-arranging
+	as much as it is, which is what caused the declaration in the
+	middle of the block, but that's a whole different battle.
+
 Release as v1.0.
 
 Sat Mar 30 04:25:08 2002  Spider Boardman  <spider@Orb.Nashua.NH.US>
