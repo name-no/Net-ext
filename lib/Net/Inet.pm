@@ -13,26 +13,26 @@
 
 
 package Net::Inet;
-use 5.004;			# new minimum Perl version for this package
+use 5.004_05;			# new minimum Perl version for this package
 
 use strict;
 # use Carp;
 sub croak { require Carp; goto &Carp::croak; }
 sub carp { require Carp; goto &Carp::carp; }
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD);
 
 my $myclass;
 
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.82';
+    $VERSION = '0.85';
 }
 
 sub Version () { "$myclass v$VERSION" }
 
 use AutoLoader;
 #use Exporter ();
-use Net::Gen 0.81 qw(:ALL);
+use Net::Gen 0.85 qw(:ALL);
 use Socket qw(!/^[a-z]/ /^inet_/ !SOMAXCONN);
 
 BEGIN {
@@ -300,7 +300,11 @@ BEGIN {
 # inherited autoload for 'regular' subroutines is being removed in
 # 5.003_96, so cheat a little.
 
-BEGIN { *AUTOLOAD = $myclass->can('AUTOLOAD') }
+sub AUTOLOAD
+{
+    $Net::Gen::AUTOLOAD = $AUTOLOAD;
+    goto &Net::Gen::AUTOLOAD;
+}
 
 # Preloaded methods go here.  Autoload methods go after __END__, and are
 # processed by the autosplit program.
@@ -368,7 +372,7 @@ sub ntohs			# number ; number // or array of same
     unpack('S*', pack('n*', @_));
 }
 
-# removed inet_ntoa that was here -- the one in Socket is good enough for me
+# removed inet_ntoa that was here -- the one in Socket is (now) good enough
 
 sub pack_sockaddr_in ($$;$)	# [$family,] $port, $in_addr
 {
@@ -403,6 +407,7 @@ my $debug = 0;
 
 sub _debug			# $this, [$newval] ; returns oldval
 {
+    use attrs 'locked';
     my ($this,$newval) = @_;
     return $this->debug($newval) if ref $this;
     my $prev = $debug;
@@ -502,6 +507,7 @@ sub _hostport			# $self, {'this'|'dest'}, [\]@list
 
 sub init			# $self, [\%params || @speclist]
 {				# returns updated $self
+    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,2);
     my($self,@args) = @_;
     return $self unless $self = $self->SUPER::init(@args);
@@ -531,6 +537,7 @@ sub init			# $self, [\%params || @speclist]
 
 sub connect			# $self, [\]@([host],[port])
 {
+    use attrs 'locked', 'method';
     my($self,@args) = @_;
     return undef if @args and not $self->_hostport('dest',@args);
     $self->SUPER::connect;
@@ -3719,6 +3726,7 @@ sub _addrinfo			# $this, $sockaddr
 
 sub getsockinfo			# $this
 {
+    use attrs 'locked', 'method';
     my($self) = @_;
     my($rem,$lcl,$port,$serv,$name,$addr);
     ($lcl,$rem) = $self->SUPER::getsockinfo;
@@ -4419,6 +4427,7 @@ Spider Boardman F<E<lt>spider@Orb.Nashua.NH.USE<gt>>
 
 sub setdebug			# $this, [bool, [norecurse]]
 {
+    use attrs 'locked';
     my $this = shift;
     $this->_debug($_[0]) .
 	((@_ > 1 && $_[1]) ? '' : $this->SUPER::setdebug(@_));
@@ -4426,6 +4435,7 @@ sub setdebug			# $this, [bool, [norecurse]]
 
 sub bind			# $self, [\]@([host],[port])
 {
+    use attrs 'locked', 'method';
     my($self,@args) = @_;
     return undef if @args and not $self->_hostport('this',@args);
     $self->SUPER::bind;
@@ -4433,6 +4443,7 @@ sub bind			# $self, [\]@([host],[port])
 
 sub unbind			# $self
 {
+    use attrs 'locked', 'method';
     my($self,@args) = @_;
     if (@args) {
 	$whoami = $_[0]->_trace(\@_,0);

@@ -13,24 +13,24 @@
 
 
 package Net::UNIX;
-use 5.004;			# new minimum Perl version for this package
+use 5.004_05;			# new minimum Perl version for this package
 
 use strict;
 #use Carp;
 sub carp { require Carp; goto &Carp::carp; }
 sub croak { require Carp; goto &Carp::croak; }
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD);
 
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.82';
+    $VERSION = '0.85';
 }
 sub Version { "$myclass v$VERSION" }
 
 use AutoLoader;
 #use Exporter ();
-use Net::Gen qw(/pack_sockaddr$/);
+use Net::Gen 0.85 qw(/pack_sockaddr$/);
 use Socket qw(!pack_sockaddr_un !unpack_sockaddr_un !SOMAXCONN);
 
 BEGIN {
@@ -51,12 +51,17 @@ BEGIN {
 	routines	=> [qw(pack_sockaddr_un unpack_sockaddr_un)],
 	ALL		=> [@EXPORT, @EXPORT_OK],
     );
+}
 
 ;# sub AUTOLOAD inherited from Net::Gen
 
-;# since 5.003_96 will break simple subroutines with inheritid autoload, cheat
-    *AUTOLOAD = $myclass->can('AUTOLOAD');
+;# since 5.003_96 will break simple subroutines with inherited autoload, cheat
+sub AUTOLOAD
+{
+    $Net::Gen::AUTOLOAD = $AUTOLOAD;
+    goto &Net::Gen::AUTOLOAD;
 }
+
 
 # Preloaded methods go here.  Autoload methods go after __END__, and are
 # processed by the autosplit program.
@@ -111,6 +116,7 @@ my $debug = 0;
 
 sub _debug			# $this, [$newval] ; returns oldval
 {
+    use attrs 'locked';
     my ($this,$newval) = @_;
     return $this->debug($newval) if ref $this;
     my $prev = $debug;
@@ -209,6 +215,7 @@ sub _setconnpath		# $self, 'destpath', $path
 
 sub _init			# $self, whatpath[, $path][, \%params]
 {
+    use attrs 'locked', 'method';
     my ($self,$what,@args,$path,$parms) = @_;
     if (@args == 1 or @args == 2) {
 	$parms = $args[-1];
@@ -247,6 +254,7 @@ sub init			# $self [, $destpath][, \%params]
 
 sub connect			# $self [, $destpath] [, \%newparams]
 {
+    use attrs 'locked', 'method';
     my($self,$path,$parms) = @_;
     if (@_ > 3 or @_ == 3 and (!ref($parms) or ref($path))) {
 	croak("Invalid arguments to ${myclass}::connect(@_), called");
@@ -282,9 +290,6 @@ sub format_addr			# ($class|$obj) , $sockaddr
 
 1;
 
-# backward-contemptibility
-
-require Net::UNIX::Server;
 
 # autoloaded methods go after the END token (& pod) below
 
@@ -518,6 +523,7 @@ Spider Boardman F<E<lt>spider@Orb.Nashua.NH.USE<gt>>
 
 sub setdebug			# $this, [bool, [norecurse]]
 {
+    use attrs 'locked';
     my $this = shift;
     $this->_debug($_[0]) .
 	((@_ > 1 && $_[1]) ? '' : $this->SUPER::setdebug(@_));
@@ -525,6 +531,7 @@ sub setdebug			# $this, [bool, [norecurse]]
 
 sub bind			# $self [, $destpath] [, \%newparams]
 {
+    use attrs 'locked', 'method';
     my($self,$path,$parms) = @_;
     if (@_ > 3 or @_ == 3 and (!ref($parms) or ref($path))) {
 	my $whoami = $self->_trace;

@@ -13,7 +13,7 @@
 
 
 package Net::Gen;
-use 5.004;		# new minimum Perl version for this package
+use 5.004_05;		# new minimum Perl version for this package
 
 use strict;
 #use Carp; # no!  just require Carp when we want to croak.
@@ -22,7 +22,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD $adebug);
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.84';
+    $VERSION = '0.85';
 }
 
 sub Version () { "$myclass v$VERSION" }
@@ -105,6 +105,8 @@ sub AUTOLOAD
     # die handler).  If the name isn't known to constant(), but it is known
     # as a key for setparams/getparams, it will be simulated via _accessor().
     # Otherwise, control will be passed to the AUTOLOAD in AutoLoader.
+
+    use attrs 'locked';
 
     my ($constname,$callpkg);
     {				# block to preserve $1,$2,et al.
@@ -193,6 +195,7 @@ my %evalopts;			# avoid compiling an eval per sockopt
 
 sub initsockopts		# $class, $level+0, \%sockopts
 {
+    use attrs 'locked';
     my ($class,$level,$opts) = @_;
     croak "Invalid arguments to ${myclass}::initsockopts, called"
 	if @_ != 3 or ref $opts ne 'HASH';
@@ -267,6 +270,7 @@ my $debug = 0;			# module-wide debug hack -- don't use
 
 sub _debug			# $this [, $newval] ; returns oldval
 {
+    use attrs 'locked';
     my ($this,$newval) = @_;
     return $this->debug($newval) if ref $this;
     # class method here
@@ -277,6 +281,7 @@ sub _debug			# $this [, $newval] ; returns oldval
 
 sub debug			# $self [, $newval] ; returns oldval
 {
+    use attrs 'locked', 'method';
     my ($self,$newval) = @_;
     my $oldval = ${*$self}{Parms}{'debug'} if defined wantarray;
     $self->setparams({'debug'=>$newval}) if defined $newval;
@@ -287,8 +292,8 @@ sub _trace			# $this , \@args, minlevel, [$moretext]
 {
     my ($this,$aref,$level,$msg) = @_;
     my ($rtn) = (caller(0))[3];
-    local $^W=0;		# keep the arglist interpolation from carping
-#    $msg = '' unless defined $msg;
+#    local $^W=0;		# keep the arglist interpolation from carping
+    $msg = '' unless defined $msg;
     print STDERR "${rtn}(@{$aref||[]})${msg}\n"
 	if $level and $this->_debug >= $level;
     ${rtn};
@@ -313,6 +318,7 @@ my $eagain = eval 'VAL_EAGAIN';
 
 sub _accessor			# $self, $what [, $newval] ; returns oldvalue
 {
+    use attrs 'locked', 'method';
     my ($self, $what, $newval) = @_;
     croak "Usage: \$sock->$what or \$sock->$what(\$newvalue),"
 	if @_ > 3;
@@ -331,13 +337,13 @@ sub _setblocking		# $self, $name, $newval
 	$_[2] = 1;	# canonicalise the new value
 	if (defined $F_GETFL and defined $F_SETFL and defined $nonblock_flag
 	    and $self->isopen) {
-	    if ((fcntl($self, $F_GETFL, 0) & VAL_O_NONBLOCK) ==
+	    if ((CORE::fcntl($self, $F_GETFL, 0) & VAL_O_NONBLOCK) ==
 		VAL_O_NONBLOCK) {
 		${*$self}{Parms}{$what} = 0;  # note previous status
 		return 'Failed to clear non-blocking status'
-		    unless eval {fcntl($self, $F_SETFL,
-				       fcntl($self, $F_GETFL, 0) &
-				       ~VAL_O_NONBLOCK)};
+		    unless eval {CORE::fcntl($self, $F_SETFL,
+					   CORE::fcntl($self, $F_GETFL, 0) &
+					     ~VAL_O_NONBLOCK)};
 	    }
 	}
     }
@@ -348,13 +354,13 @@ sub _setblocking		# $self, $name, $newval
 	    return 'Non-blocking sockets unavailable in this configuration';
 	}
 	if ($self->isopen) {
-	    if ((fcntl($self, $F_GETFL, 0) & VAL_O_NONBLOCK) !=
+	    if ((CORE::fcntl($self, $F_GETFL, 0) & VAL_O_NONBLOCK) !=
 		VAL_O_NONBLOCK) {
 		${*$self}{Parms}{$what} = 1;  # note previous state
 		return 'Failed to set non-blocking status'
-		    unless eval {fcntl($self, $F_SETFL,
-				       fcntl($self, $F_GETFL, 0) |
-				       VAL_O_NONBLOCK)};
+		    unless eval {CORE::fcntl($self, $F_SETFL,
+					   CORE::fcntl($self, $F_GETFL, 0) |
+					     VAL_O_NONBLOCK)};
 	    }
 	}
     }
@@ -400,6 +406,7 @@ my %Opts;
 
 sub registerParamKeys		# $self, \@keys
 {
+    use attrs 'locked', 'method';
     my ($self, $names) = @_;
     my $whoami = $self->_trace(\@_,3);
     croak "Invalid arguments to ${whoami}(@_), called"
@@ -412,6 +419,7 @@ sub register_param_keys;	# helps with -w
 
 sub registerParamHandlers	# $self, \@keys, [\]@handlers
 {				# -or- $self, \%key-handlers
+    use attrs 'locked', 'method';
     my ($self, $names, @handlers, $handlers) = @_;
     my $whoami = $self->_trace(\@_,3);
     if (ref $names eq 'HASH') {
@@ -437,6 +445,7 @@ sub register_param_handlers;	# helps with -w
 
 sub registerOptions		# $self, $levelname, $level, \%options
 {
+    use attrs 'locked', 'method';
     my ($self, $levname, $level, $opts) = @_;
     my $whoami = $self->_trace(\@_,3);
     croak "Invalid arguments to ${whoami}(@_), called"
@@ -451,6 +460,7 @@ sub register_options;		# helps with -w
 # pseudo-subclass for saving parameters (ParamSaver, inspired by SelectSaver)
 sub paramSaver			# $self, @params
 {
+    use attrs 'locked', 'method';
     my ($self, @params) = @_;
     my %setparams = $self->getparams(\@params);
     my @delparams = map { exists ${*$self}{Parms}{$_} ? () : ($_) } @params;
@@ -464,6 +474,7 @@ sub ParamSaver;
 
 sub Net::Gen::ParamSaver::DESTROY
 {
+    use attrs 'locked';
     local $!;	# just to be sure we don't clobber it
     $_[0]->[0]->setparams($_[0]->[1]);
     $_[0]->[0]->delparams($_[0]->[2]);
@@ -516,6 +527,7 @@ sub new				# classname [, \%params]
 
 sub setparams			# $this, \%newparams [, $newonly [, $check]]
 {
+    use attrs 'locked', 'method';
     my ($self,$newparams,$newonly,$check) = @_;
     my $errs = 0;
 
@@ -564,19 +576,21 @@ sub setparams			# $this, \%newparams [, $newonly [, $check]]
 
 sub delparams			# $self, \@paramnames ; returns bool
 {
+    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,1);
     my($self,$keysref) = @_;
     my(@k,%k);
     @k = grep(exists ${*$self}{Parms}{$_}, @$keysref);
     return 1 unless @k;		# if no keys need deleting, succeed vacuously
     @k{@k} = ();		# a hash of undefs for the following
-    return undef unless $self->setparams(\%k); # see if undef is allowed
+    return undef unless $self->setparams(\%k); # see whether undef is allowed
     delete @{${*$self}{Parms}}{@k};
     1;				# return goodness
 }
 
 sub checkparams			# $self, (void) ; returns bool
 {
+    use attrs 'locked', 'method';
     my $whoami = $_[0]->_trace(\@_,1);
     my $self = shift;
     carp "Excess arguments to ${whoami} ignored"
@@ -602,6 +616,7 @@ sub init			# $self, (void) ; returns updated $self
 
 sub getparam			# $self, $key [, $default [, $defaultifundef]]
 {
+    use attrs 'locked', 'method';
     my $whoami = $_[0]->_trace(\@_,2);
     my($self,$key,$defval,$noundef) = @_;
     carp "Excess arguments to ${whoami}($self) ignored"
@@ -617,6 +632,7 @@ sub getparam			# $self, $key [, $default [, $defaultifundef]]
 
 sub getparams			# $self, \@keys [, $noundef]; returns (%hash)
 {
+    use attrs 'locked', 'method';
     my $whoami = $_[0]->_trace(\@_,2);
     my ($self,$aref,$noundef) = @_;
     croak "Insufficient arguments to ${whoami}($self), called"
@@ -660,18 +676,20 @@ sub getparams			# $self, \@keys [, $noundef]; returns (%hash)
 
 sub condition			# $self ; return not useful
 {
+    use attrs 'locked', 'method';
     my $self = $_[0];
     my $sel = SelectSaver->new;
-    select($self);
+    CORE::select($self);
     $| = 1;
     # $\ = "\015\012";
     binmode($self);
-    vec(${*$self}{FHVec} = '', fileno($self), 1) = 1;
+    vec(${*$self}{FHVec} = '', CORE::fileno($self), 1) = 1;
     $self->setparams({'blocking'=>$self->getparam('blocking',1,1)},0,1);
 }
 
 sub open			# $self [, @ignore] ; returns boolean
 {
+    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,2);
     my $self = shift;
     $self->stopio if $self->isopen;
@@ -711,7 +729,7 @@ sub _tryconnect			# $self, $addr, $timeout ; returns boolean
 	    }
 	}
     }
-    my $rval = connect($self,$addr);
+    my $rval = CORE::connect($self,$addr);
     return $rval if $rval;
     return 1  if $! == EISCONN;
     return $rval unless $! == EWOULDBLOCK or $! == EINPROGRESS or
@@ -720,7 +738,7 @@ sub _tryconnect			# $self, $addr, $timeout ; returns boolean
     ${*$self}{'isconnecting'} = 1;
     ${*$self}{Parms}{'dstaddr'} = $addr;
     return $rval unless defined $timeout;
-    my $nfound = select(undef,$fhvec,undef,$timeout);
+    my $nfound = CORE::select(undef,$fhvec,undef,$timeout);
     return $rval unless $nfound;
     ${*$self}{'isconnecting'} = 0;
     # Now, for the black magick of async sockets--re-try the connect
@@ -733,6 +751,7 @@ sub _tryconnect			# $self, $addr, $timeout ; returns boolean
 
 sub connect			# $self, [@ignored] ; returns boolean
 {
+    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,2);
     my $self = shift;
     $self->close if
@@ -782,6 +801,7 @@ sub connect			# $self, [@ignored] ; returns boolean
 
 sub getsockinfo			# $self, [@ignored] ; returns ?dest sockaddr?
 {
+    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,4);
     my $self = shift;
     my ($sad,$dad);
@@ -795,6 +815,7 @@ sub getsockinfo			# $self, [@ignored] ; returns ?dest sockaddr?
 
 sub shutdown			# $self [, $how=2] ; returns boolean
 {
+    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,3);
     my $self = shift;
     return 1 unless $self->isconnected or $self->isconnecting;
@@ -803,7 +824,7 @@ sub shutdown			# $self [, $how=2] ; returns boolean
 	defined $how && length $how && $how !~ /\D/ &&
 	    grep($how == $_, 0, 1, 2);
     my $was = (${*$self}{'wasconnected'} |= $how+1);
-    my $rval = shutdown($self,$how);
+    my $rval = CORE::shutdown($self,$how);
     local $!;	# preserve shutdown()'s errno
     ${*$self}{'isconnecting'} = ${*$self}{'isconnected'} = 0 if $was == 3 or
 	(!defined(getpeername($self)) && (${*$self}{'wasconnected'} = 3));
@@ -817,6 +838,7 @@ my @CloseKeys = qw(srcaddr dstaddr);
 
 sub close			# $self [, @ignored] ; returns boolean
 {
+    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,3);
     my $self = shift;
     $self->shutdown if $self->isopen;
@@ -828,12 +850,13 @@ sub CLOSE;
 
 sub stopio			# $self [, @ignored] ; returns boolean
 {
+    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,4);
     my $self = shift;
     @{*$self}{@CloseVars} = ();	# these flags no longer true
     $self->delparams(\@CloseKeys); # connection values now invalid
     return 1 unless $self->isopen;
-    close($self);
+    CORE::close($self);
 }
 
 # I/O enries
@@ -868,8 +891,8 @@ sub send			# $self, $buf, [$flags, [$where]] : boolean
     return getsockopt($self,SOL_SOCKET,SO_TYPE) unless
 	$self->isopen;		# generate EBADF return if not open
     defined $whither
-	? send($self, $buf, $flags, $whither)
-	: send($self, $buf, $flags);
+	? CORE::send($self, $buf, $flags, $whither)
+	: CORE::send($self, $buf, $flags);
 }
 
 sub SEND;
@@ -889,6 +912,7 @@ sub print;			# avoid -w error
 
 sub ckeof			# $self ; returns boolean
 {
+    use attrs 'locked', 'method';
     my $saverr = $!+0;
     local $!;			# preserve this over fcntl() and such
     my $whoami = $_[0]->_trace(\@_,3);
@@ -901,7 +925,7 @@ sub ckeof			# $self ; returns boolean
     return 0
 	unless unpack('I',getsockopt($self,SOL_SOCKET,SO_TYPE)) == SOCK_STREAM;
     # See whether need to test for non-blocking status.
-    my $flags = ($F_GETFL ? fcntl($self,$F_GETFL,0+0) : undef);
+    my $flags = ($F_GETFL ? CORE::fcntl($self,$F_GETFL,0+0) : undef);
     if ((defined($flags) && defined($nonblock_flag))
 	? ($flags & VAL_O_NONBLOCK)
 	: 1)
@@ -914,6 +938,7 @@ sub ckeof			# $self ; returns boolean
 
 sub recv			# $self, [$maxlen, [$flags, [$from]]] ;
 {				# returns $buf or undef
+    use attrs 'locked', 'method';
     my $whoami = $_[0]->_trace(\@_,3);
     my($self,$maxlen,$flags) = @_;
     my($buf,$from,$xfrom) = '';
@@ -940,7 +965,7 @@ sub recv			# $self, [$maxlen, [$flags, [$from]]] ;
 	return $buf;
     }
     $! = 0;			# ease EOF checking
-    $xfrom = $from = recv($self,$buf,$maxlen,$flags);
+    $xfrom = $from = CORE::recv($self,$buf,$maxlen,$flags);
     my $errnum = $!+0;		# preserve possible recv failure
     $xfrom = getpeername($self) if defined($from) and $from eq '';
     $from = $xfrom if defined($xfrom) and $from eq '' and $xfrom ne '';
@@ -971,6 +996,7 @@ sub get;			# (helps with -w)
 
 sub getline			# $self ; returns like scalar(<$fhandle>)
 {
+    use attrs 'locked', 'method';
     my $whoami = $_[0]->_trace(\@_,4);
     carp "Excess arguments to ${whoami} ignored"
 	if @_ > 1;
@@ -2425,6 +2451,7 @@ sub setparam			# $self, $name, $value, [newonly, [docheck]] ;
 
 sub bind			# $self [, @ignored] ; returns boolean
 {
+    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,2);
     my $self = shift;
     $self->close if
@@ -2436,17 +2463,17 @@ sub bind			# $self [, @ignored] ; returns boolean
     if (${*$self}{Parms}{srcaddrlist}) {
 	my $tryaddr;
 	foreach $tryaddr (@{${*$self}{Parms}{srcaddrlist}}) {
-	    next unless $rval = bind($self, $tryaddr);
+	    next unless $rval = CORE::bind($self, $tryaddr);
 	    ${*$self}{Parms}{srcaddr} = $tryaddr;
 	    last;
 	}
     }
     elsif (defined(${*$self}{Parms}{srcaddr}) and
 	   length ${*$self}{Parms}{srcaddr}) {
-	$rval = bind($self, ${*$self}{Parms}{srcaddr});
+	$rval = CORE::bind($self, ${*$self}{Parms}{srcaddr});
     }
     else {
-	$rval = bind($self, pack_sockaddr(${*$self}{Parms}{AF},''));
+	$rval = CORE::bind($self, pack_sockaddr(${*$self}{Parms}{AF},''));
     }
     ${*$self}{'isbound'} = $rval;
     return $rval unless $rval;
@@ -2456,6 +2483,7 @@ sub bind			# $self [, @ignored] ; returns boolean
 
 sub unbind			# $self [, @ignored] ; return not useful
 {
+    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,2);
     my($self) = @_;
     $self->close unless $self->isconnected;
@@ -2470,6 +2498,7 @@ sub delparam			# $self, @paramnames ; returns bool
 
 sub listen			# $self [, $maxq=SOMAXCONN] ; returns boolean
 {
+    use attrs 'locked', 'method';
     my $whoami = $_[0]->_trace(\@_,2);
     my ($self,$maxq) = @_;
     $maxq = $self->getparam('maxqueue',SOMAXCONN,1) unless defined $maxq;
@@ -2478,7 +2507,7 @@ sub listen			# $self [, $maxq=SOMAXCONN] ; returns boolean
     carp "Excess args for ${whoami}(@_) ignored" if @_ > 2;
     return undef unless $self->isbound or $self->bind;
     ${*$self}{'didlisten'} = $maxq;
-    listen($self,$maxq) or undef ${*$self}{'didlisten'};
+    CORE::listen($self,$maxq) or undef ${*$self}{'didlisten'};
 }
 
 sub didlisten			# $self [, @ignored] ; returns boolean
@@ -2497,6 +2526,7 @@ sub TIESCALAR
 
 sub FETCH
 {
+    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,2);
     my $self = shift;
     my $line = $self->READLINE;
@@ -2505,6 +2535,7 @@ sub FETCH
 
 sub STORE
 {
+    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,2);
     my $self = shift;
     return if @_ == 1 and !defined $_[0];	# "undef $x"
@@ -2558,6 +2589,7 @@ sub _findxopt			# $self, $realp, @args ;
 
 sub _getxopt			# $this, $realp, [$level,] $what
 {
+    use attrs 'locked', 'method';
     my($self,$realp,@args) = @_;
     my($aref,$level,$what,$rval,$format);
     @args = $self->_findxopt($realp, @args); # get the array ref
@@ -2591,6 +2623,7 @@ sub getropt			# $this, [$level,] $what
 
 sub _setxopt			# $this, $realp, [$level,] $what, @vals
 {
+    use attrs 'locked', 'method';
     my($self,$realp,@args) = @_;
     my($aref,$level,$what,$rval,$format);
     @args = $self->_findxopt($realp, @args); # get the array ref and real args
@@ -2630,7 +2663,7 @@ sub setropt			# $this, [$level,] $what, $realvalue
 sub fileno			# $this
 {
 #    $_[0]->_trace(\@_,4);
-    fileno($_[0]);
+    CORE::fileno($_[0]);
 }
 
 sub getfh			# $this
@@ -2645,12 +2678,13 @@ sub fhvec			# $this
     my($self) = @_;
     return getsockopt($self,SOL_SOCKET,SO_TYPE) unless
 	$self->isopen and
-	    defined(fileno($self)); # return EBADF unless open
+	    defined(CORE::fileno($self)); # return EBADF unless open
     ${*$self}{FHVec};		# already setup by condition()
 }
 
 sub select			# $this [[, $read, $write, $xcept, $timeout]]
 {
+    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,4);
     my($self,$doread,$dowrite,$doxcept,$timer) = @_;
     my($fhvec,$rvec,$wvec,$xvec,$nfound,$timeleft) = $self->fhvec;
@@ -2659,7 +2693,7 @@ sub select			# $this [[, $read, $write, $xcept, $timeout]]
     $wvec = $dowrite ? $fhvec : undef;
     $xvec = $doxcept ? $fhvec : undef;
     $timer = 0 if $doread and defined(${*$self}{sockLineBuf});
-    ($nfound, $timeleft) = select($rvec, $wvec, $xvec, $timer)
+    ($nfound, $timeleft) = CORE::select($rvec, $wvec, $xvec, $timer)
 	or return ();
     if (defined(${*$self}{sockLineBuf}) && $doread && ($rvec ne $fhvec)) {
 	$nfound += 1;
@@ -2674,22 +2708,24 @@ sub select			# $this [[, $read, $write, $xcept, $timeout]]
 
 sub ioctl			# $this, @args
 {
+    use attrs 'locked', 'method';
     my $whoami = $_[0]->_trace(\@_,4);
     croak "Insufficient arguments to ${whoami}(@_), found"
 	if @_ < 3;
     carp "Excess arguments to ${whoami} ignored"
 	if @_ > 3;
-    ioctl($_[0], $_[1], $_[2]);
+    CORE::ioctl($_[0], $_[1], $_[2]);
 }
 
 sub fcntl			# $this, @args
 {
+    use attrs 'locked', 'method';
     my $whoami = $_[0]->_trace(\@_,4);
     croak "Insufficient arguments to ${whoami}(@_), found"
 	if @_ < 3;
     carp "Excess arguments to ${whoami} ignored"
 	if @_ > 3;
-    fcntl($_[0], $_[1], $_[2]);
+    CORE::fcntl($_[0], $_[1], $_[2]);
 }
 
 sub format_addr			# $thunk, $sockaddr
@@ -2728,7 +2764,7 @@ sub new_from_fh			# classname, $filehandle
 	croak "Invalid number of arguments to ${whoami}, called";
     }
     my ($fh,$rfh);
-    unless(defined(eval {$fh=fileno($_[1])})) {
+    unless(defined(eval {$fh=CORE::fileno($_[1])})) {
 	if ($_[1] =~ /\D/ or !length($_[1])) {
 	    croak "Invalid filehandle '$_[1]' in ${whoami}, called";
 	}
@@ -2776,9 +2812,9 @@ sub accept			# $self ; returns new (ref $self) or undef
 	if (defined $timeout) {
 	    $saveblocking = $self->param_saver('blocking');
 	    $self->setparams({'blocking'=>0});
-	    my $nfound = select($fhvec, undef, undef, $timeout);
+	    my $nfound = CORE::select($fhvec, undef, undef, $timeout);
 	}
-	unless (accept($ns, $self)) {
+	unless (CORE::accept($ns, $self)) {
 	    {
 		local $!;
 		undef $ns;
@@ -2916,7 +2952,7 @@ sub EOF				# $self ; returns bool
 	$self->isopen;			# generate EBADF return if not open
     return 0 if defined ${*$self}{sockLineBuf}; # not EOF if can still read
     my $fhvec = ${*$self}{FHVec};
-    my $nfound = select($fhvec, undef, undef, 0);
+    my $nfound = CORE::select($fhvec, undef, undef, 0);
     return 0 unless $nfound;
     $buf = $self->recv;
     return 1 if ! $! and !defined $buf;

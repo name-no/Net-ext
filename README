@@ -53,7 +53,7 @@ the methods.
 I'm not a technical writer, nor do I usually play one on the net.
 The documentation could still use a lot of work, I'm sure.
 
-Making it all work requires perl 5.004 or later.
+Making it all work requires perl 5.004_05 or later.
 
 A simple test script:
 
@@ -82,13 +82,12 @@ to the shell.
 
 
 Anyway, bug reports & feature requests to me (spider@Orb.Nashua.NH.US).
-
-In particular, however, if you have compilation difficulties, check
-the Makefile.PL file again, especially near "my @hfiles".  The list
-of required system include files is almost entirely tester-contributed.
-If it doesn't build (yet) on your system/configuration/version, see if
-you can figure out why, following those guidelines.  Future users will
-thank you, too.
+HOWEVER, if you have compilation difficulties, check the Makefile.PL
+file again, especially near "my @hfiles".  The list of required system
+include files is almost entirely tester-contributed.  If it doesn't
+build (yet) on your system/configuration/version, see if you can figure
+out why, following the guidelines just above "my @hfiles" there.  Future
+users will thank you, too.
 
 Finally, previous releases of this code had a significantly different
 internal implementation, which was slower (but worked in earlier versions

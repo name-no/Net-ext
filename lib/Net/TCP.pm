@@ -13,25 +13,25 @@
 
 
 package Net::TCP;
-use 5.004;			# new minimum Perl version for this package
+use 5.004_05;			# new minimum Perl version for this package
 
 use strict;
 #use Carp;
 sub carp { require Carp; goto &Carp::carp; }
 sub croak { require Carp; goto &Carp::croak; }
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD);
 
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.82';
+    $VERSION = '0.85';
 }
 sub Version () { "$myclass v$VERSION" }
 
 use AutoLoader;
 #use Exporter ();	# we inherit what we need here from Net::Gen
-use Net::Inet;
-use Net::Gen;
+use Net::Inet 0.85;
+use Net::Gen 0.85;
 use Socket qw(!/^[a-z]/ !SOMAXCONN);
 
 BEGIN {
@@ -71,11 +71,6 @@ BEGIN {
 	ALL		=> [@EXPORT, @EXPORT_OK],
     );
 
-;# sub AUTOLOAD inherited from Net::Gen (via Net::Inet)
-
-;# However, since 5.003_96 will make simple subroutines not inherit AUTOLOAD...
-    *AUTOLOAD = $myclass->can('AUTOLOAD');
-
 ;# pre-declare some things to keep the prototypes in sync
 
 
@@ -86,6 +81,16 @@ BEGIN {
 	eval "sub $name () ;" unless defined(&$name);
     }
 }
+
+;# sub AUTOLOAD inherited from Net::Gen (via Net::Inet)
+
+;# However, since 5.003_96 will make simple subroutines not inherit AUTOLOAD...
+sub AUTOLOAD
+{
+    $Net::Gen::AUTOLOAD = $AUTOLOAD;
+    goto &Net::Gen::AUTOLOAD;
+}
+
 
 # Preloaded methods go here.  Autoload methods go after __END__, and are
 # processed by the autosplit program.
@@ -115,12 +120,15 @@ my $debug = 0;
 
 sub _debug			# $this, [$newval] ; returns oldval
 {
+    use attrs 'locked';
     my ($this,$newval) = @_;
     return $this->debug($newval) if ref $this;
     my $prev = $debug;
     $debug = 0+$newval if defined $newval;
     $prev;
 }
+
+my %Sopts;			# do a full register_options only once
 
 sub new
 {
@@ -134,7 +142,13 @@ sub new
     if ($self) {
 	;# no new keys for TCP?
 	# register our socket options
-	$self->registerOptions('IPPROTO_TCP', IPPROTO_TCP(), \%sockopts);
+	if (%Sopts) {
+	    ${*$self}{Sockopts} = { %Sopts } ;
+	}
+	else {
+	    $self->registerOptions('IPPROTO_TCP', IPPROTO_TCP(), \%sockopts);
+	    %Sopts = %{ ${*$self}{Sockopts} } ;
+	}
 	# set our expected parameters
 	$self->setparams({IPproto => 'tcp',
 			  type => SOCK_STREAM,
@@ -162,11 +176,6 @@ sub _addrinfo			# $this, $sockaddr, [numeric_only]
     }
     @r;
 }
-
-
-# backward-contemptibility
-
-require Net::TCP::Server;
 
 
 1;

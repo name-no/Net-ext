@@ -1,3 +1,63 @@
+Released as version 0.85.  The test suite still needs a lot more work,
+but Perl v5.005 produced too many spurious warnings to ignore.
+
+Wed Sep 30 00:23:19 1998  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.pm: On second thought, the _autoload method
+	interface is too slow.  Fix up the client AUTOLOAD's to
+	stuff $Net::Gen::AUTOLOAD and goto &Net::Gen::AUTOLOAD
+	directly.
+
+	* lib/Net/TCP/Server.pm: No longer autoload new() && init().
+
+	* lib/Net/UNIX/Server.pm: No longer autoload new() && init().
+
+	* lib/Net/TCP.pm: Drop backward-compat for ::Server load.
+
+	* lib/Net/UNIX.pm: Drop backward-compat for ::Server load.
+
+	* lib/Net/*.pm: Made AUTOLOAD work with an _autoload method
+	to silence the complaints about inheritance.
+
+	* t/00basic.t: Expanded beyond loader tests to do simple
+	message exchange over UDP sockets.
+
+	* t/01unix.t: Added simple tests for UNIX-domain sockets.
+
+Tue Sep 29 15:49:41 1998  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* Makefile.PL: Changed minimum perl version to 5.004_05.
+
+	* README: Noted update to 5.004_05.
+
+Mon Sep 28 21:51:05 1998  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* MANIFEST: Rename basic.t to 00basic.t, in preparation for
+	adding additional tests.
+
+	* lib/Net/UDP.pm: Add 'use attrs' for threads, bumping the
+	minimum perl version to 5.004_05.
+
+	* lib/Net/TCP/Server.pm: Add 'use attrs' for threads, bumping the
+	minimum perl version to 5.004_05.
+
+	* lib/Net/TCP.pm: Add 'use attrs' for threads, bumping the
+	minimum perl version to 5.004_05.
+
+	* lib/Net/UNIX/Server.pm: Add 'use attrs' for threads, bumping the
+	minimum perl version to 5.004_05.
+
+	* lib/Net/UNIX.pm: Add 'use attrs' for threads, bumping the
+	minimum perl version to 5.004_05.
+
+	* lib/Net/Inet.pm: Add 'use attrs' for threads, bumping the
+	minimum perl version to 5.004_05.
+
+	* lib/Net/Gen.pm: Fix up for 5.005 braindamage with respect
+	to CORE::whatever functions.  Feh.  This advances the minimum
+	version to 5.004_05, since I need to 'use attrs' for threads
+	in 5.005.
+
 Emergency release as version 0.84.  Begin work on real test suite for 0.85.
 
 Sat Apr  4 00:36:44 1998  Spider Boardman  <spider@Orb.Nashua.NH.US>

@@ -13,26 +13,26 @@
 
 
 package Net::TCP::Server;
-use 5.004;
+use 5.004_05;
 
 use strict;
 #use Carp;
 sub carp { require Carp; goto &Carp::carp; }
 sub croak { require Carp; goto &Carp::croak; }
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD);
 
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.84';
+    $VERSION = '0.85';
 }
 sub Version () { "$myclass v$VERSION" }
 
-use AutoLoader;
+#use AutoLoader;
 #use Exporter ();	# we inherit what we need here from Net::Gen
 #use Net::Inet;
 #use Net::Gen;
-use Net::TCP;
+use Net::TCP 0.85;
 
 
 BEGIN {
@@ -51,24 +51,64 @@ BEGIN {
     %EXPORT_TAGS = (
     ALL		=> [@EXPORT, @EXPORT_OK],
 );
+}
 
 # sub AUTOLOAD inherited from Net::Gen (via Net::TCP)
 
 # However, since 5.003_96 will make simple subroutines not inherit AUTOLOAD...
-    *AUTOLOAD = $myclass->can('AUTOLOAD');
+#sub AUTOLOAD
+#{
+#    $Net::Gen::AUTOLOAD = $AUTOLOAD;
+#    goto &Net::Gen::AUTOLOAD;
+#}
 
-}
 
 # Preloaded methods go here.  Autoload methods go after __END__, and are
 # processed by the autosplit program.
 
 # Can't autoload routines which we could get without autoloading by
-# inheritance, so new() and init() have to be here.  Make them stubs which
-# call autoloadable routines to keep the footprint down when being included
-# from Net::TCP in the interest of backward compatibility.
+# inheritance, so new() and init() have to be here.
 
-sub new { &Net::TCP::Server::_new; }
-sub init { &Net::TCP::Server::_init; }
+sub new				# classname, [[hostspec,] service,] [\%params]
+{
+    $_[0]->_trace(\@_,1);
+    my ($xclass, @Args) = @_;
+    if (@Args == 2 && ref $Args[1] && ref($Args[1]) eq 'HASH' or
+	@Args == 1 and not ref $Args[0]) {
+	unshift(@Args, undef);	# thishost spec
+    }
+    my $self = $xclass->SUPER::new(@Args);
+    return undef unless $self;
+    $self->setparams({reuseaddr => 1}, -1);
+    $xclass = ref $xclass if ref $xclass;
+    if ($xclass eq __PACKAGE__) {
+	unless ($self->init(@Args)) {
+	    local $!;		# protect returned errno value
+	    undef $self;	# against excess closes in perl core
+	    undef $self;	# another statement needed for sequencing
+	}
+    }
+    $self;
+}
+
+sub init			# $self, [@stuff] ; returns updated $self
+{
+    use attrs 'locked', 'method';
+    my ($self, @Args) = @_;
+    if (@Args == 2 && ref $Args[1] && ref $Args[1] eq 'HASH' or
+	@Args == 1 and not ref $Args[0]) {
+	unshift(@Args, undef);	# thishost spec
+    }
+    return unless $self->_hostport('this',\@Args);
+    return unless $self->SUPER::init;
+    if ($self->getparam('srcaddrlist') && !$self->isbound) {
+	return unless $self->bind;
+    }
+    if ($self->isbound && !$self->didlisten) {
+	return unless $self->isconnected or $self->listen;
+    }
+    $self;
+}
 
 # maybe someday add some fork+accept handling here?
 
@@ -196,43 +236,3 @@ Spider Boardman F<E<lt>spider@Orb.Nashua.NH.USE<gt>>
 #other sections should be added, sigh.
 
 #any real autoloaded methods go after this line
-
-sub _new			# classname, [[hostspec,] service,] [\%params]
-{
-    $_[0]->_trace(\@_,1);
-    my ($xclass, @Args) = @_;
-    if (@Args == 2 && ref $Args[1] && ref($Args[1]) eq 'HASH' or
-	@Args == 1 and not ref $Args[0]) {
-	unshift(@Args, undef);	# thishost spec
-    }
-    my $self = $xclass->SUPER::new(@Args);
-    return undef unless $self;
-    $self->setparams({reuseaddr => 1}, -1);
-    $xclass = ref $xclass if ref $xclass;
-    if ($xclass eq __PACKAGE__) {
-	unless ($self->init(@Args)) {
-	    local $!;		# protect returned errno value
-	    undef $self;	# against excess closes in perl core
-	    undef $self;	# another statement needed for sequencing
-	}
-    }
-    $self;
-}
-
-sub _init			# $self, [@stuff] ; returns updated $self
-{
-    my ($self, @Args) = @_;
-    if (@Args == 2 && ref $Args[1] && ref $Args[1] eq 'HASH' or
-	@Args == 1 and not ref $Args[0]) {
-	unshift(@Args, undef);	# thishost spec
-    }
-    return unless $self->_hostport('this',\@Args);
-    return unless $self->SUPER::init;
-    if ($self->getparam('srcaddrlist') && !$self->isbound) {
-	return unless $self->bind;
-    }
-    if ($self->isbound && !$self->didlisten) {
-	return unless $self->isconnected or $self->listen;
-    }
-    $self;
-}

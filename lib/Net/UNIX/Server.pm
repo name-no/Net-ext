@@ -13,26 +13,27 @@
 
 
 package Net::UNIX::Server;
-use 5.004;
+use 5.004_05;
 
 use strict;
 #use Carp;
 sub carp { require Carp; goto &Carp::carp; }
 sub croak { require Carp; goto &Carp::croak; }
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD);
 
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.84';
+    $VERSION = '0.85';
 }
 sub Version { "$myclass v$VERSION" }
 
-use AutoLoader;
+#use AutoLoader;		# someday add back, along with AUTOLOAD, below
 #use Exporter ();
-#use Net::Gen qw(/pack_sockaddr$/);
+#use Net::Gen 0.85 qw(/pack_sockaddr$/);
 #use Socket qw(!pack_sockaddr_un !unpack_sockaddr_un);
-use Net::UNIX;
+use Socket '/^SOCK_/';
+use Net::UNIX 0.85;
 
 BEGIN {
     @ISA = qw(Net::UNIX);
@@ -49,22 +50,60 @@ BEGIN {
     %EXPORT_TAGS = (
 	ALL		=> [@EXPORT, @EXPORT_OK],
     );
+}
 
 # sub AUTOLOAD inherited from Net::Gen
 
 # since 5.003_96 will break simple subroutines with inherited autoload, cheat
-    *AUTOLOAD = $myclass->can('AUTOLOAD');
-}
+#sub AUTOLOAD
+#{
+#    $Net::Gen::AUTOLOAD = $AUTOLOAD;
+#    goto &Net::Gen::AUTOLOAD;
+#}
+
 
 # Preloaded methods go here.  Autoload methods go after __END__, and are
 # processed by the autosplit program.
 
-# Can't autoload new & init when Net::Gen has then non-autoloaded.  Feh.
-
-sub new { &Net::UNIX::Server::_new }
-sub init { &Net::UNIX::Server::_init }
+# Can't autoload new & init when Net::Gen has them non-autoloaded.  Feh.
 
 # No additional sockopts for UNIX-domain sockets (?)
+
+sub new
+{
+    my $whoami = $_[0]->_trace(\@_,1);
+    my($class,@Args,$self) = @_;
+    $self = $class->SUPER::new(@Args);
+    $class = ref $class if ref $class;
+    ($self || $class)->_trace(\@_,2," self" .
+			      (defined $self ? "=$self" : " undefined") .
+			      " after sub-new");
+    if ($self) {
+	$self->setparams({reuseaddr => 1}, -1);
+	if ($class eq __PACKAGE__) {
+	    unless ($self->init(@Args)) {
+		local $!;	# preserve errno
+		undef $self;	# against the side-effects of this
+		undef $self;	# another statement needed for unwinding
+	    }
+	}
+    }
+    ($self || $class)->_trace(0,1," returning " .
+			      (defined $self ? "self=$self" : "undefined"));
+    $self;
+}
+
+sub init			# $self [, $thispath][, \%params]
+{
+    my ($self,@args) = @_;
+    return undef unless $self->_init('thispath',@args);
+    if ($self->isbound) {
+	return undef
+	    unless $self->getparam('type') == SOCK_DGRAM or
+		$self->isconnected or $self->didlisten or $self->listen;
+    }
+    $self;
+}
 
 1;
 
@@ -191,40 +230,3 @@ Spider Boardman F<E<lt>spider@Orb.Nashua.NH.USE<gt>>
 #other sections should be added, sigh.
 
 #any real autoloaded methods go after this line
-
-
-sub _new
-{
-    my $whoami = $_[0]->_trace(\@_,1);
-    my($class,@Args,$self) = @_;
-    $self = $class->SUPER::new(@Args);
-    $class = ref $class if ref $class;
-    ($self || $class)->_trace(\@_,2," self" .
-			      (defined $self ? "=$self" : " undefined") .
-			      " after sub-new");
-    if ($self) {
-	$self->setparams({reuseaddr => 1}, -1);
-	if ($class eq __PACKAGE__) {
-	    unless ($self->init(@Args)) {
-		local $!;	# preserve errno
-		undef $self;	# against the side-effects of this
-		undef $self;	# another statement needed for unwinding
-	    }
-	}
-    }
-    ($self || $class)->_trace(0,1," returning " .
-			      (defined $self ? "self=$self" : "undefined"));
-    $self;
-}
-
-sub _init			# $self [, $thispath][, \%params]
-{
-    my ($self,@args) = @_;
-    return undef unless $self->_init('thispath',@args);
-    if ($self->isbound) {
-	return undef
-	    unless $self->isconnected or $self->didlisten or $self->listen;
-    }
-    $self;
-}
-

@@ -1,5 +1,5 @@
 #!perl
-use 5.004;
+use 5.004_05;
 use ExtUtils::MakeMaker qw(WriteMakefile $Verbose);
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.

@@ -13,30 +13,36 @@
 
 
 package Net::UDP;
-use 5.004;			# new minimum Perl version for this package
+use 5.004_05;			# new minimum Perl version for this package
 
 use strict;
 #use Carp;
 sub carp { require Carp; goto &Carp::carp; }
 sub croak { require Carp; goto &Carp::croak; }
-use vars qw($VERSION @ISA);
+use vars qw($VERSION @ISA $AUTOLOAD);
 
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.82';
+    $VERSION = '0.85';
 }
 sub Version () { "$myclass v$VERSION" }
 
 use AutoLoader;
 
-use Net::Inet;
-use Net::Gen;
+use Net::Inet 0.85;
+use Net::Gen 0.85;
 use Socket qw(!/^[a-z]/ !SOMAXCONN);
 
 BEGIN {
     @ISA = qw(Net::Inet);
-    *AUTOLOAD = $myclass->can('AUTOLOAD');
+}
+
+# Cheat on AUTOLOAD inheritance.
+sub AUTOLOAD
+{
+    $Net::Gen::AUTOLOAD = $AUTOLOAD;
+    goto &Net::Gen::AUTOLOAD;
 }
 
 # Preloaded methods go here.  Autoload methods go after
@@ -49,14 +55,22 @@ BEGIN {
 my @Keys = qw(unbuffered_input unbuffered_output);
 my %CodeKeys = (unbuffered_IO => \&_setbuf_unbuf);
 
+my %Keys;			# for only calling registration routines once
+
 sub new
 {
     my($class,@args) = @_;
     my $self = $class->SUPER::new(@args);
     $class = ref $class if ref $class;
     if ($self) {
-	$self->register_param_keys(\@Keys);
-	$self->register_param_handlers(\%CodeKeys);
+	if (%Keys) {
+	    ${*$self}{Keys} = { %Keys } ;
+	}
+	else {
+	    $self->register_param_keys(\@Keys);
+	    $self->register_param_handlers(\%CodeKeys);
+	    %Keys = %{ ${*$self}{Keys} } ;
+	}
 	# no new sockopts for UDP?
 	# set our required parameters
 	$self->setparams({type => SOCK_DGRAM,
@@ -87,6 +101,11 @@ sub _addrinfo			# $this, $sockaddr, [numeric_only]
 }
 
 # autoloaded methods go after the END token (& pod) below
+
+# hack to ensure that autoloading in Net::Gen doesn't override these...
+# not needed currently, but keep it in mind
+#sub PRINT { goto &_UDP_PRINT; }
+#sub READLINE { goto &_UDP_READLINE; }
 
 1;
 __END__
@@ -280,6 +299,7 @@ sub _setbuf_unbuf		# $self, $param, $newvalue;
 
 sub PRINT			# $self, @args; returns boolean OKness
 {
+    use attrs 'locked', 'method';
     my $self = shift;
     if ($self->getparam('unbuffered_output')) {
 	$self->send(join $, , @_);
@@ -289,8 +309,9 @@ sub PRINT			# $self, @args; returns boolean OKness
     }
 }
 
-sub READLINE			# $self; returns buffer or array of buffers
+sub READLINE		# $self; returns buffer or array of buffers
 {				# barfs if called unbuffered in array context
+    use attrs 'locked', 'method';
     my $whoami = $_[0]->_trace(\@_,5);
     carp "Excess arguments to ${whoami}, ignored" if @_ > 1;
     my $self = shift;

@@ -12,5 +12,6 @@ lib/Net/UDP.pm
 lib/Net/UNIX.pm
 lib/Net/TCP/Server.pm
 lib/Net/UNIX/Server.pm
-t/basic.t
+t/00basic.t
+t/01unix.t
 typemap
