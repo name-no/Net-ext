@@ -2,6 +2,8 @@
 \,v$
 ^[M]akefile$
 ^[M]akefile\.aperl$
+\bnetgen\.h$
+\bnetgenh\.new$
 ^blib/
 \~$
 \#$
@@ -15,3 +17,4 @@
 \.tar\.gz$
 \.tgz$
 \.sig$
+\.asc$

@@ -22,7 +22,7 @@ use vars qw($VERSION @ISA);
 my $myclass;
 BEGIN {
     $myclass = &{+sub {(caller(0))[0]}};
-    $VERSION = '0.75';
+    $VERSION = '0.77';
 }
 sub Version () { "$myclass v$VERSION" }
 
@@ -49,7 +49,9 @@ sub new
 	# no new keys for UDP?
 	# no new sockopts for UDP?
 	# set our required parameters
-	$self->setparams({type => SOCK_DGRAM, proto => IPPROTO_UDP}, -1);
+	$self->setparams({type => SOCK_DGRAM,
+			  proto => IPPROTO_UDP,
+			  IPproto => 'udp'}, -1);
 	$self = $self->init(@args) if $class eq $myclass;
     }
     $self;

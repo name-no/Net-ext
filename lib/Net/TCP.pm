@@ -22,18 +22,18 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 my $myclass;
 BEGIN {
     $myclass = &{+sub {(caller(0))[0]}};
-    $VERSION = '0.75';
+    $VERSION = '0.77';
 }
 sub Version () { "$myclass v$VERSION" }
 
 use AutoLoader;
-use Exporter ();
+#use Exporter ();	# we inherit what we need here from Net::Gen
 use Net::Inet;
 use Net::Gen;
 use Socket qw(!/^[a-z]/);
 
 BEGIN {
-    @ISA = qw(Exporter Net::Inet);
+    @ISA = qw(Net::Inet);
 
 # Items to export into callers namespace by default
 # (move infrequently used names to @EXPORT_OK below)
@@ -62,6 +62,11 @@ BEGIN {
 
     %EXPORT_TAGS = (
 	sockopts	=> [qw(TCP_NODELAY TCP_MAXSEG TCP_RPTR2RXT)],
+	tcpoptions	=> [qw(TCPOPT_EOL TCPOPT_MAXSEG TCPOPT_NOP
+			       TCPOPT_WINDOW)],
+	protocolvalues	=> [qw(TCP_MAXWIN TCP_MAX_WINSHIFT TCP_MSS
+			       TH_ACK TH_FIN TH_PUSH TH_RST TH_SYN TH_URG)],
+	ALL		=> [@EXPORT, @EXPORT_OK],
     );
 
 ;# sub AUTOLOAD inherited from Net::Gen (via Net::Inet)
@@ -224,7 +229,7 @@ The following methods are provided by the C<Net::TCP> module
 itself, rather than just being inherited from C<Net::Inet> or
 C<Net::Gen>.
 
-=over 6
+=over
 
 =item new
 
@@ -288,13 +293,11 @@ none.
 
 These are the socket options known to the C<Net::TCP> module itself:
 
-=over 6
+=over
 
 =item Z<>
 
-TCP_NODELAY,
-TCP_MAXSEG,
-TCP_RPTR2RXT
+C<TCP_NODELAY> C<TCP_MAXSEG> C<TCP_RPTR2RXT>
 
 =back
 
@@ -327,7 +330,7 @@ C<FETCH> method).
 
 =head2 Exports
 
-=over 6
+=over
 
 =item default
 
@@ -335,31 +338,34 @@ none
 
 =item exportable
 
-C<TCPOPT_EOL>,
-C<TCPOPT_MAXSEG>,
-C<TCPOPT_NOP>,
-C<TCPOPT_WINDOW>,
-C<TCP_MAXSEG>,
-C<TCP_MAXWIN>,
-C<TCP_MAX_WINSHIFT>,
-C<TCP_MSS>,
-C<TCP_NODELAY>,
-C<TCP_RPTR2RXT>,
-C<TH_ACK>,
-C<TH_FIN>,
-C<TH_PUSH>,
-C<TH_RST>,
-C<TH_SYN>,
-C<TH_URG>
+C<TCPOPT_EOL> C<TCPOPT_MAXSEG> C<TCPOPT_NOP> C<TCPOPT_WINDOW>
+C<TCP_MAXSEG> C<TCP_MAXWIN> C<TCP_MAX_WINSHIFT> C<TCP_MSS>
+C<TCP_NODELAY> C<TCP_RPTR2RXT> C<TH_ACK> C<TH_FIN> C<TH_PUSH> C<TH_RST>
+C<TH_SYN> C<TH_URG>
 
 =item tags
 
-=over 6
+The following I<:tags> are available for grouping related exportable
+items:
 
-=item C<:sockopts>
+=over
 
-This tag gets you the known socket options, C<TCP_MAXSEG>,
-C<TCP_NODELAY>, and C<TCP_RPTR2RXT>.
+=item :sockopts
+
+C<TCP_NODELAY> C<TCP_MAXSEG> C<TCP_RPTR2RXT>
+
+=item :tcpoptions
+
+C<TCPOPT_EOL> C<TCPOPT_MAXSEG> C<TCPOPT_NOP> C<TCPOPT_WINDOW>
+
+=item :protocolvalues
+
+C<TCP_MAXWIN> C<TCP_MAX_WINSHIFT> C<TCP_MSS> C<TH_ACK> C<TH_FIN>
+C<TH_PUSH> C<TH_RST> C<TH_SYN> C<TH_URG>
+
+=item :ALL
+
+All of the above exportable items.
 
 =back
 

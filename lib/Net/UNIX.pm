@@ -22,17 +22,17 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 my $myclass;
 BEGIN {
     $myclass = &{+sub {(caller(0))[0]}};
-    $VERSION = '0.75';
+    $VERSION = '0.77';
 }
 sub Version { "$myclass v$VERSION" }
 
 use AutoLoader;
-use Exporter ();
+#use Exporter ();
 use Net::Gen qw(/pack_sockaddr$/);
 use Socket qw(!pack_sockaddr_un !unpack_sockaddr_un);
 
 BEGIN {
-    @ISA = qw(Exporter Net::Gen);
+    @ISA = qw(Net::Gen);
 
 # Items to export into callers namespace by default.
 # (Move infrequently used names to @EXPORT_OK below.)
@@ -47,6 +47,7 @@ BEGIN {
 
     %EXPORT_TAGS = (
 	routines	=> [qw(pack_sockaddr_un unpack_sockaddr_un)],
+	ALL		=> [@EXPORT, @EXPORT_OK],
     );
 
 ;# sub AUTOLOAD inherited from Net::Gen
@@ -261,14 +262,24 @@ sub init			# $self [, $thispath][, \%params]
 
 package Net::UNIX;		# back to original package for Autoloader
 
-sub connect			# $self [, $destpath]
+sub connect			# $self [, $destpath] [, \%newparams]
 {
-    my($self,$path) = @_;
-    if (@_ > 2 or @_ == 2 and ref $path) {
+    my($self,$path,$parms) = @_;
+    if (@_ > 3 or @_ == 3 and (!ref($parms) or ref($path))) {
 	croak("Invalid arguments to ${myclass}::connect(@_), called");
     }
-    if (@_ == 2) {
-	return undef unless $self->setparams({destpath=>$path});
+    if (@_ == 2 and ref $path) {
+	$parms = $path;
+	undef $path;
+    }
+    else {
+	$parms ||= {};
+    }
+    if (defined $path) {
+	$$parms{destpath} = $path;
+    }
+    if (@_ > 1) {
+	return unless $self->setparams($parms);
     }
     $self->SUPER::connect;
 }
@@ -311,7 +322,7 @@ is part of the same distribution.
 The following methods are provided by the C<Net::UNIX> module
     itself, rather than just being inherited from C<Net::Gen>.
 
-=over 6
+=over
 
 =item new
 
@@ -362,10 +373,12 @@ Usage:
 
     $ok = $obj->bind;
     $ok = $obj->bind($pathname);
+    $ok = $obj->bind($pathname,\%newparameters);
 
-Sets up the C<srcaddrlist> object parameter with the specified
-$pathname argument if supplied, and then returns the value from
-the inherited C<bind> method.
+Updates the object with the supplied new parameters (if
+supplied), then sets up the C<srcaddrlist> object parameter with
+the specified $pathname argument (if supplied), and then returns
+the value from the inherited C<bind> method.
 
 Example:
 
@@ -377,11 +390,14 @@ Usage:
 
     $ok = $obj->connect;
     $ok = $obj->connect($pathname);
+    $ok = $obj->connect($pathname,\%newparameters);
 
 Attempts to establish a connection for the object.  If the
-$pathname argument is specified, it will be used to set the
-C<dstaddrlist> object parameter.  Then, the result of a call to
-the inherited C<connect> method will be returned.
+C<newparams> argument is specified, it will be used to update the
+object parameters.  Then, if the $pathname argument is specified,
+it will be used to set the C<dstaddrlist> object parameter.
+Finally, the result of a call to the inherited C<connect> method
+will be returned.
 
 =item format_addr
 
@@ -397,7 +413,7 @@ is normally just a pathname, or the constant string C<''>.
 
 =head2 Protected Methods
 
-[See the note in the C<Net::Gen> documentation about my
+[See the description in L<Net::Gen/"Protected Methods"> for my
 definition of protected methods in Perl.]
 
 None.
@@ -427,7 +443,7 @@ C<FETCH> method).
 
 =head2 Non-Method Subroutines
 
-=over 6
+=over
 
 =item pack_sockaddr_un
 
@@ -459,7 +475,7 @@ that it trims the returned pathname at the first null character.
 
 =head2 Exports
 
-=over 6
+=over
 
 =item default
 
@@ -467,12 +483,25 @@ None.
 
 =item exportable
 
-C<pack_sockaddr_un>,
-C<unpack_sockaddr_un>
+C<pack_sockaddr_un> C<unpack_sockaddr_un>
 
 =item tags
 
-	routines	=> [qw(pack_sockaddr_un unpack_sockaddr_un)]
+The following I<:tags> are available for grouping exportable items:
+
+=over
+
+=item :routines
+
+C<pack_sockaddr_un> C<unpack_sockaddr_un>
+
+=item :ALL
+
+All of the above exportable items.
+
+=back
+
+Z<>
 
 =back
 
@@ -494,15 +523,25 @@ sub setdebug			# $this, [bool, [norecurse]]
 	((@_ > 1 && $_[1]) ? '' : $this->SUPER::setdebug(@_));
 }
 
-sub bind			# $self [, $thispath]
+sub bind			# $self [, $destpath] [, \%newparams]
 {
-    my($self,$path) = @_;
-    if (@_ > 2 or @_ == 2 and ref $path) {
+    my($self,$path,$parms) = @_;
+    if (@_ > 3 or @_ == 3 and (!ref($parms) or ref($path))) {
 	my $whoami = $self->_trace;
 	croak("Invalid arguments to ${whoami}(@_), called");
     }
-    if (@_ == 2) {
-	return unless $self->setparams({thispath=>$path});
+    if (@_ == 2 and ref $path) {
+	$parms = $path;
+	undef $path;
+    }
+    else {
+	$parms ||= {};
+    }
+    if (defined $path) {
+	$$parms{thispath} = $path;
+    }
+    if (@_ > 1) {
+	return unless $self->setparams($parms);
     }
     $self->SUPER::bind;
 }

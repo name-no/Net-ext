@@ -1,3 +1,75 @@
+Released as version 0.77 as this part of development now seems stable.
+
+Sat Apr  5 01:58:20 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* README: Added a copyright statement as per the recommendations
+        in the module list.
+
+	* lib/Net/Inet.pm: Missed INADDR_UNSPEC_GROUP before.
+
+	* Gen.xs: Consolidated the BOOT: sections for better compilation
+        performance.
+
+Fri Apr  4 12:47:18 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* Makefile.PL: Added MY::libscan to keep my local 'make install'
+        working despite my backup files.
+
+	* lib/Net/Gen.pm: Fixed up the RECV method so that its calling
+	sequence is appropriate for tied FH support, instead of matching
+	the recv method.  Updated the pod accordingly.
+
+	* lib/Net/UDP.pm: Updated the new/init handling to set IPproto as
+	well as proto (just in case).
+
+	* lib/Net/UNIX.pm: Updated the bind and connect methods to allow
+	additional parameter setting, as in Inet.pm.  Updated the pods to
+	match.
+
+	* lib/Net/TCP.pm: Slight pod cleanup.
+
+	* lib/Net/Inet.pm: Updated general pod for the IN_MULTICAST() and
+	IPOPT_COPIED() additions, along with the IP multicast addresses.
+
+	* README: Updated for items which are (mostly?) done.
+
+Limited private release as 0.76 with these changes except for the ChangeLog.
+
+Fri Apr  4 12:28:57 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/UNIX.pm: Updated EXPORT_TAGS and related pod.
+
+	* lib/Net/TCP.pm: Updated EXPORT_TAGS and related pod.
+
+	* lib/Net/Inet.pm: Updated EXPORT_TAGS and related pod.
+
+	* lib/Net/Gen.pm: Updated EXPORT_TAGS and related pod.  Changed
+	initsockopts to use a generated closure in the caller's package to
+	evaluate the proposed socket options.  I'm not convinced whether
+	this is better than the previous can() method, though.  Some
+	profiling is required, along with testing the behaviour of each
+	style under pathological conditions.
+
+	* Gen.xs: Removed entries in constant() which will (now) never be
+        missing from the rest of the generated file.  Added entries for
+        the 1-arg macros, and a few new constants (such as IPOPT_CIPSO and
+        INADDR_ALLRTRS_GROUP).  Added support for sv_inaddr_t / T_INADDR
+        typemap (routine sv2inaddr) so that IN_CLASSD() and friends can
+        take a local-byte-ordered UV or a PV which is returned by
+        Socket::inet_aton() or unpack_sockaddr_in() which is in network
+        byte order.
+
+	* Makefile.PL: Added code to create "netgen.h" for #include, in
+        support of finding local .h files and generating default values
+        for system-independent symbols.  This means that I have #defines
+        which duplicate the anonymous enums used in Linux, but that's
+        life.  The macros generated in netgen.h allow me to support some
+        of the 1-argument macros, too, such as IN_CLASSD() and
+        IPOPT_COPIED().
+
+	* typemap: Add sv_inaddr_t / T_INADDR mapping for the new
+        IN_CLASSD() and related predicate functions.
+
 Released as version 0.75 (still alpha) because of perl 5.003_96 & AUTOLOAD.
 
 Tue Apr  1 00:53:05 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>

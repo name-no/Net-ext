@@ -11,6 +11,8 @@ U16			T_UV
 U8			T_UV
 Result			T_UV
 
+sv_inaddr_t		T_INADDR
+
 #############################################################################
 INPUT
 T_UV
@@ -18,6 +20,8 @@ T_UV
 		(warn (\"${Package}::$func_name - $var argument truncated\"),
 			SvUV($arg))
 		: SvUV($arg))
+T_INADDR
+	$var = ($type)(SvIOK($arg) ? SvUV($arg) : sv2inaddr($arg))
 #############################################################################
 OUTPUT
 T_UV

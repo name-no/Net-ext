@@ -22,7 +22,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD $adebug);
 my $myclass;
 BEGIN {
     $myclass = &{+sub {(caller(0))[0]}};
-    $VERSION = '0.75';
+    $VERSION = '0.77';
 }
 
 sub Version () { "$myclass v$VERSION" }
@@ -50,6 +50,7 @@ BEGIN {
 
     %EXPORT_TAGS = (
 	NonBlockVals => [qw(EOF_NONBLOCK RD_NODATA VAL_EAGAIN VAL_O_NONBLOCK)],
+	routines	=> [qw(pack_sockaddr unpack_sockaddr)],
 	ALL	=> [@EXPORT, @EXPORT_OK],
     );
 }
@@ -58,10 +59,15 @@ my %loaded;
 
 ;# since I use these values in ckeof(), I need to predeclare them here
 
-sub EOF_NONBLOCK ();
-sub RD_NODATA	();
-sub VAL_EAGAIN	();
-sub VAL_O_NONBLOCK ();
+sub EOF_NONBLOCK 	();
+sub RD_NODATA		();
+sub VAL_EAGAIN		();
+sub VAL_O_NONBLOCK	();
+
+my $nullsub = sub {};		# handly null warning handler
+;# If the warning handler is this exact code ref, don't bother calling
+;# croak in the AUTOLOAD constant section, since we're being called from
+;# inside the eval in initsockopts().
 
 sub AUTOLOAD
 {
@@ -80,6 +86,9 @@ sub AUTOLOAD
 	    goto &AutoLoader::AUTOLOAD;
 	}
 	else {
+	    my $wh = $SIG{__WARN__};
+	    die "\n"
+		if ($wh and (ref($wh) eq 'CODE') and $wh == $nullsub);
 	    croak "Your vendor has not defined $callpkg macro $constname, used";
 	}
     }
@@ -117,18 +126,23 @@ BEGIN {
 # have filled in the ones which can.  It will also have duplicated
 # the entries to be indexed by option value as well as by option name.
 
+my %evalopts;			# avoid an eval per sockopt
+
 sub initsockopts		# $class, $level+0, \%sockopts
 {
     my ($class,$level,$opts) = @_;
     croak "Invalid arguments to ${myclass}::initsockopts, called"
 	if @_ != 3 or ref $opts ne 'HASH';
     $level += 0;		# force numeric
-    my($opt,$oval,@oval);
+    my($opt,$oval,@oval,$esub);
+    my $nullwarn = $nullsub;	# a handy __WARN__ handler
+    # The above has to be there, since the file-scope 'my' won't be seen
+    # in the generated closure.
+    $evalopts{$class} ||= eval "package $class; no strict 'refs';" .
+	'sub ($) {local($SIG{__WARN__})=$nullwarn;&{$_[0]}()}';
+    $esub = $evalopts{$class};
     foreach $opt (keys %$opts) {
-	$oval = $class->can($opt);
-	if (defined $oval) {
-	    $oval = eval {local($^W)=0;&$oval()};
-	}
+	$oval = eval {&$esub($opt)};
 	delete $$opts{$opt}, next if $@ or !defined($oval) or $oval eq '';
 	$oval += 0;		# force numeric
 	push(@{$$opts{$opt}}, $oval, $level);
@@ -655,7 +669,7 @@ sub ckeof			# $self ; returns boolean
 	my $flags = ($F_GETFL ? fcntl($fh,$F_GETFL,0+0) : undef);
 	if (((defined($flags) && defined($nonblock_flag)) ?
 		($flags & $nonblock_flag) : 1)
-		&& ($saverr == $eagain)) {
+	    && ($saverr == $eagain)) {
 	    # *sigh* -- no way to tell, here
 	    return 0;
 	}
@@ -705,8 +719,6 @@ sub recv			# $self, [$maxlen, [$flags, [$from]]] ;
 
 sub get;			# (helps with -w)
 *get = \&recv;			# a name that works for indirect references
-sub RECV;			# a tied-FH method setup
-*RECV = \&recv;
 
 sub getline			# $self ; returns like scalar(<$fhandle>)
 {
@@ -819,7 +831,7 @@ which are layered atop C<Net::Gen>.
 
 =head2 Public Methods
 
-=over 6
+=over
 
 =item new
 
@@ -1221,8 +1233,6 @@ stdio.  This method makes no attempt to trap C<SIGPIPE>.
 
 =item get
 
-=item RECV
-
 =item recv
 
 Usage:
@@ -1242,6 +1252,18 @@ not supplied, it is defaulted to the receive buffer size of the
 associated filehandle (if known), or the preferred blocksize of
 the associated filehandle (if known, which it usually won't be),
 or 8192.
+
+=item RECV
+
+Usage:
+
+    $from = $obj->RECV($buffer, $maxlen, $flags);
+    $from = $obj->RECV($buffer, $maxlen);
+    $from = $obj->RECV($buffer);
+
+This method calls the recv() method with the arguments and return
+rearranged to match the recv() builtin.  This is for (eventual) support of
+tied filehandles.
 
 =item READLINE
 
@@ -1455,7 +1477,7 @@ Yes, I know that Perl doesn't really have protected methods as
 such.  However, these are the methods which are only useful for
 implementing derived classes, and not for the general user.
 
-=over 6
+=over
 
 =item initsockopts
 
@@ -1579,7 +1601,7 @@ calls and traditional socket-level I/O.  However, if you're sure you can
 keep things straight, here are the rules under which it's safe to use the
 embedded filehandle:
 
-=over 6
+=over
 
 =item Z<>
 
@@ -1616,7 +1638,7 @@ the built-in I/O primitives.
 These are the socket options known to the C<Net::Gen> module
 itself:
 
-=over 6
+=over
 
 =item Z<>
 
@@ -1645,7 +1667,7 @@ C<SO_LINGER>
 These are the object parameters registered by the C<Net::Gen>
 module itself:
 
-=over 6
+=over
 
 =item PF
 
@@ -1689,7 +1711,7 @@ listen() is not supplied.
 
 =head2 Non-Method Subroutines
 
-=over 6
+=over
 
 =item pack_sockaddr
 
@@ -1747,7 +1769,7 @@ always defined.
 
 =head2 Exports
 
-=over 6
+=over
 
 =item default
 
@@ -1755,16 +1777,31 @@ None.
 
 =item exportable
 
-C<pack_sockaddr>,
-C<unpack_sockaddr>,
-C<VAL_O_NONBLOCK>,
-C<VAL_EAGAIN>,
-C<RD_NODATA>,
-C<EOF_NONBLOCK>
+C<VAL_O_NONBLOCK> C<VAL_EAGAIN> C<RD_NODATA> C<EOF_NONBLOCK>
+C<pack_sockaddr> C<unpack_sockaddr>
 
 =item tags
 
-	NonBlockVals => [qw(EOF_NONBLOCK RD_NODATA VAL_EAGAIN VAL_O_NONBLOCK)]
+The following I<:tags> are available for grouping exported items
+together:
+
+=over
+
+=item :NonBlockVals
+
+C<EOF_NONBLOCK> C<RD_NODATA> C<VAL_EAGAIN> C<VAL_O_NONBLOCK>
+
+=item :routines
+
+C<pack_sockaddr> C<unpack_sockaddr>
+
+=item :ALL
+
+All of the above.
+
+=back
+
+Z<>
 
 =back
 
@@ -2137,4 +2174,16 @@ sub accept			# $self ; returns new (ref $self) or undef
     return undef unless $ns->isconnected;
     $ns->condition;
     $ns;
+}
+
+sub RECV			# $self, $buf [,$maxlen] [,$flags]
+{				# returns $from  ( for tied-FH handling )
+    my ($from,$buf);
+    my $whoami = $_[0]->_trace(\@_,5);
+    croak "Invalid arguments to ${whoami}, called"
+	if @_ < 2 or @_ > 4 or !ref($_[0]);
+    $buf = $_[0]->recv($_[2], $_[3], $from);
+    return unless defined $buf;
+    $_[1] = $buf;
+    $from;
 }
