@@ -1,3 +1,13 @@
+Emergency release as version 0.84.  Begin work on real test suite for 0.85.
+
+Sat Apr  4 00:36:44 1998  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.pm (accept): Fix up successful accept logic.
+
+	* lib/Net/TCP/Server.pm (_init): Fix up autoloading.
+
+	* lib/Net/UNIX/Server.pm (_init): Fix up autoloading.
+
 Released as version 0.83.
 
 Sun Mar 15 16:52:11 1998  Spider Boardman  <spider@Orb.Nashua.NH.US>

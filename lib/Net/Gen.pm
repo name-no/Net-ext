@@ -22,7 +22,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD $adebug);
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.83';
+    $VERSION = '0.84';
 }
 
 sub Version () { "$myclass v$VERSION" }
@@ -2787,7 +2787,7 @@ sub accept			# $self ; returns new (ref $self) or undef
 	    return $ns;
 	}
     }
-    $$ns{'isopen'} = $$ns{'isbound'} = $$ns{'isconnected'} = 1;
+    ${*$ns}{'isopen'} = ${*$ns}{'isbound'} = ${*$ns}{'isconnected'} = 1;
     $ns->getsockinfo;
     unless ($ns->isconnected) {
 	{

@@ -24,7 +24,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.82';
+    $VERSION = '0.84';
 }
 sub Version { "$myclass v$VERSION" }
 
@@ -52,12 +52,17 @@ BEGIN {
 
 # sub AUTOLOAD inherited from Net::Gen
 
-# since 5.003_96 will break simple subroutines with inheritid autoload, cheat
+# since 5.003_96 will break simple subroutines with inherited autoload, cheat
     *AUTOLOAD = $myclass->can('AUTOLOAD');
 }
 
 # Preloaded methods go here.  Autoload methods go after __END__, and are
 # processed by the autosplit program.
+
+# Can't autoload new & init when Net::Gen has then non-autoloaded.  Feh.
+
+sub new { &Net::UNIX::Server::_new }
+sub init { &Net::UNIX::Server::_init }
 
 # No additional sockopts for UNIX-domain sockets (?)
 
@@ -188,7 +193,7 @@ Spider Boardman F<E<lt>spider@Orb.Nashua.NH.USE<gt>>
 #any real autoloaded methods go after this line
 
 
-sub new
+sub _new
 {
     my $whoami = $_[0]->_trace(\@_,1);
     my($class,@Args,$self) = @_;
@@ -199,7 +204,7 @@ sub new
 			      " after sub-new");
     if ($self) {
 	$self->setparams({reuseaddr => 1}, -1);
-	if ($class eq $myclass) {
+	if ($class eq __PACKAGE__) {
 	    unless ($self->init(@Args)) {
 		local $!;	# preserve errno
 		undef $self;	# against the side-effects of this
@@ -212,7 +217,7 @@ sub new
     $self;
 }
 
-sub init			# $self [, $thispath][, \%params]
+sub _init			# $self [, $thispath][, \%params]
 {
     my ($self,@args) = @_;
     return undef unless $self->_init('thispath',@args);
