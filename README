@@ -1,0 +1,78 @@
+What it is:
+
+	modules Net::Gen, Net::Inet, and Net::TCP (so far).
+	Net::Gen is not a good name, I know that, but what's
+	in it really belongs in Socket, I think.  In any case,
+	I'm open to votes for a better name.
+
+	modules yet to come:  Net::UDP, Net::Unix, Net::DECnet,
+	maybe Net::Telnet.
+
+What's different from other offerings:
+
+	Layering keeps PF_INET things in Inet, and only socket-generic
+	stuff is in Gen.
+
+	Friendly {g,s}etsockopt.
+
+	A TIESCALAR interface for really simple socket communications.
+
+	Properly handles connects to hosts with multiple addresses as
+	long as gethostbyname() returns more than one address.  (RFC 1123)
+
+What's still missing:
+
+	Support for non-blocking sockets is untested at best.
+	The select, fhvec, ioctl, and fcntl methods are crude hacks.
+
+	A proper set of regression & verification tests.
+
+	Better direct support for INADDR_{ANY,NONE,BROADCAST}
+	and the equivalents for multicast.  This needs some
+	thought, though, since the current ones work (for me)
+	for simple uses of this suite of packages.
+
+	Probably several other things I won't have missed (yet).
+
+
+The .pm files themselves are pod-ified (somewhat), with a catalogue of
+the methods.  I've found them to be most readable after something like
+
+	pod/pod2man ext/Net/Gen/Gen.pm | nroff -man | less -is
+
+Your mileage may vary.
+
+I'm not a tech. writer, nor do I usually play one on the net.  The
+documentation could still use a lot of work, I'm sure.
+
+Making it work requires perl 5.001 or later.  However, pre-5.002,
+you need to apply the four "official unofficial" patches
+(available from ftp.metronet.com at least) plus the
+pad-lexicals-patch in this archive if you want it to work.
+
+A simple test script:
+
+	#!/usr/bin/perl
+
+	use Net::TCP;
+
+	$f = new Net::TCP 0, 'finger';
+	die "Can't establish finger socket: $!\n" unless $f;
+
+	put $f "-s\n";
+	print $line while defined($line = getline $f);
+	undef $f;
+
+	die "Can't tie to finger socket: $!\n" unless
+		tie $f,Net::TCP,0,'finger';
+
+	$f = "-s\n";
+	print $line while (defined $line=$f);
+	untie $f;
+
+Should be the same (on most BSD-ish systems, anyway) as
+	finger ; finger
+to the shell.
+
+
+Anyway, bug reports & feature requests to me (spider@Orb.Nashua.NH.US).
