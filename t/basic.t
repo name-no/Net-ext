@@ -8,26 +8,44 @@
 # (It may become useful if the test is moved to ./t subdirectory.)
 
 my $loaded;
-BEGIN { $| = 1; print "1..3\n"; $Net::Gen::adebug = 1; $loaded=0;}
-END {
-    print "not ok 1\n" unless $loaded;
-    print "not ok 2\n" unless $loaded > 1;
-    print "not ok 3\n" unless $loaded > 2;
+my $num_tests;
+my $begin_tests;
+BEGIN {
+    $begin_tests = 5;
+    $num_tests = $begin_tests; # for now
+    $loaded = 0;
+    $Net::Gen::adebug = 1;
+    $| = 1;
+    print "1..$num_tests\n";
 }
+END {
+    print "not ok $loaded\n" while $loaded++ < $begin_tests;
+}
+
 use Net::TCP;
 BEGIN {
-$loaded = 1;
-print "ok 1\n";
+    $loaded++;
+    print "ok $loaded\n";
+}
+use Net::TCP::Server;
+BEGIN {
+    $loaded++;
+    print "ok $loaded\n";
 }
 use Net::UDP;
 BEGIN {
-$loaded = 2;
-print "ok 2\n";
+    $loaded++;
+    print "ok $loaded\n";
 }
 use Net::UNIX;
 BEGIN {
-$loaded = 3;
-print "ok 3\n";
+    $loaded++;
+    print "ok $loaded\n";
+}
+use Net::UNIX::Server;
+BEGIN {
+    $loaded++;
+    print "ok $loaded\n";
 }
 
 ######################### End of black magic.

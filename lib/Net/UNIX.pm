@@ -22,7 +22,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.79';
+    $VERSION = '0.80';
 }
 sub Version { "$myclass v$VERSION" }
 
@@ -208,7 +208,7 @@ sub _init			# $self, whatpath[, $path][, \%params]
 {
     my ($self,$what,@args,$path,$parms) = @_;
     if (@args == 1 or @args == 2) {
-	$parms = $args[$#args];
+	$parms = $args[-1];
 	$parms = undef
 	    unless $parms and ref($parms) eq 'HASH';
 	$path = $args[0];
@@ -230,7 +230,7 @@ sub _init			# $self, whatpath[, $path][, \%params]
 	}
 	if ($self->getparams([qw(dstaddr dstaddrlist)],1) > 0) {
 	    return undef unless $self->isconnected or $self->connect or
-		$self->isconnecting;
+		$self->isconnecting and !$self->blocking;
 	}
     }
     $self;
@@ -246,63 +246,6 @@ sub init			# $self [, $destpath][, \%params]
     }
     $self;
 }
-
-1;
-
-# These would have been autoloaded, but AutoLoader doesn't like that yet.
-
-package Net::UNIX::Server;
-
-use vars qw(@ISA);
-
-my $srvpkg;
-BEGIN {
-    $srvpkg = __PACKAGE__;
-    @ISA = $myclass;
-}
-
-sub new
-{
-    my $whoami = $_[0]->_trace(\@_,1);
-    my($class,@Args,$self) = @_;
-    $self = $class->SUPER::new(@Args);
-    ($self || $class)->_trace(\@_,2," self" .
-			      (defined $self ? "=$self" : " undefined") .
-			      " after sub-new");
-    if ($self) {
-	$self->setparams({reuseaddr => 1}, -1);
-	if ($class eq $srvpkg) {
-	    unless ($self->init(@Args)) {
-		local $!;	# preserve errno
-		undef $self;	# against the side-effects of this
-		undef $self;	# another statement needed for unwinding
-	    }
-	}
-    }
-    ($self || $class)->_trace(0,1," returning " .
-			      (defined $self ? "self=$self" : "undefined"));
-    $self;
-}
-
-sub init			# $self [, $thispath][, \%params]
-{
-    my ($self,@args) = @_;
-    unless ($self->_init('thispath',@args)) {
-	local $!;	# preserve returned errno
-	undef $self;	# around the side-effects of close inside of perl
-	return undef;
-    }
-    if ($self->isbound) {
-	unless ($self->isconnected or $self->didlisten or $self->listen) {
-	    local $!;
-	    undef $self;
-	    return undef;
-	}
-    }
-    $self;
-}
-
-package Net::UNIX;		# back to original package for Autoloader
 
 sub connect			# $self [, $destpath] [, \%newparams]
 {
@@ -338,6 +281,12 @@ sub format_addr			# ($class|$obj) , $sockaddr
     }
     $sdata;
 }
+
+1;
+
+# backward-contemptibility
+
+require Net::UNIX::Server;
 
 # autoloaded methods go after the END token (& pod) below
 

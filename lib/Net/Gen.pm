@@ -22,7 +22,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD $adebug);
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.79';
+    $VERSION = '0.80';
 }
 
 sub Version () { "$myclass v$VERSION" }
@@ -45,6 +45,7 @@ BEGIN {
 		    VAL_EAGAIN
 		    RD_NODATA
 		    EOF_NONBLOCK
+		    SOMAXCONN
 		    EINPROGRESS EALREADY ENOTSOCK EDESTADDRREQ
 		    EMSGSIZE EPROTOTYPE ENOPROTOOPT EPROTONOSUPPORT
 		    ESOCKTNOSUPPORT EOPNOTSUPP EPFNOSUPPORT EAFNOSUPPORT
@@ -54,6 +55,7 @@ BEGIN {
 		    ECONNREFUSED EHOSTDOWN EHOSTUNREACH
 		    ENOSR ETIME EBADMSG EPROTO ENODATA ENOSTR
 		    EAGAIN EWOULDBLOCK
+		    ENOENT EINVAL EBADF
 		   );
 
     %EXPORT_TAGS = (
@@ -68,6 +70,7 @@ BEGIN {
 		       ECONNREFUSED EHOSTDOWN EHOSTUNREACH
 		       ENOSR ETIME EBADMSG EPROTO ENODATA ENOSTR
 		       EAGAIN EWOULDBLOCK
+		       ENOENT EINVAL EBADF
 		      )],
 	ALL	=> [@EXPORT, @EXPORT_OK],
     );
@@ -89,9 +92,15 @@ my $nullsub = sub {};		# handy null warning handler
 
 sub AUTOLOAD
 {
-    # This AUTOLOAD is used to 'autoload' constants from the constant()
-    # XS function.  If a constant is not found then control is passed
-    # to the AUTOLOAD in AutoLoader.
+    # This AUTOLOAD is used to validate possible constants from the constant()
+    # XS function.  The implemention of the associated XS file means that
+    # constant() will never actually return with $! == 0, since the defined
+    # constants were already found as XSUBs.  If the constant is missing,
+    # we croak as usual for such things (except for when $nullsub is the
+    # die handler).  If the name isn't known to constant(), but it is known
+    # as a key for setparams/getparams, it will be simulated via _accessor().
+    # Otherwise, control will be passed to the AUTOLOAD in AutoLoader.
+
     my ($constname,$callpkg);
     {				# block to preserve $1,$2,et al.
 	($callpkg,$constname) = $AUTOLOAD =~ /^(.*)::(.*)$/;
@@ -99,6 +108,17 @@ sub AUTOLOAD
     my $val = constant($constname);
     if ($! != 0) {
 	if ($! =~ /Invalid/) {
+	    if (@_ && ref $_[0] && @_ < 3 && exists $_[0]->{Keys}{$constname})
+	    {
+		no strict 'refs';	# allow us to define the sub
+		my $what = $constname;  # don't tie up $constname for closures
+		warn "Auto-generating accessor $AUTOLOAD\n" if $adebug;
+		*$AUTOLOAD = sub {
+		    splice @_, 1, 0, $what;
+		    goto &_accessor;
+		};
+		goto &$AUTOLOAD;
+	    }
 	    warn "Autoloading $AUTOLOAD\n" if $adebug;
 	    $AutoLoader::AUTOLOAD = $AUTOLOAD;
 	    goto &AutoLoader::AUTOLOAD;
@@ -110,6 +130,10 @@ sub AUTOLOAD
 	    croak "Your vendor has not defined $callpkg macro $constname, used";
 	}
     }
+
+    # I don't think we can actually get here any more, but I'm leaving it
+    # in place since I haven't proved it (yet).
+
     no strict 'refs';		# allow various value types in autoload
     unless ($loaded{$AUTOLOAD}) {
 	local($^W) = 0;		# suppress warning for sub redefined, etc.
@@ -233,7 +257,7 @@ sub _debug			# $this [, $newval] ; returns oldval
 sub debug			# $self [, $newval] ; returns oldval
 {
     my ($self,$newval) = @_;
-    my $oldval = $$self{Parms}{'debug'};
+    my $oldval = $$self{Parms}{'debug'} if defined wantarray;
     $self->setparams({'debug'=>$newval}) if defined $newval;
     $oldval;
 }
@@ -265,6 +289,16 @@ my ($F_GETFL,$F_SETFL) =
     eval 'use Fcntl qw(F_GETFL F_SETFL);(F_GETFL,F_SETFL)';
 my $nonblock_flag = eval 'pack("I",VAL_O_NONBLOCK)';
 my $eagain = eval 'VAL_EAGAIN';
+
+sub _accessor			# $self, $what [, $newval] ; returns oldvalue
+{
+    my ($self, $what, $newval) = @_;
+    croak "Usage: \$sock->$what or \$sock->$what(\$newvalue),"
+	if @_ > 3;
+    my $oldval = $self->getparam($what) if defined wantarray;
+    $self->setparams({$what=>$newval}) if @_ > 2;
+    $oldval;
+}
 
 sub _setblocking		# $self, $name, $newval
 {
@@ -304,6 +338,16 @@ sub _setblocking		# $self, $name, $newval
 	}
     }
     '';		# return goodness if got this far
+}
+
+sub blocking			# $self [, $newval] ; returns canonical oldval
+{
+    my ($self, $newval) = @_;
+    croak 'Usage: $sock->blocking or $sock->blocking(0|1),'
+	if @_ > 2;
+    my $oldval = $self->getparam('blocking', 1, 1) if defined wantarray;
+    $self->setparams({'blocking'=>$newval}) if @_ > 1;
+    $oldval;
 }
 
 sub _settimeout			# $self, $what, $newval
@@ -624,7 +668,8 @@ sub open			# $self [, @ignore] ; returns boolean
 
 # Establish a value for SOMAXCONN
 
-eval '&SOMAXCONN()' or eval 'sub SOMAXCONN {5}'; # old bsd default if undefined
+eval '&SOMAXCONN()' or eval 'sub SOMAXCONN () {5}'
+    or eval 'sub SOMAXCONN {5}'; # old bsd default if undefined
 
 # sub listen - autoloaded
 
@@ -632,16 +677,20 @@ sub _tryconnect			# $self, $addr, $timeout ; returns boolean
 {
     my ($self,$addr,$timeout) = @_;
     if ($$self{'isconnecting'}) {
-	$self->stopio;
-	return undef unless $self->open;
-	if ($self->getparam('srcaddr') || $self->getparam('srcaddrlist')
-	    and !$self->isbound) {
-	    return undef unless $self->bind;
+	if ($$self{Parms}{'dstaddr'} && ($$self{Parms}{'dstaddr'} ne $addr)) {
+	    $self->stopio;
+	    return undef unless $self->open;
+	    if ($self->getparam('srcaddr') || $self->getparam('srcaddrlist')
+		and !$self->isbound) {
+		return undef unless $self->bind;
+	    }
 	}
     }
     my $rval = connect($$self{fhref},$addr);
     return $rval if $rval;
-    return $rval unless $! == EWOULDBLOCK or $! == EINPROGRESS;
+    return 1  if $! == EISCONN;
+    return $rval unless $! == EWOULDBLOCK or $! == EINPROGRESS or
+	$! == EAGAIN or $! == EALREADY;
     my $fhvec = $$self{FHVec};
     $$self{'isconnecting'} = 1;
     $$self{Parms}{'dstaddr'} = $addr;
@@ -650,8 +699,11 @@ sub _tryconnect			# $self, $addr, $timeout ; returns boolean
     return $rval unless $nfound;
     $$self{'isconnecting'} = 0;
     # Now, for the black magick of async sockets--re-try the connect
-    # to see whether it already worked.
-    connect($$self{fhref},$addr);
+    # to see whether it already worked.  This is necessary in order to
+    # get the right errno value for failed connections.
+    $rval = connect($$self{fhref},$addr);
+    $rval = 1 if !$rval and $! == EISCONN;
+    $rval;
 }
 
 sub connect			# $self, [@ignored] ; returns boolean
@@ -659,9 +711,8 @@ sub connect			# $self, [@ignored] ; returns boolean
     $_[0]->_trace(\@_,2);
     my $self = shift;
     $self->close if
-	$$self{wasconnected} || $$self{'isconnected'} ||
-	    $$self{'isconnecting'};
-    $$self{wasconnected} = 0;
+	$$self{'wasconnected'} || $$self{'isconnected'};
+    $$self{'wasconnected'} = 0;
     return undef unless $self->isopen or $self->open;
     if ($self->getparam('srcaddr') || $self->getparam('srcaddrlist')
 	and !$self->isbound) {
@@ -676,13 +727,17 @@ sub connect			# $self, [@ignored] ; returns boolean
 	    $self->setparams({'blocking'=>0}) or undef $timeout;
 	}
 	if (defined($$self{Parms}{dstaddrlist}) and
-	    ref($$self{Parms}{dstaddrlist}) eq 'ARRAY') {
+	    ref($$self{Parms}{dstaddrlist}) eq 'ARRAY' and
+	    !$$self{'isconnecting'})
+	{
 	    my $tryaddr;
 	    foreach $tryaddr (@{$$self{Parms}{dstaddrlist}}) {
 		$rval = _tryconnect($self, $tryaddr, $timeout);
-		next unless $rval;
-		$$self{Parms}{dstaddr} = $tryaddr;
-		last;
+		$$self{Parms}{dstaddr} = $tryaddr  if $rval;
+		last if $rval or
+		    defined $timeout && !$timeout
+		    and ($! == EINPROGRESS || $! == EWOULDBLOCK
+			 || $! == EAGAIN || $! == EALREADY);
 	    }
 	}
 	else {
@@ -723,12 +778,12 @@ sub shutdown			# $self [, $how=2] ; returns boolean
     $how = 2 unless
 	defined $how && length $how && $how !~ /\D/ &&
 	    grep($how == $_, 0, 1, 2);
-    my $was = ($$self{wasconnected} |= $how+1);
+    my $was = ($$self{'wasconnected'} |= $how+1);
     my $fhref = $$self{fhref};
     my $rval = shutdown($fhref,$how);
     local $!;	# preserve shutdown()'s errno
     $$self{'isconnecting'} = $$self{'isconnected'} = 0 if $was == 3 or
-	(!defined(getpeername($fhref)) && ($$self{wasconnected} = 3));
+	(!defined(getpeername($fhref)) && ($$self{'wasconnected'} = 3));
     $rval;
 }
 
@@ -741,20 +796,18 @@ sub close			# $self [, @ignored] ; returns boolean
 {
     $_[0]->_trace(\@_,3);
     my $self = shift;
-    return 1 unless $self->isopen;
-    $self->shutdown;
-    @$self{@CloseVars} = ();	# these flags no longer true
-    $self->delparams(\@CloseKeys); # connection values now invalid
-    close($$self{fhref});
+    $self->shutdown if $self->isopen;
+    $self->stopio;
 }
 
 sub stopio			# $self [, @ignored] ; returns boolean
 {
     $_[0]->_trace(\@_,4);
     my $self = shift;
-    # lie to avoid shutdown call
-    $$self{'isconnecting'} = $$self{'isconnected'} = 0;
-    $self->close;
+    @$self{@CloseVars} = ();	# these flags no longer true
+    $self->delparams(\@CloseKeys); # connection values now invalid
+    return 1 unless $self->isopen;
+    close($$self{fhref});
 }
 
 # I/O enries
@@ -762,32 +815,25 @@ sub stopio			# $self [, @ignored] ; returns boolean
 # Warning!  No intercepting of SIGPIPE is done, so the output routines
 # can abort the program.
 
-sub send			# $self, $buf, [$flags] ; returns boolean
+sub send			# $self, $buf, [$flags, [$where]] : boolean
 {
     my $whoami = $_[0]->_trace(\@_,3);
-    my($self,$buf,$flags,$fh) = @_;
+    my($self,$buf,$flags,$whither,$fh) = @_;
     croak "Invalid args to ${whoami}, called"
 	if @_ < 2 or !ref $self or !($fh = $$self{fhref});
     $flags = 0 unless defined $flags;
-    carp "Excess arguments to ${whoami} ignored" if @_ > 3;
-    $self->connect unless $self->isconnected; # send(2) requires connect(2)
+    carp "Excess arguments to ${whoami} ignored" if @_ > 4;
+    # send(2) requires connect(2)
+    $self->connect unless $self->isconnected or defined $whither;
     return getsockopt($fh,SOL_SOCKET,SO_TYPE) unless
 	$self->isopen;		# generate EBADF return if not open
-    send($fh, $buf, $flags);
+    defined $whither
+	? send($fh, $buf, $flags, $whither)
+	: send($fh, $buf, $flags);
 }
 
-sub sendto			# $self, $buf, $where, [$flags] ; returns bool
-{
-    my $whoami = $_[0]->_trace(\@_,3);
-    my($self,$buf,$where,$flags,$fh) = @_;
-    croak "Invalid args to ${whoami}, called"
-	if @_ < 3 or !ref $self or !($fh = $$self{fhref});
-    $flags = 0 unless defined $flags;
-    carp "Excess arguments to ${whoami} ignored" if @_ > 4;
-    return getsockopt($fh,SOL_SOCKET,SO_TYPE) unless
-	$self->isopen or $self->open;	# generate EBADF return if not open
-    CORE::send($fh, $buf, $flags, $where);
-}
+sub SEND;
+*SEND = \&send;
 
 sub put				# $self, @stuff ; returns boolean
 {
@@ -804,23 +850,25 @@ sub print;			# avoid -w error
 sub ckeof			# $self ; returns boolean
 {
     my $saverr = $!+0;
+    local $!;			# preserve this over fcntl() and such
     my $whoami = $_[0]->_trace(\@_,3);
     my($self) = @_;
     my($fh);
     croak "Invalid args to ${whoami}, called"
 	if !@_ or !ref $self or !($fh = $$self{fhref});
+    # Bug out if we shouldn't have been called.
+    return 1 if EOF_NONBLOCK or $saverr != $eagain;
     # Bug out early if not a socket where EOF is possible.
     return 0
 	unless unpack('I',getsockopt($fh,SOL_SOCKET,SO_TYPE)) == SOCK_STREAM;
     # See whether need to test for non-blocking status.
-    unless (EOF_NONBLOCK) {
-	my $flags = ($F_GETFL ? fcntl($fh,$F_GETFL,0+0) : undef);
-	if (((defined($flags) && defined($nonblock_flag)) ?
-		($flags & $nonblock_flag) : 1)
-	    && ($saverr == $eagain)) {
-	    # *sigh* -- no way to tell, here
-	    return 0;
-	}
+    my $flags = ($F_GETFL ? fcntl($fh,$F_GETFL,0+0) : undef);
+    if ((defined($flags) && defined($nonblock_flag))
+	? ($flags & VAL_O_NONBLOCK)
+	: 1)
+    {
+	# *sigh* -- no way to tell, here
+	return 0;
     }
     1;				# wrong errno or blocking
 }
@@ -899,10 +947,7 @@ sub getline			# $self ; returns like scalar(<$fhandle>)
 	if (defined($buf)) {
 	    return $buf
 	}
-	if (defined($rval)) {
-	    return $rval
-	}
-	return undef;
+	return $rval
     }
     my $sep = $/;		# get the current separator
     $sep = "\n\n" if $sep eq ''; # account for paragraph mode
@@ -929,7 +974,7 @@ sub getline			# $self ; returns like scalar(<$fhandle>)
     }
 }
 
-sub gets;			# an alias for FileHandle:: or IO:: compat.
+sub gets;			# an alias for FileHandle:: or POSIX:: compat.
 *gets = \&getline;
 
 sub DESTROY
@@ -953,6 +998,12 @@ sub isconnecting		# $self [, @ignored] ; returns boolean
 {
     #$_[0]->_trace(\@_,4," - ".($_[0]->{'isconnecting'} ? "yes" : "no"));
     $_[0]->{'isconnecting'};
+}
+
+sub wasconnected		# $self [, @ignored] ; returns boolean
+{
+    #$_[0]->_trace(\@_,4," - ".($_[0]->{'wasconnected'} ? "yes" : "no"));
+    $_[0]->{'wasconnected'};
 }
 
 sub isbound			# $self [, @ignored] ; returns boolean
@@ -1037,6 +1088,13 @@ C<TIEHANDLE>
 
 C<FETCH>, C<STORE>, C<TIESCALAR>
 
+=item Accessors
+
+Any of the I<keys> known to the C<getparam> and C<setparams> methods
+may be used as an I<accessor> function.  See L<"Known Object Parameters">
+below, and the related sections in the derived classes.  For an example,
+see L</blocking> below.
+
 =back
 
 The descriptions, listed alphabetically:
@@ -1090,6 +1148,25 @@ the foregoing discussion, you may be in trouble.  Don't panic
 until you've checked the discussion of binding in the derived
 class you're using, however.
 
+=item blocking
+
+Usage:
+
+    $isblocking = $obj->blocking;
+    $oldblocking = $obj->blocking($newvalue);
+
+The C<blocking> method is an example of an I<accessor> method.  The
+above usage examples are (morally) equivalent to the following calls,
+respectively:
+
+    $isblocking = $obj->getparam('blocking');
+
+    $oldblocking = $obj->getparam('blocking');
+    $obj->setparams({blocking=>$newvalue});
+
+The C<getparam> method call is skipped if the accessor method was
+called in void context.
+
 =item checkparams
 
 Usage:
@@ -1131,8 +1208,12 @@ Usage:
 
     $ok = $obj->connect;
 
-Attempts to establish a connection for the object.  First, if the
-object is currently connected (or connecting) or has been connected since the
+Attempts to establish a connection for the object.
+[Note the special information for re-trying connects on non-blocking sockets,
+later in this section.]
+
+First, if the
+object is currently connected or has been connected since the
 last time it was opened, its C<close> method is called.  Then, if
 the object is not currently open, its C<open> method is called.
 If it's not open after that, C<undef> is returned.  If it is
@@ -1158,10 +1239,20 @@ blocking (which is the default), the timeout period is strictly at the
 mercy of you operating system.  If there is no C<timeout> parameter and the
 socket is non-blocking, that's effectively the same as having a C<timeout>
 parameter value of C<0>.  If there is a C<timeout> parameter, the socket
-is made non-blocking temporarily (see L</"param_saver"> below), and the
+is made non-blocking temporarily (see L<"param_saver"> below), and the
 indicated timeout value will be used to limit the connection attempt.  An
 attempt is made to preserve any meaningful $! values when all connection
-attempts have failed.
+attempts have failed.  In particular, if the C<timeout> parameter is 0,
+then each failed connect returns without completing the processing of
+the C<dstaddrlist> object parameter.  This is so that the re-try logic
+for connections in progress will be more useful.
+
+If, on entry to the C<connect> method, the object is already marked as
+having a connection in progress (C<$obj->isconnecting> returns true),
+then the connection will be re-tried with a timeout of 0 to see whether it
+has succeeded in the meanwhile.  The appropriate success/fail condition
+for that check will be returned, with no further processing of the
+C<dstaddrlist> object parameter.
 
 Note that the derived classes tend to provide additional
 capabilities which make the C<connect> method easier to use than
@@ -1411,7 +1502,7 @@ Usage:
 Returns the unpacked values from a call to the getsockopt()
 builtin.  In order to do the unpacking, the socket option must
 have been registered with the object.  See the additional discussion of
-socket options below in L</initsockopts>.
+socket options in L</initsockopts> below.
 
 Since registered socket options are known by name as well as by
 their level and option values, it is possible to make calls using
@@ -1477,8 +1568,10 @@ Usage:
 
 Returns true if the object's C<connect> method has been used
 with a timeout or on a non-blocking socket, and the connect() did
-not complete.  (In other words, the failure from the connect() builtin
-indicated that the operation was still in progress.)
+not complete.  In other words, the failure from the connect() builtin
+indicated that the operation was still in progress.  A rejected
+connection or a connection which exceeded the operating system's timeout
+is said to have completed unsuccessfully, rather than not to have completed.
 
 =item isopen
 
@@ -1702,11 +1795,13 @@ checking just one of the three possible conditions.
 
 =item SEND
 
+=item send
+
 Usage:
 
-    $ok = $obj->SEND($buffer, $flags, $destsockaddr);
-    $ok = $obj->SEND($buffer, $flags);
-    $ok = $obj->SEND($buffer);
+    $ok = $obj->send($buffer, $flags, $destsockaddr);
+    $ok = $obj->send($buffer, $flags);
+    $ok = $obj->send($buffer);
 
 This method calls the send() builtin (three- or four-argument
 form).  The C<$flags> parameter is defaulted to 0 if not supplied.
@@ -1714,18 +1809,6 @@ If the C<$destsockaddr> value is missing or undefined, the three-
 argument form of the send() builtin will be used.  A defined
 C<$destsockaddr> will result in a four-argument send() call.
 The return value from the send() builtin is returned.  This method
-makes no attempt to trap C<SIGPIPE>.
-
-=item send
-
-Usage:
-
-    $ok = $obj->send($buffer, $flags);
-    $ok = $obj->send($buffer);
-
-This method calls the send() builtin (three-argument form).  The
-C<$flags> parameter is defaulted to 0 if not supplied.  The
-return value from the send() builtin is returned.  This method
 makes no attempt to trap C<SIGPIPE>.
 
 =item sendto
@@ -1860,6 +1943,16 @@ method, in order to ensure that any previous binding is removed.
 Even if the object is connected, the C<srcaddrlist> object
 parameter is removed (via the object's C<delparams> method).  The
 return value from this method is indeterminate.
+
+=item wasconnected
+
+Usage:
+
+    $was = $obj->wasconnected;
+
+Returns true for if the object has had a successful connect() completion
+since it was last opened.  Returns false after a close() or on a new
+object.
 
 =back
 
@@ -2103,7 +2196,7 @@ The inverse of pack_sockaddr().
 
 =item E*
 
-Various socket-related C<errno> values.  See L</":errnos"> for the list.
+Various socket-related C<errno> values.  See L<":errnos"> for the list.
 These routines will always be defined, but they will return 0 if the
 corresponding error symbol was not found on your system.
 
@@ -2155,11 +2248,12 @@ None.
 
 C<VAL_O_NONBLOCK> C<VAL_EAGAIN> C<RD_NODATA> C<EOF_NONBLOCK>
 C<pack_sockaddr> C<unpack_sockaddr>
+C<SOMAXCONN>
 C<EADDRINUSE> C<EADDRNOTAVAIL> C<EAFNOSUPPORT> C<EAGAIN>
-C<EALREADY> C<EBADMSG> C<ECONNABORTED> C<ECONNREFUSED>
+C<EALREADY> C<EBADF> C<EBADMSG> C<ECONNABORTED> C<ECONNREFUSED>
 C<ECONNRESET> C<EDESTADDRREQ> C<EHOSTDOWN> C<EHOSTUNREACH>
-C<EINPROGRESS> C<EISCONN> C<EMSGSIZE> C<ENETDOWN> C<ENETRESET>
-C<ENETUNREACH> C<ENOBUFS> C<ENODATA> C<ENOPROTOOPT> C<ENOSR>
+C<EINPROGRESS> C<EINVAL> C<EISCONN> C<EMSGSIZE> C<ENETDOWN> C<ENETRESET>
+C<ENETUNREACH> C<ENOBUFS> C<ENODATA> C<ENOENT> C<ENOPROTOOPT> C<ENOSR>
 C<ENOSTR> C<ENOTCONN> C<ENOTSOCK> C<EOPNOTSUPP> C<EPFNOSUPPORT>
 C<EPROTO> C<EPROTONOSUPPORT> C<EPROTOTYPE> C<ESHUTDOWN>
 C<ESOCKTNOSUPPORT> C<ETIME> C<ETIMEDOUT> C<ETOOMANYREFS> C<EWOULDBLOCK>
@@ -2182,10 +2276,10 @@ C<pack_sockaddr> C<unpack_sockaddr>
 =item :errnos
 
 C<EADDRINUSE> C<EADDRNOTAVAIL> C<EAFNOSUPPORT> C<EAGAIN>
-C<EALREADY> C<EBADMSG> C<ECONNABORTED> C<ECONNREFUSED>
+C<EALREADY> C<EBADF> C<EBADMSG> C<ECONNABORTED> C<ECONNREFUSED>
 C<ECONNRESET> C<EDESTADDRREQ> C<EHOSTDOWN> C<EHOSTUNREACH>
-C<EINPROGRESS> C<EISCONN> C<EMSGSIZE> C<ENETDOWN> C<ENETRESET>
-C<ENETUNREACH> C<ENOBUFS> C<ENODATA> C<ENOPROTOOPT> C<ENOSR>
+C<EINPROGRESS> C<EINVAL> C<EISCONN> C<EMSGSIZE> C<ENETDOWN> C<ENETRESET>
+C<ENETUNREACH> C<ENOBUFS> C<ENODATA> C<ENOENT> C<ENOPROTOOPT> C<ENOSR>
 C<ENOSTR> C<ENOTCONN> C<ENOTSOCK> C<EOPNOTSUPP> C<EPFNOSUPPORT>
 C<EPROTO> C<EPROTONOSUPPORT> C<EPROTOTYPE> C<ESHUTDOWN>
 C<ESOCKTNOSUPPORT> C<ETIME> C<ETIMEDOUT> C<ETOOMANYREFS> C<EWOULDBLOCK>
@@ -2232,7 +2326,7 @@ sub bind			# $self [, @ignored] ; returns boolean
     $_[0]->_trace(\@_,2);
     my $self = shift;
     $self->close if
-	$$self{wasconnected} || $self->isconnected || $self->isconnecting ||
+	$self->wasconnected || $self->isconnected || $self->isconnecting ||
 	    $self->isbound;
     return $$self{'isbound'} = undef unless $self->isopen or $self->open;
     $self->setsopt('SO_REUSEADDR', 1) if $$self{Parms}{reuseaddr};
@@ -2253,6 +2347,7 @@ sub bind			# $self [, @ignored] ; returns boolean
 	$rval = bind($$self{fhref}, pack_sockaddr($$self{Parms}{AF},''));
     }
     $$self{'isbound'} = $rval;
+    return $rval unless $rval;
     $self->getsockinfo;
     $self->isbound;
 }
@@ -2666,17 +2761,15 @@ sub READLINE			# $self
     @lines;
 }
 
-sub SEND			# $self, $buf [,$flags] [,$where] ; bool
+sub sendto			# $self, $buf, $where, [$flags] ; returns bool
 {
     my $whoami = $_[0]->_trace(\@_,3);
-    my ($self,$buf,$flags,$where,$fh) = @_;
+    my($self,$buf,$whither,$flags,$fh) = @_;
     croak "Invalid args to ${whoami}, called"
-	if @_ < 2 or !ref $self or !($fh = $$self{fhref});
+	if @_ < 3 or !ref $self or !($fh = $$self{fhref});
     $flags = 0 unless defined $flags;
     carp "Excess arguments to ${whoami} ignored" if @_ > 4;
     return getsockopt($fh,SOL_SOCKET,SO_TYPE) unless
-	$self->isopen or $self->open;	# EBADF error unless open
-    (defined $where) ?
-	CORE::send($fh, $buf, $flags, $where) :
-	CORE::send($fh, $buf, $flags);
+	$self->isopen or $self->open;	# generate EBADF return if not open
+    CORE::send($fh, $buf, $flags, $whither);
 }

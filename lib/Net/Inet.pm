@@ -23,14 +23,14 @@ my $myclass;
 
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.79';
+    $VERSION = '0.80';
 }
 
 sub Version () { "$myclass v$VERSION" }
 
 use AutoLoader;
 #use Exporter ();
-use Net::Gen 0.79 qw(:ALL);
+use Net::Gen 0.80 qw(:ALL);
 use Socket qw(!/^[a-z]/ /^inet_/);
 
 BEGIN {
@@ -293,10 +293,10 @@ BEGIN {
 
 }
 
-;# sub AUTOLOAD inherited from Net::Gen
+# sub AUTOLOAD inherited from Net::Gen
 
-;# inherited autoload for 'regular' subroutines is being removed in
-;# 5.003_96, so cheat a little.
+# inherited autoload for 'regular' subroutines is being removed in
+# 5.003_96, so cheat a little.
 
 BEGIN { *AUTOLOAD = $myclass->can('AUTOLOAD') }
 
@@ -336,6 +336,7 @@ $myclass->initsockopts( IPPROTO_IP(), \%sockopts );
 
 sub htonl			# number ; number // or array of same
 {
+    return unless defined wantarray;
     carp "Wrong number of arguments ($#_) to ${myclass}::htonl, called"
 	if @_ != 1 and !wantarray;
     unpack('N*', pack('L*', @_));
@@ -343,6 +344,7 @@ sub htonl			# number ; number // or array of same
 
 sub htons			# number ; number // or array of same
 {
+    return unless defined wantarray;
     carp "Wrong number of arguments ($#_) to ${myclass}::htons, called"
 	if @_ != 1 and !wantarray;
     unpack('n*', pack('S*', @_));
@@ -350,6 +352,7 @@ sub htons			# number ; number // or array of same
 
 sub ntohl			# number ; number // or array of same
 {
+    return unless defined wantarray;
     carp "Wrong number of arguments ($#_) to ${myclass}::ntohl, called"
 	if @_ != 1 and !wantarray;
     unpack('L*', pack('N*', @_));
@@ -357,35 +360,27 @@ sub ntohl			# number ; number // or array of same
 
 sub ntohs			# number ; number // or array of same
 {
+    return unless defined wantarray;
     carp "Wrong number of arguments ($#_) to ${myclass}::ntohs, called"
 	if @_ != 1 and !wantarray;
     unpack('S*', pack('n*', @_));
 }
 
-;# removed inet_ntoa that was here -- the one in Socket is good enough for me
+# removed inet_ntoa that was here -- the one in Socket is good enough for me
 
 sub pack_sockaddr_in ($$;$)	# [$family,] $port, $in_addr
 {
-    my(@args) = @_;
-    unshift(@args,AF_INET) if @args == 2;
-    pack_sockaddr($args[0],
-		  (unpack_sockaddr(Socket::pack_sockaddr_in($args[1],
-							    $args[2])))[1]
-		  );
+    unshift(@_,AF_INET) if @_ == 2;
+    _pack_sockaddr_in($_[0], $_[1], $_[2]);
 }
 
-sub unpack_sockaddr_in ($)	# $sockaddr_in; returns ($fam,$port,$in_addr)
-{
-    my ($fam,$port,$inaddr);
-    ($fam) = unpack_sockaddr($_[0]);
-    ($port,$inaddr) = Socket::unpack_sockaddr_in($_[0]);
-    ($fam,$port,$inaddr);
-}
+# sub unpack_sockaddr_in is in XS code
 
-;# Get the prototypes right for the autoloaded values, to avoid confusing
-;# the caller's code with changes in prototypes.
 
-;# sub inet_aton in Socket.xs
+# Get the prototypes right for the autoloaded values, to avoid confusing
+# the caller's code with changes in prototypes.
+
+# sub inet_aton in Socket.xs
 
 sub inet_addr;			# (helps with -w)
 BEGIN {
@@ -467,14 +462,14 @@ sub new				# $class, [\%params]
 	    }
 	}
 	if ($self) {
-	    $self->_trace([],1," returning self=$self");
+	    $self->_trace(0,1," returning self=$self");
 	}
 	else {
-	    $class->_trace([],1," returning self=(undef)");
+	    $class->_trace(0,1," returning self=(undef)");
 	}
     }
     else {
-	$class->_trace([],1," returning self=(undef)");
+	$class->_trace(0,1," returning self=(undef)");
     }
     $self;
 }
@@ -524,7 +519,8 @@ sub init			# $self, [\%params || @speclist]
     if ($self->getparam('dstaddrlist')) {
 	# have enough object already to attempt the connection
 	return undef unless $self->connect or
-	    $self->isconnecting;	# make no less object than requested
+	    $self->isconnecting and !$self->blocking;
+	# make no less object than requested
     }
     # I think this is all we need here ?
     $self;
@@ -622,8 +618,8 @@ sub _sethost			# $self,$key,$newval
     '';				# return nullstring for goodness
 }
 
-;# These port assignments were generated from IANA's list of assigned ports
-;# as of 1997/05/17.
+# These port assignments were generated from IANA's list of assigned ports
+# as of 1997/05/17.
 
 my %udp_ports;
 
@@ -3689,13 +3685,13 @@ sub _setproto			# $this, $key, $newval
     return "Unknown protocol ($newval), seen"
 	unless defined $proto;
     unless (defined $pname) {
-	if ($proto == &IPPROTO_UDP) {
+	if ($proto == IPPROTO_UDP) {
 	    $pname = 'udp';
 	}
-	elsif ($proto == &IPPROTO_TCP) {
+	elsif ($proto == IPPROTO_TCP) {
 	    $pname = 'tcp';
 	}
-	elsif ($proto == &IPPROTO_ICMP) {
+	elsif ($proto == IPPROTO_ICMP) {
 	    $pname = 'icmp';
 	}
     }
@@ -3793,7 +3789,8 @@ the parameter validation it needs in the object before allowing
 the validation.)  Otherwise, it will cause the parameters to be
 validated by calling its C<init> method.  In particular, this
 means that if both a host and a service are given, then an object
-will only be returned if a connect() call was successful.
+will only be returned if a connect() call was successful, or if
+the object is non-blocking and a connect() call is in progress.
 
 =item init
 
@@ -3898,9 +3895,14 @@ updating more object parameters, it behaves the same as that in
 the base class.  The additional object parameters which get set
 are C<lcladdr>, C<lclhost>, C<lclport>, C<lclservice>,
 C<remaddr>, C<remhost>, C<remport>, and C<remservice>.  (They are
-described in L</"Known Object Parameters"> below.)
+described in L<"Known Object Parameters"> below.)
 
 =back
+
+There are also various I<accessor> methods for the object parameters.
+See L<Net::Gen/Accessors> for calling details.
+See L<"Known Object Parameters"> below
+for those defined by this class.
 
 =head2 Protected Methods
 
@@ -4140,7 +4142,7 @@ Returns the address family, port, and packed C<struct in_addr>
 from the supplied packed C<struct sockaddr_in>.  This is the
 inverse of pack_sockaddr_in().  This differs from the
 implementation in the C<Socket> module in that the C<$family>
-value from the socket address is returned.
+value from the socket address is returned (and might not be AF_INET).
 
 =item INADDR_UNSPEC_GROUP
 
@@ -4203,7 +4205,7 @@ the information on IP options in RFC 791.
 =item ...
 
 Other constants which relate to parts of IP or ICMP headers or
-vendor-defined socket options, as listed in L</"Exports"> below.
+vendor-defined socket options, as listed in L<"Exports"> below.
 
 =back
 

@@ -1,5 +1,5 @@
 (^|/)(RCS|CVS|SCCS)$
-^IANA$
+^IANA
 \,v$
 ^[Mm]akefile$
 ^[Mm]akefile\.aperl$

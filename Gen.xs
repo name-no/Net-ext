@@ -661,6 +661,84 @@ bool
 ICMP_INFOTYPE(icmp_code)
 	U8	icmp_code
 
+SV *
+_pack_sockaddr_in(family,port,address)
+	U8	family
+	U16	port
+	SV *	address
+    PREINIT:
+	struct sockaddr_in sin;
+	char * adata;
+	STRLEN adlen;
+    CODE:
+	Zero(&sin, sizeof sin, char);
+	sin.sin_family = family;
+	adata = SvPV(address, adlen);
+	sin.sin_port = htons(port);
+	if (adlen == sizeof sin.sin_addr) {
+	    Copy(adata, &sin.sin_addr, sizeof sin.sin_addr, char);
+	    ST(0) = sv_2mortal(newSVpv((char*)&sin, sizeof sin));
+	}
+	else {
+	    SV *adsv = sv_2mortal(newSVpv((char*)&sin,
+					  STRUCT_OFFSET(struct sockaddr_in,
+							sin_addr)));
+	    sv_catpvn(adsv, adata, adlen);
+	    ST(0) = adsv;
+	}
+
+void
+unpack_sockaddr_in(sad)
+	SV *	sad
+    PREINIT:
+	char *	cp;
+	struct sockaddr_in sin;
+	STRLEN	len;
+    PPCODE:
+	if ((cp = SvPV(sad, len)) != (char*)0 && len >= sizeof sin) {
+	    U16  family;
+	    U16  port;
+	    char * adata;
+	    STRLEN addrlen;
+
+	    Copy(cp, &sin, sizeof sin, char);
+	    family = sin.sin_family;
+	    if (family > 255) {	/* 4.4BSD anyone? */
+		U8 famlen1, famlen2;
+		famlen1 = family & 255;
+		famlen2 = (family >> 8) & 255;
+		if (famlen1 == famlen2) {
+		    family = famlen1;
+		}
+		else if (famlen1 == len) {
+		    family = famlen2;
+		}
+		else if (famlen2 == len) {
+		    family = famlen1;
+		}
+		else if (famlen1 == AF_INET || famlen2 == AF_INET) {
+		    family = AF_INET;
+		}
+		else if (famlen1 < famlen2) {
+		    family = famlen1;
+		}
+		else {
+		    family = famlen2;
+		}
+	    }
+	    port = ntohs(sin.sin_port);
+	    /* now work on the address */
+	    cp += STRUCT_OFFSET(struct sockaddr_in, sin_addr);
+	    addrlen = len - STRUCT_OFFSET(struct sockaddr_in, sin_addr);
+	    if (family == AF_INET && len == sizeof sin)
+		addrlen = sizeof sin.sin_addr;
+
+	    EXTEND(sp,3);
+	    PUSHs(sv_2mortal(newSViv((IV)family)));
+	    PUSHs(sv_2mortal(newSViv((IV)port)));
+	    PUSHs(sv_2mortal(newSVpv(cp, addrlen)));
+	}
+
 
 MODULE = Net::Gen		PACKAGE = Net::Gen	PREFIX = f_ic_
 
@@ -685,6 +763,9 @@ BOOT:
 #ifdef	VAL_EAGAIN
 	newXSconstUV("Net::Gen::VAL_EAGAIN", VAL_EAGAIN, file);
 #endif
+	newXSconstUV("Net::Gen::ENOENT", ENOENT, file);
+	newXSconstUV("Net::Gen::EINVAL", EINVAL, file);
+	newXSconstUV("Net::Gen::EBADF", EBADF, file);
 	newXSconstUV("Net::Gen::EAGAIN", EAGAIN, file);
 	newXSconstUV("Net::Gen::EWOULDBLOCK", EWOULDBLOCK, file);
 	newXSconstUV("Net::Gen::EINPROGRESS", EINPROGRESS, file);

@@ -1,3 +1,31 @@
+Released as 0.80.  Next release will re-implement with a different internal
+representation.  Be warned.  Use the documented interfaces only.
+
+Sat Dec  6 06:05:01 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/UNIX/Server.pm: split off from UNIX.pm.
+
+	* lib/Net/TCP/Server.pm: split off from TCP.pm.
+
+	* Gen.xs:   Added ENOENT, EINVAL, and EBADF to the errnos.
+	Reverted to XS for unpack_sockaddr_in and _pack_sockaddr_in.
+
+	* lib/Net/Inet.pm: Made ->init's acceptance of ->isconnecting
+ 	conditional on being non-blocking.  Revert to XS help for
+	unpack_sockaddr_in and pack_sockaddr_in.
+
+	* lib/Net/UNIX.pm: Made ->init's acceptance of ->isconnecting
+	conditional on being non-blocking.
+
+	* lib/Net/Gen.pm: Add accessor function simulation to AUTOLOAD
+ 	with the use of the new _accessor() routine.  Now single-key
+ 	setparam & getparam calls are even easier.
+	[Example: $self->timeout(20)]
+	Added ->wasconnected.  Made ->connect re-try for ->isconnecting
+	sockets.  Made timeout of 0 try only one address.  Merged ->send
+	and ->SEND.  Made ->sendto autoloaded.  Added EINVAL, EBADF, and
+	ENOENT to the :errnos list.
+
 Released as 0.79.
 
 Wed Nov 26 00:57:12 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>

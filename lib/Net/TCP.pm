@@ -22,7 +22,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.79';
+    $VERSION = '0.80';
 }
 sub Version () { "$myclass v$VERSION" }
 
@@ -161,59 +161,10 @@ sub _addrinfo			# $this, $sockaddr, [numeric_only]
 }
 
 
-package Net::TCP::Server;	# here to ease creating server sockets
+# backward-contemptibility
 
-@Net::TCP::Server::ISA = qw(Net::TCP);
+require Net::TCP::Server;
 
-my $svclass = __PACKAGE__;
-
-# When autosplit/autoload & inherticance work together,
-# every routine in this (sub-)class should be autoloaded.
-# Problem is, AutoLoader won't let me mix packages, so this class can't
-# autoload right now.
-
-sub new				# classname, [[hostspec,] service,] [\%params]
-{
-    $_[0]->_trace(\@_,1);
-    my ($xclass, @Args) = @_;
-    if (@Args == 2 && ref $Args[1] && ref($Args[1]) eq 'HASH' or
-	@Args == 1 and not ref $Args[0]) {
-	unshift(@Args, undef);	# thishost spec
-    }
-    my $self = $xclass->SUPER::new(@Args);
-    return undef unless $self;
-    $self->setparams({reuseaddr => 1}, -1);
-    if ($xclass eq $svclass) {
-	unless ($self->init(@Args)) {
-	    local $!;		# protect returned errno value
-	    undef $self;	# against excess closes in perl core
-	    undef $self;	# another statement needed for sequencing
-	}
-    }
-    $self;
-}
-
-sub init			# $self, [@stuff] ; returns updated $self
-{
-    my ($self, @Args) = @_;
-    if (@Args == 2 && ref $Args[1] && ref $Args[1] eq 'HASH' or
-	@Args == 1 and not ref $Args[0]) {
-	unshift(@Args, undef);	# thishost spec
-    }
-    return unless $self->_hostport('this',\@Args);
-    return unless $self->SUPER::init;
-    if ($self->getparam('srcaddrlist') && !$self->isbound) {
-	return unless $self->bind;
-    }
-    if ($self->isbound && !$self->didlisten) {
-	return unless $self->listen;
-    }
-    $self;
-}
-
-# maybe someday add some fork+accept handling here
-
-package Net::TCP;		# back to starting package for autosplit
 
 1;
 
@@ -263,40 +214,8 @@ the validation.)  Otherwise, it will cause the parameters to be
 validated by calling its C<init> method, which C<Net::TCP>
 inherits from C<Net::Inet>.  In particular, this means that if
 both a host and a service are given, then an object will only be
-returned if a connect() call was successful.
-
-=item Server::new
-
-Usage:
-
-    $obj = new Net::TCP::Server $service;
-    $obj = new Net::TCP::Server $service, \%parameters;
-    $obj = new Net::TCP::Server $lcladdr, $service, \%parameters;
-
-Returns a newly-initialised object of the given class.  This is
-much like the regular C<new> method, except that it makes it easier
-to specify just a service name or port number, and it automatically
-does a setsockopt() call to set C<SO_REUSEADDR> to make the bind() more
-likely to succeed.
-
-Simple example for server setup:
-
-    $lh = new Net::TCP::Server 7788 or die;
-    while ($sh = $lh->accept) {
-	defined($pid=fork) or die "fork: $!\n";
-	if ($pid) {		# parent doesn't need client fh
-	    $sh->stopio;
-	    next;
-	}
-	# child doesn't need listener fh
-	$lh->stopio;
-	# do per-connection stuff here
-	exit;
-    }
-
-Note that signal-handling for the child processes is not included in this
-example.  A sample server will be included in the final kit which will show how
-to manage the subprocesses.
+returned if a connect() call was successful (or is still in progress,
+if the object is non-blocking).
 
 =back
 
@@ -331,7 +250,7 @@ mentioned in connection with this module.
 Example:
 
     tie $x,Net::TCP,0,'finger' or die;
-    $x = "-s\n";
+    $x = "-s\015\012";
     print $y while defined($y = $x);
     untie $x;
 

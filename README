@@ -25,11 +25,10 @@ What's still missing:
 
 	A proper set of regression & verification tests.
 
-	Proper handling of timeout options.
-
-	Finished integration with 5.003_13 & later features.  (Mostly
-	only the partial tied filehandle support is missing now, I
-	think.)
+	Proper handling of timeout options.  Timed connect() seems
+	to be working now, but there's no direct support for, say,
+	sending as much of a block of data as possible in a given
+	timeout period.
 
 	Configuration testing to get the include files right on more
 	systems, and to manage to find the constants which at least some
@@ -60,7 +59,7 @@ A simple test script:
 	$f = new Net::TCP 0, 'finger';
 	die "Can't establish finger socket: $!\n" unless $f;
 
-	put $f "-s\n";
+	put $f "-s\015\012";
 	$f->shutdown(1);
 	print $line while defined($line = getline $f);
 	undef $f;
@@ -86,6 +85,10 @@ If it doesn't build (yet) on your system/configuration/version, see if
 you can figure out why, following those guidelines.  Future users will
 thank you, too.
 
+Finally, the next release point of this code will be making major changes
+to the internal implementation.  Be warned.  If you're sticking to the
+documented interfaces the way you should be doing, it shouldn't matter
+to you.
 
 # Copyright 1995,1996,1997 Spider Boardman.
 # All rights reserved.
