@@ -75,7 +75,11 @@ extern "C" {
 #endif
 #endif
 
+#if !defined(SUBVERSION) && !defined(PATCHLEVEL)
+#include <patchlevel.h>
+#endif
 #if (PATCHLEVEL < 5) && (SUBVERSION < 5)
+#define	PL_dowarn	dowarn
 #define	PL_sv_no	sv_no
 #define	PL_sv_undef	sv_undef
 #endif

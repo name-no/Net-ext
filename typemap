@@ -16,7 +16,7 @@ sv_inaddr_t		T_INADDR
 #############################################################################
 INPUT
 T_UV
-	$var = ($type)((dowarn && (($type)SvUV($arg)) != SvUV($arg)) ?
+	$var = ($type)((PL_dowarn && (($type)SvUV($arg)) != SvUV($arg)) ?
 		(warn (\"${Package}::$func_name - $var argument truncated\"),
 			SvUV($arg))
 		: SvUV($arg))
