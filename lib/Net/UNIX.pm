@@ -24,7 +24,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD);
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.85';
+    $VERSION = '0.86';
 }
 sub Version { "$myclass v$VERSION" }
 
@@ -314,7 +314,7 @@ is part of the same distribution.
 =head2 Public Methods
 
 The following methods are provided by the C<Net::UNIX> module
-    itself, rather than just being inherited from C<Net::Gen>.
+itself, rather than just being inherited from C<Net::Gen>.
 
 =over
 
@@ -346,17 +346,6 @@ are occasional problems with the indirect object syntax, which
 tend to be rather obscure when encountered.  See
 F<E<lt>URL:http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.htmlE<gt>>
 for details.
-
-=item Server::new
-
-Usage:
-
-    $obj = new Net::UNIX::Server $pathname;
-    $obj = new Net::UNIX::Server $pathname, \%parameters;
-
-Returns a newly-initialised object of the given class.  This is
-much like the regular C<new> method, except that it does a
-C<bind> rather than a C<connect>, and it does a C<listen>.
 
 =item init
 

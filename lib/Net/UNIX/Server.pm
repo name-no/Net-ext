@@ -24,7 +24,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD);
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.85';
+    $VERSION = '0.86';
 }
 sub Version { "$myclass v$VERSION" }
 
@@ -152,7 +152,7 @@ much like the regular C<new> methods of other modules in this
 distribution, except that it does a
 C<bind> rather than a C<connect>, and it does a C<listen>.  Unless
 specified otherwise with a C<type> object parameter, the underlying
-socket will be a datagram socket.
+socket will be a datagram socket (C<SOCK_DGRAM>).
 
 The examples above show the indirect object syntax which many prefer,
 as well as the guaranteed-to-be-safe static method call.  There
@@ -160,6 +160,15 @@ are occasional problems with the indirect object syntax, which
 tend to be rather obscure when encountered.  See
 F<E<lt>URL:http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.htmlE<gt>>
 for details.
+
+See L<Net::TCP::Server> for an example of running a server.  The
+differences are only in the module names and the fact that UNIX-domain
+sockets bind to a pathname rather than to a port number.  Of course,
+that example is for stream (C<type = SOCK_STREAM>) sockets rather than
+for datagrams.  UNIX-domain datagram sockets don't need to do an
+accept() (and can't where I've tested this code), and can't answer back
+to their clients unless those clients have also bound to a specific path
+name.
 
 =item init
 

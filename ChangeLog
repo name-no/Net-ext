@@ -1,3 +1,68 @@
+Released as version 0.87.  Critical to replace 0.86 because of
+the typos in Gen.xs.
+
+Thu Oct 15 04:26:49 1998  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/TCP.pm: Suppress -w complaints about socket options which
+	are not known on the current system (such as TCP_RPTR2RXT).
+
+	* lib/Net/Gen.pm (_trace): Try to fix bogus tracing output in the
+	debugger.
+
+	* t/01unix.t: Update to unbuffer stdout.
+
+	* Gen.xs: Fix typos for SHUT_* symbols.
+
+	* lib/Net/Gen.pm: Update version stamp.
+
+Released as version 0.86.  Further tests are needed, but the clean-up
+work already done might be needed by other users.
+
+Wed Oct 14 05:20:42 1998  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.pm (shutdown): Slight clean-up for 'wasconnected'
+	handling.  It's now down to a single hash, which is used in part
+	for argument validation.
+
+	* README: Add bug-report instructions relative to `perl -V'
+	and `make test TEST_VERBOSE=1'.
+
+	* t/00basic.t: Update to print Net::Gen::Version output
+	under TEST_VERBOSE=1 so I can request better debugging info.
+	Remove UNIX domain load tests for non-i_sysun systems.
+	That's now tested in t/01unix.t anyway.
+
+Fri Oct  2 20:53:12 1998  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.pm (recv): Fix ->shutdown(0) to use SHUT_RD.
+
+Thu Oct  1 17:28:19 1998  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* Gen.xs: drop _xlate_shut_flag().
+
+	* lib/Net/Gen.pm: Re-think _xlate_shut_flag.  Even XS subcall
+	overhead is too high.  Just use a pair of hashes, and think about
+	how to do a better job with the 'wasconnected' interface to
+	eliminate the need for the conversions.
+
+Wed Sep 30 18:40:41 1998  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Inet.pm: Updated pods.
+
+	* lib/Net/Gen.pm: Added SHUT_RD, SHUT_WR, SHUT_RDWR, and the
+	:shutflags export tag.  Updated pods.
+
+	* Gen.xs: Added SHUT_RD, SHUT_WR, SHUT_RDWR, and the `private'
+	routine _xlate_shut_flag().
+
+	* lib/Net/UNIX.pm: Updated pods.
+
+	* lib/Net/UNIX/Server.pm: Updated pods.
+
+	* lib/Net/TCP/Server.pm: Updated pods.
+
+	* lib/Net/UDP.pm: Updated pods.
+
 Released as version 0.85.  The test suite still needs a lot more work,
 but Perl v5.005 produced too many spurious warnings to ignore.
 

@@ -26,9 +26,9 @@ What's still missing:
 	select, fhvec, ioctl, and fcntl methods aren't necessarily all
 	one would wish.
 
-	A proper set of regression & verification tests.
+	A proper set of regression & verification tests [partial].
 
-	Proper handling of timeout options.  Timed connect() and
+	Proper handling of timeout options [partial].  Timed connect() and
 	accept() seem to be working now, but there's no direct support
 	for, say, sending as much of a block of data as possible in a
 	given timeout period.
@@ -88,6 +88,10 @@ include files is almost entirely tester-contributed.  If it doesn't
 build (yet) on your system/configuration/version, see if you can figure
 out why, following the guidelines just above "my @hfiles" there.  Future
 users will thank you, too.
+
+If you do need to send a bug report, be sure to include the output from
+a `perl -V' command.  If the failure is during the test suite, also include
+the output from `make test TEST_VERBOSE=1'.
 
 Finally, previous releases of this code had a significantly different
 internal implementation, which was slower (but worked in earlier versions

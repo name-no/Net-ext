@@ -22,7 +22,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD $adebug);
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.85';
+    $VERSION = '0.87';
 }
 
 sub Version () { "$myclass v$VERSION" }
@@ -61,6 +61,7 @@ BEGIN {
 		    ENOSR ETIME EBADMSG EPROTO ENODATA ENOSTR
 		    EAGAIN EWOULDBLOCK
 		    ENOENT EINVAL EBADF
+		    SHUT_RD SHUT_WR SHUT_RDWR
 		   );
 
     %EXPORT_TAGS = (
@@ -77,6 +78,7 @@ BEGIN {
 		       EAGAIN EWOULDBLOCK
 		       ENOENT EINVAL EBADF
 		      )],
+	shutflags => [qw(SHUT_RD SHUT_WR SHUT_RDWR)],
 	ALL	=> [@EXPORT, @EXPORT_OK],
     );
 }
@@ -291,7 +293,8 @@ sub debug			# $self [, $newval] ; returns oldval
 sub _trace			# $this , \@args, minlevel, [$moretext]
 {
     my ($this,$aref,$level,$msg) = @_;
-    my ($rtn) = (caller(0))[3];
+    my $rtn = (caller(0))[3];
+    $rtn = (caller(1))[3] if $rtn eq __PACKAGE__ . '::_trace';
 #    local $^W=0;		# keep the arglist interpolation from carping
     $msg = '' unless defined $msg;
     print STDERR "${rtn}(@{$aref||[]})${msg}\n"
@@ -756,7 +759,7 @@ sub connect			# $self, [@ignored] ; returns boolean
     my $self = shift;
     $self->close if
 	${*$self}{'wasconnected'} || ${*$self}{'isconnected'};
-    ${*$self}{'wasconnected'} = 0;
+    ${*$self}{'wasconnected'} = '0 but true';
     return undef unless $self->isopen or $self->open;
     if ($self->getparam('srcaddr') || $self->getparam('srcaddrlist')
 	and !$self->isbound) {
@@ -813,18 +816,26 @@ sub getsockinfo			# $self, [@ignored] ; returns ?dest sockaddr?
 	$sad && $dad;
 }
 
-sub shutdown			# $self [, $how=2] ; returns boolean
+# 'static' hashes for translating between SHUT_* values and the traditional
+# (but off-by-one) 1-3.  Used for marking shutdown progress.  The connect
+# code helps in the conspiracy by setting '0 but true' rather than '0'.
+
+my %to_shut_flags = (SHUT_RD,1, SHUT_WR,2, SHUT_RDWR,3);
+
+sub shutdown			# $self [, $how=SHUT_RDWR] ; returns boolean
 {
     use attrs 'locked', 'method';
     $_[0]->_trace(\@_,3);
     my $self = shift;
     return 1 unless $self->isconnected or $self->isconnecting;
     my $how = shift;
-    $how = 2 unless
-	defined $how && length $how && $how !~ /\D/ &&
-	    grep($how == $_, 0, 1, 2);
-    my $was = (${*$self}{'wasconnected'} |= $how+1);
-    my $rval = CORE::shutdown($self,$how);
+    $how = SHUT_RDWR unless defined $how and $how !~ m/\D/ and length $how;
+    $how += 0;
+    my $xhow = $to_shut_flags{$how};
+    ($how = SHUT_RDWR), ($xhow = 3)
+	unless $xhow;
+    my $was = (${*$self}{'wasconnected'} |= $xhow);
+    my $rval = CORE::shutdown($self, $how);
     local $!;	# preserve shutdown()'s errno
     ${*$self}{'isconnecting'} = ${*$self}{'isconnected'} = 0 if $was == 3 or
 	(!defined(getpeername($self)) && (${*$self}{'wasconnected'} = 3));
@@ -986,7 +997,7 @@ sub recv			# $self, [$maxlen, [$flags, [$from]]] ;
     unless ($self->ckeof) {
 	return defined($from) ? $buf : undef;
     }
-    $self->shutdown(0);		# make sure I know about this EOF
+    $self->shutdown(SHUT_RD);	# make sure I know about this EOF
     $! = 0;			# no error for EOF
     undef;			# no buffer, either, though
 }
@@ -1009,7 +1020,7 @@ sub getline			# $self ; returns like scalar(<$fhandle>)
     if (!defined($/)) {
 	$rval = <$self>;	# return all of the input
 	# what about non-blocking sockets here?!?
-	$self->shutdown(0);	# keep track of EOF
+	$self->shutdown(SHUT_RD);	# keep track of EOF
 	if (defined($buf) and defined($rval)) {
 	    return $buf . $rval
 	}
@@ -1511,7 +1522,8 @@ Usage:
 This is a lot like C<@lines = E<lt>$filehandleE<gt>>, except that it doesn't
 let stdio confuse the C<get>/C<recv> method.  It's unreliable on non-blocking
 sockets.  It will produce a fatal (but trappable) error if not called in
-list context.
+list context.  (In other words, it uses the die() builtin when not called in
+list context.)
 
 =item getparam
 
@@ -1535,7 +1547,7 @@ Usage:
     %hash = $obj->getparams(\@keynames, $noundefs);
     %hash = $obj->getparams(\@keynames);
 
-Returns a hash (I<not> a reference) consisting of the key-value
+Returns a hash as a list (I<not> a reference) consisting of the key-value
 pairs corresponding to the specified keyname list.  Only those
 keys which exist in the current parameter list of the object will
 be returned.  If the C<$noundefs> parameter is present and true,
@@ -1668,9 +1680,9 @@ Usage:
 Returns true if the object's C<connect> method has been used
 with a timeout or on a non-blocking socket, and the connect() did
 not complete.  In other words, the failure from the connect() builtin
-indicated that the operation was still in progress.  A rejected
+indicated that the operation was still in progress.  (A rejected
 connection or a connection which exceeded the operating system's timeout
-is said to have completed unsuccessfully, rather than not to have completed.
+is said to have completed unsuccessfully, rather than not to have completed.)
 
 =item isopen
 
@@ -1883,16 +1895,17 @@ Usage:
 	$obj->select($doread, $dowrite, $doxcept, $timeout);
     $nfound = $obj->select($doread, $dowrite, $doxcept, $timeout);
 
-Issues a 4-argument select() call for the associated I/O stream.
-All arguments are optional.  The $timeout argument is the same as
-the fourth argument to select().  The first three are booleans, used
-to determine whether the method should include the object's I/O stream
-in the corresponding parameter to the select() call.  The return in list
-context is the standard two values from select(), follwed by booleans
-indicating whether the actual select() call found reading, writing, or
-exception to be true.  In scalar context, returns only the count of the
-number of matching conditions.  This is probably only useful when you're
-checking just one of the three possible conditions.
+Issues a 4-argument select() call for the associated I/O stream.  All
+arguments are optional.  The $timeout argument is the same as the fourth
+argument to the select() builtin.
+The first three are booleans, used to determine
+whether the method should include the object's I/O stream in the
+corresponding parameter to the select() call.  The return in list context is
+the standard two values from select(), follwed by booleans indicating
+whether the actual select() call found reading, writing, or exception to be
+true.  In scalar context, the routine returns only the count of the number
+of matching conditions.  This is probably only useful when you're checking
+just one of the three possible conditions.
 
 =item SEND
 
@@ -1907,7 +1920,8 @@ Usage:
 This method calls the send() builtin (three- or four-argument
 form).  The C<$flags> parameter is defaulted to 0 if not
 supplied.  If the C<$destsockaddr> value is missing or undefined,
-the three-argument form of the send() builtin will be used.  The
+and the socket is connected (C<$obj->isconnected> returns true), then
+the three-argument form of the send() builtin will be used.  Otherwise, the
 C<$destsockaddr> parameter will be defaulted from the last recv()
 peer address for the same kind of message (depending on whether
 C<MSG_OOB> is set in the C<$flags> parameter).  A defined
@@ -2017,7 +2031,7 @@ the object.  This method is a no-op, returning 1, if the
 filehandle is not connected.  The C<$how> parameter is as per the
 shutdown() builtin, which in turn should be as described in the
 shutdown(2) manpage.  If the C<$how> parameter is not present,
-it is assumed to be 2.
+it is assumed to be C<SHUT_RDWR>(2).
 
 Returns 1 if it has nothing to do, otherwise propagates the return from
 the shutdown() builtin.
@@ -2290,7 +2304,7 @@ A reference to an array of socket addresses to try for bind()
 
 =item timeout
 
-The maximum time to wait for connect() attempts to succeed.
+The maximum time to wait for connect() or accept() attempts to succeed.
 See the discussion of timeouts and non-blocking sockets
 in L</connect> above.
 
@@ -2385,6 +2399,7 @@ C<ENETUNREACH> C<ENOBUFS> C<ENODATA> C<ENOENT> C<ENOPROTOOPT> C<ENOSR>
 C<ENOSTR> C<ENOTCONN> C<ENOTSOCK> C<EOPNOTSUPP> C<EPFNOSUPPORT>
 C<EPROTO> C<EPROTONOSUPPORT> C<EPROTOTYPE> C<ESHUTDOWN>
 C<ESOCKTNOSUPPORT> C<ETIME> C<ETIMEDOUT> C<ETOOMANYREFS> C<EWOULDBLOCK>
+C<SHUT_RD> C<SHUT_WR> C<SHUT_RDWR>
 
 =item tags
 
@@ -2411,6 +2426,10 @@ C<ENETUNREACH> C<ENOBUFS> C<ENODATA> C<ENOENT> C<ENOPROTOOPT> C<ENOSR>
 C<ENOSTR> C<ENOTCONN> C<ENOTSOCK> C<EOPNOTSUPP> C<EPFNOSUPPORT>
 C<EPROTO> C<EPROTONOSUPPORT> C<EPROTOTYPE> C<ESHUTDOWN>
 C<ESOCKTNOSUPPORT> C<ETIME> C<ETIMEDOUT> C<ETOOMANYREFS> C<EWOULDBLOCK>
+
+=item :shutflags
+
+C<SHUT_RD> C<SHUT_WR> C<SHUT_RDWR>
 
 =item :ALL
 
@@ -2486,7 +2505,7 @@ sub unbind			# $self [, @ignored] ; return not useful
     use attrs 'locked', 'method';
     $_[0]->_trace(\@_,2);
     my($self) = @_;
-    $self->close unless $self->isconnected;
+    $self->close unless $self->isconnected || $self->isconnecting;
     $self->delparams([qw(srcaddrlist)]);
 }
 
@@ -2503,7 +2522,7 @@ sub listen			# $self [, $maxq=SOMAXCONN] ; returns boolean
     my ($self,$maxq) = @_;
     $maxq = $self->getparam('maxqueue',SOMAXCONN,1) unless defined $maxq;
     croak "Invalid args for ${whoami}(@_), called" if
-	$maxq =~ /\D/ or !ref $self or !$self;
+	$maxq =~ /\D/ or !ref $self;
     carp "Excess args for ${whoami}(@_) ignored" if @_ > 2;
     return undef unless $self->isbound or $self->bind;
     ${*$self}{'didlisten'} = $maxq;
@@ -2772,7 +2791,7 @@ sub new_from_fh			# classname, $filehandle
     }
     my $self = $pack->new();
     return undef unless $self;
-    unless (open($self, "+<&$fh")) {
+    unless (CORE::open($self, "+<&$fh")) {
 	{
 	    local $!;
 	    undef $self;
@@ -2880,7 +2899,7 @@ sub READ			# $self, $buffer, $length [,$offset]
 	    if ($_[3] < 0 and $_[3]+length($_[1]) < 0);
     }
     my $buf = $_[0]->recv($len, 0);
-    $_[1] ||= '' unless defined $_[1];
+    $_[1] = '' unless defined $_[1];
     unless (defined $buf) {
 	return undef if $!;
 	return 0;

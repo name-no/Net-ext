@@ -24,7 +24,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD);
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.85';
+    $VERSION = '0.86';
 }
 sub Version () { "$myclass v$VERSION" }
 
@@ -190,9 +190,11 @@ Simple example for server setup:
 	exit;
     }
 
-Note that signal-handling for the child processes is not included in this
-example.  A sample server will be included in the final kit which will show how
-to manage the subprocesses.
+Note that signal-handling for the child processes is not included in
+this example.  See L<perlipc/"Internet TCP Clients and Servers"> for
+related examples which manage subprocesses.  However, on many operating
+systems, a simple C<$SIG{CHLD} = 'IGNORE';> will prevent the server
+process from collecting `zombie' subprocesses.
 
 =back
 

@@ -51,6 +51,30 @@ extern "C" {
 
 #include "netgen.h"
 
+#ifndef	SHUT_RD
+#ifdef	O_RDONLY
+#define	SHUT_RD	O_RDONLY
+#else
+#define	SHUT_RD	0
+#endif
+#endif
+
+#ifndef	SHUT_WR
+#ifdef	O_WRONLY
+#define	SHUT_WR	O_WRONLY
+#else
+#define	SHUT_WR	1
+#endif
+#endif
+
+#ifndef	SHUT_RDWR
+#ifdef	O_RDWR
+#define	SHUT_RDWR	O_RDWR
+#else
+#define	SHUT_RDWR	2
+#endif
+#endif
+
 #ifdef __cplusplus
 }
 #endif
@@ -755,6 +779,9 @@ BOOT:
 #ifdef	RD_NODATA
 	newXSconstIV("Net::Gen::RD_NODATA", RD_NODATA, file);
 #endif
+	newXSconstIV("Net::Gen::SHUT_RD", SHUT_RD, file);
+	newXSconstIV("Net::Gen::SHUT_WR", SHUT_WR, file);
+	newXSconstIV("Net::Gen::SHUT_RDWR", SHUT_RDWR, file);
 
 
 MODULE = Net::Gen		PACKAGE = Net::Gen	PREFIX = f_uc_

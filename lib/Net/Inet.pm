@@ -25,7 +25,7 @@ my $myclass;
 
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.85';
+    $VERSION = '0.86';
 }
 
 sub Version () { "$myclass v$VERSION" }
@@ -3788,13 +3788,13 @@ C<Net::UDP>.
 Usage:
 
     $obj = new Net::Inet;
-    $obj = new Net::Inet $host, $service;
+    $obj = new Net::Inet $desthost, $destservice;
     $obj = new Net::Inet \%parameters;
-    $obj = new Net::Inet $host, $service, \%parameters;
+    $obj = new Net::Inet $desthost, $destservice, \%parameters;
     $obj = 'Net::Inet'->new();
-    $obj = 'Net::Inet'->new($host, $service);
+    $obj = 'Net::Inet'->new($desthost, $destservice);
     $obj = 'Net::Inet'->new(\%parameters);
-    $obj = 'Net::Inet'->new($host, $service, \%parameters);
+    $obj = 'Net::Inet'->new($desthost, $destservice, \%parameters);
 
 Returns a newly-initialised object of the given class.  If called
 for a derived class, no validation of the supplied parameters
@@ -3819,8 +3819,8 @@ Usage:
 
     return undef unless $self->init;
     return undef unless $self->init(\%parameters);
-    return undef unless $self->init($host, $service);
-    return undef unless $self->init($host, $service, \%parameters);
+    return undef unless $self->init($desthost, $destservice);
+    return undef unless $self->init($desthost, $destservice, \%parameters);
 
 Verifies that all previous parameter assignments are valid (via
 C<checkparams>).  Returns the incoming object on success, and
@@ -3832,11 +3832,11 @@ C<init> method or its own C<new> call.
 Usage:
 
     $ok = $obj->bind;
-    $ok = $obj->bind($host, $service);
-    $ok = $obj->bind($host, $service, \%parameters);
+    $ok = $obj->bind($lclhost, $lclservice);
+    $ok = $obj->bind($lclhost, $lclservice, \%parameters);
 
 Sets up the C<srcaddrlist> object parameter with the specified
-$host and $service arguments if supplied (via the C<thishost> and
+$lclhost and $lclservice arguments if supplied (via the C<thishost> and
 C<thisport> object parameters), and then returns the value from
 the inherited C<bind> method.  Changing of parameters is also
 allowed, mainly for setting debug status or timeouts.

@@ -6,7 +6,7 @@ my $num_tests;
 my $begin_tests;
 my $testnum;
 BEGIN {
-    $begin_tests = 5;
+    $begin_tests = 4;
     $num_tests = $begin_tests + 15; # for now
     $testnum = 0;
     #$Net::Gen::adebug = 1;
@@ -15,6 +15,12 @@ BEGIN {
 }
 END {
     print "not ok $testnum # not reached\n" while $testnum++ < $begin_tests;
+}
+
+use Net::Gen;
+BEGIN {
+    $testnum++;
+    print "ok $testnum #", Net::Gen::Version(), "\n";
 }
 
 use Net::TCP;
@@ -28,16 +34,6 @@ BEGIN {
     print "ok $testnum\n";
 }
 use Net::UDP;
-BEGIN {
-    $testnum++;
-    print "ok $testnum\n";
-}
-use Net::UNIX;
-BEGIN {
-    $testnum++;
-    print "ok $testnum\n";
-}
-use Net::UNIX::Server;
 BEGIN {
     $testnum++;
     print "ok $testnum\n";

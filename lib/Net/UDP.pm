@@ -24,7 +24,7 @@ use vars qw($VERSION @ISA $AUTOLOAD);
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.85';
+    $VERSION = '0.86';
 }
 sub Version () { "$myclass v$VERSION" }
 
@@ -53,7 +53,9 @@ sub AUTOLOAD
 # Module-specific object options
 
 my @Keys = qw(unbuffered_input unbuffered_output);
-my %CodeKeys = (unbuffered_IO => \&_setbuf_unbuf);
+my @CodeKeys = qw(unbuffered_IO unbuffered_io);
+my %CodeKeys;
+@CodeKeys{@CodeKeys} = (\&_setbuf_unbuf) x @CodeKeys;
 
 my %Keys;			# for only calling registration routines once
 
@@ -140,14 +142,14 @@ C<Net::Gen>.
 Usage:
 
     $obj = new Net::UDP;
-    $obj = new Net::UDP $host, $service;
+    $obj = new Net::UDP $desthost, $destservice;
     $obj = new Net::UDP \%parameters;
-    $obj = new Net::UDP $host, $service, \%parameters;
+    $obj = new Net::UDP $desthost, $destservice, \%parameters;
     $obj = 'Net::UDP'->new();
-    $obj = 'Net::UDP'->new($host);
-    $obj = 'Net::UDP'->new($host, $service);
+    $obj = 'Net::UDP'->new($desthost);
+    $obj = 'Net::UDP'->new($desthost, $destservice);
     $obj = 'Net::UDP'->new(\%parameters);
-    $obj = 'Net::UDP'->new($host, $service, \%parameters);
+    $obj = 'Net::UDP'->new($desthost, $destservice, \%parameters);
 
 Returns a newly-initialised object of the given class.  If called
 for a derived class, no validation of the supplied parameters
@@ -177,11 +179,13 @@ This method, intended to be used with tied filehandles, behaves like one
 of two inherited methods from the C<Net::Gen> class, depending on the
 setting of the object parameter C<unbuffered_output>.  If that parameter
 is false (the default), then the normal print() builtin is used.
-If that parameter is true, then each print() operation will actually result
-in a call to the C<send> method, requiring that the object be connected
-or that its message is in response to its last normal recv() (with a C<flags>
-parameter of C<0>).  The value of the $\ variable is ignored in that case, but
-the $, variable is still used if the C<@args> array has multiple elements.
+If the C<unbuffered_output> parameter is true, then each print()
+operation will actually result in a call to the C<send> method,
+requiring that the object be connected or that its message is in
+response to its last normal recv() (with a C<flags> parameter of
+C<0>).  The value of the $\ variable is ignored in that case, but
+the $, variable is still used if the C<@args> array has multiple
+elements.
 
 =item READLINE
 
@@ -194,14 +198,16 @@ Usage:
     @lines_or_datagrams = <TIED_FH>;
     @lines_or_datagrams = readline(TIED_FH);
 
-This method, intended to be used with tied filehandles, behaves like one of
-two inherited methods from the C<Net::Gen> class, depending on the setting
-of the object parameter C<unbuffered_input>.  If that parameter is false
-(the default), then this method does line-buffering of its input as defined
-by the current setting of the $/ variable.  If that parameter is true, then
-the input records will be exact recv() datagrams, disregarding the setting
-of the $/ variable.  Note that invoking the C<READLINE> method in unbuffered
-mode in array context is likely to hang, since UDP sockets typically don't
+This method, intended to be used with tied filehandles, behaves
+like one of two inherited methods from the C<Net::Gen> class,
+depending on the setting of the object parameter
+C<unbuffered_input>.  If that parameter is false (the default),
+then this method does line-buffering of its input as defined by
+the current setting of the $/ variable.  If the
+<unbuffered_input> parameter is true, then the input records will
+be exact recv() datagrams, disregarding the setting of the $/
+variable.  Note that invoking the C<READLINE> method in array
+context is likely to hang, since UDP sockets typically don't
 return EOF.
 
 =back
@@ -228,7 +234,7 @@ buffer as though it were a single separate line, independently of the setting
 of the $/ variable.  The default is false, which causes the C<READLINE>
 interface to return lines split at boundaries as appropriate for $/.
 (The C<READLINE> method for tied filehandles is the C<E<lt>FHE<gt>>
-operation.)  Note that calling the C<READLINE> method in unbuffered mode
+operation.)  Note that calling the C<READLINE> method
 in array context is likely to hang.
 
 =item unbuffered_output
