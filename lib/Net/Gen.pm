@@ -139,9 +139,9 @@ my $nullsub = sub {};		# handy null warning handler
 # croak in the AUTOLOAD constant section, since we're being called from
 # inside the eval in initsockopts().
 
-#+attrs locked
 sub AUTOLOAD
 {
+    use attrs qw(locked);
     # This AUTOLOAD is used to validate possible missing constants from
     # the XS code, or to auto-create get/setattr subs.
     # The defined constants are already available as XSUBs, and the same
@@ -209,9 +209,9 @@ BEGIN {
 my %evalopts;			# avoid compiling an eval per sockopt
 
 #& initsockopts($class, $level+0, \%sockopts) : void
-#+attrs locked
 sub initsockopts
 {
+    use attrs qw(locked);
     my ($class,$level,$opts) = @_;
     croak "Invalid arguments to " . __PACKAGE__ . "::initsockopts, called"
 	if @_ != 3 or ref $opts ne 'HASH';
@@ -296,9 +296,9 @@ my $debug = 0;			# module-wide debug hack -- don't use
 
 # can update $debug file variable
 #& _debug($this [, $newval]) : oldval
-#+attrs locked
 sub _debug
 {
+    use attrs qw(locked);
     my ($this,$newval) = @_;
     return $this->debug($newval) if ref $this;
     # class method here
@@ -308,9 +308,9 @@ sub _debug
 }
 
 #& debug($self [, $newval]) : oldval
-#+attrs locked method
 sub debug
 {
+    use attrs qw(locked method);
     my ($self,$newval) = @_;
     my $oldval = $ {*$self}{Parms}{'debug'} if defined wantarray;
     $self->setparams({'debug'=>$newval}) if defined $newval;
@@ -348,9 +348,9 @@ my $nonblock_flag = eval 'pack("I",VAL_O_NONBLOCK)';
 my $eagain = eval 'VAL_EAGAIN';
 
 #& _accessor($self, $what [, $newval]) : oldvalue
-#+attrs locked method
 sub _accessor
 {
+    use attrs qw(locked method);
     my ($self, $what, $newval) = @_;
     croak "Usage: \$sock->$what or \$sock->$what(\$newvalue),"
 	if @_ > 3;
@@ -402,9 +402,9 @@ sub _setblocking
 }
 
 #& blocking($self [, $newval]) : canonical_oldval
-#+attrs locked method
 sub blocking
 {
+    use attrs qw(locked method);
     my ($self, $newval) = @_;
     croak 'Usage: $sock->blocking or $sock->blocking(0|1),'
 	if @_ > 2;
@@ -442,9 +442,9 @@ my %Keys;
 my %Opts;
 
 #& register_param_keys($self, \@keys)
-#+attrs locked method
 sub register_param_keys
 {
+    use attrs qw(locked method);
     my ($self, $names) = @_;
     my $whoami = $self->_trace(\@_,3);
     croak "Invalid arguments to ${whoami}(@_), called"
@@ -459,9 +459,9 @@ sub registerParamKeys;	# helps with -w
 
 #& register_param_handlers($self, \@keys, [\]@handlers)
 #&  -or- ($self, \%key-handlers)
-#+attrs locked method
 sub register_param_handlers
 {
+    use attrs qw(locked method);
     my ($self, $names, @handlers, $handlers) = @_;
     my $whoami = $self->_trace(\@_,3);
     if (ref $names eq 'HASH') {
@@ -486,9 +486,9 @@ sub registerParamHandlers;	# helps with -w
 *registerParamHandlers = \&register_param_handlers; # alias other form
 
 #& register_options($self, $levelname, $level, \%options)
-#+attrs locked method
 sub register_options
 {
+    use attrs qw(locked method);
     my ($self, $levname, $level, $opts) = @_;
     my $whoami = $self->_trace(\@_,3);
     croak "Invalid arguments to ${whoami}(@_), called"
@@ -502,9 +502,9 @@ sub registerOptions;		# helps with -w
 
 # pseudo-subclass for saving parameters (ParamSaver, inspired by SelectSaver)
 #& param_saver($self, @params) : restoration_object
-#+attrs locked method
 sub param_saver
 {
+    use attrs qw(locked method);
     my ($self, @params) = @_;
     my @delparams =
 	# map { exists $ {*$self}{Parms}{$_} ? () : ($_) } @params;
@@ -573,9 +573,9 @@ sub new
 }
 
 #& setparams($this, \%newparams [, $newonly [, $check]]) : boolean
-#+attrs locked method
 sub setparams
 {
+    use attrs qw(locked method);
     my ($self,$newparams,$newonly,$check) = @_;
     my $errs = 0;
 
@@ -627,9 +627,9 @@ sub setparams
     
 
 #& delparams($self, \@paramnames) : boolean
-#+attrs locked method
 sub delparams
 {
+    use attrs qw(locked method);
     $_[0]->_trace(\@_,1);
     my($self,$keysref) = @_;
     my(@k,%k);
@@ -642,9 +642,9 @@ sub delparams
 }
 
 #& checkparams($self) : boolean
-#+attrs locked method
 sub checkparams
 {
+    use attrs qw(locked method);
     my $whoami = $_[0]->_trace(\@_,1);
     my $self = shift;
     carp "Excess arguments to ${whoami} ignored"
@@ -670,9 +670,9 @@ sub init
 }
 
 #& getparam($self, $key [, $default [, $defaultifundef]]) : param_value
-#+attrs locked method
 sub getparam
 {
+    use attrs qw(locked method);
     my $whoami = $_[0]->_trace(\@_,2);
     my($self,$key,$defval,$noundef) = @_;
     carp "Excess arguments to ${whoami}($self) ignored"
@@ -687,9 +687,9 @@ sub getparam
 }
 
 #& getparams($self, \@keys [, $noundef]) : (%hash)
-#+attrs locked method
 sub getparams
 {
+    use attrs qw(locked method);
     my $whoami = $_[0]->_trace(\@_,2);
     my ($self,$aref,$noundef) = @_;
     croak "Insufficient arguments to ${whoami}($self), called"
@@ -732,9 +732,9 @@ sub getparams
     
 
 #& condition($self)
-#+attrs locked method
 sub condition
 {
+    use attrs qw(locked method);
     my $self = $_[0];
     my $sel = SelectSaver->new;
     CORE::select($self);
@@ -746,9 +746,9 @@ sub condition
 }
 
 #& open($self [, @ignore]) : boolean
-#+attrs locked method
 sub open
 {
+    use attrs qw(locked method);
     $_[0]->_trace(\@_,2);
     my $self = shift;
     $self->stopio if $self->isopen;
@@ -879,9 +879,9 @@ sub _tryconnect
 }
 
 #& connect($self, [@ignored]) : boolean
-#+attrs locked method
 sub connect
 {
+    use attrs qw(locked method);
     $_[0]->_trace(\@_,2);
     my $self = shift;
     my $hval = *$self{HASH};
@@ -933,9 +933,9 @@ sub connect
 }
 
 #& getsockinfo($self, [@ignored]) : ?dest sockaddr?
-#+attrs locked method
 sub getsockinfo
 {
+    use attrs qw(locked method);
     $_[0]->_trace(\@_,4);
     my $self = shift;
     my ($sad,$dad);
@@ -954,9 +954,9 @@ sub getsockinfo
 my %to_shut_flags = (SHUT_RD,1, SHUT_WR,2, SHUT_RDWR,3);
 
 #& shutdown($self [, $how=SHUT_RDWR]) : boolean
-#+attrs locked method
 sub shutdown
 {
+    use attrs qw(locked method);
     $_[0]->_trace(\@_,3);
     my $self = shift;
     return 1 unless $self->isconnected or $self->isconnecting;
@@ -981,9 +981,9 @@ my @CloseVars = qw(FHVec isopen isbound didlisten wasconnected isconnected
 my @CloseKeys = qw(srcaddr dstaddr);
 
 #& close($self [, @ignored]) : boolean
-#+attrs locked method
 sub close
 {
+    use attrs qw(locked method);
     $_[0]->_trace(\@_,3);
     my $self = shift;
     $self->shutdown if $self->isopen;
@@ -994,9 +994,9 @@ sub CLOSE;
 *CLOSE = \&close;
 
 #& stopio($self [, @ignored]) : boolean
-#+attrs locked method
 sub stopio
 {
+    use attrs qw(locked method);
     $_[0]->_trace(\@_,4);
     my $self = shift;
     my $wasopen = $self->isopen;
@@ -1074,9 +1074,9 @@ sub print;			# avoid -w error
 *print = \&put;			# maybe-useful alias
 
 #& ckeof($self) : boolean
-#+attrs locked method
 sub ckeof
 {
+    use attrs qw(locked method);
     my $saverr = $!+0;
     local $!;			# preserve this over fcntl() and such
     my $whoami = $_[0]->_trace(\@_,3);
@@ -1101,9 +1101,9 @@ sub ckeof
 }
 
 #& recv($self, [$maxlen, [$flags, [$from]]]) : {$buf | undef}
-#+attrs locked method
 sub recv
 {
+    use attrs qw(locked method);
     my $whoami = $_[0]->_trace(\@_,3);
     my($self,$maxlen,$flags) = @_;
     my($buf,$from,$xfrom) = '';
@@ -1160,9 +1160,9 @@ sub get;			# (helps with -w)
 *get = \&recv;			# a name that works for indirect references
 
 #& getline($self) : like scalar(<$fhandle>)
-#+attrs locked method
 sub getline
 {
+    use attrs qw(locked method);
     my $whoami = $_[0]->_trace(\@_,4);
     carp "Excess arguments to ${whoami} ignored"
 	if @_ > 1;
@@ -2741,9 +2741,9 @@ sub setparam
 }
 
 #& bind($self [, @ignored]) : boolean
-#+attrs locked method
 sub bind
 {
+    use attrs qw(locked method);
     $_[0]->_trace(\@_,2);
     my $self = shift;
     $self->close if
@@ -2776,9 +2776,9 @@ sub bind
 }
 
 #& unbind($self [, @ignored])
-#+attrs locked method
 sub unbind
 {
+    use attrs qw(locked method);
     $_[0]->_trace(\@_,2);
     my($self) = @_;
     $self->close unless $self->isconnected || $self->isconnecting;
@@ -2793,9 +2793,9 @@ sub delparam
 }
 
 #& listen($self [, $maxq=SOMAXCONN]) : boolean
-#+attrs locked method
 sub listen
 {
+    use attrs qw(locked method);
     my $whoami = $_[0]->_trace(\@_,2);
     my ($self,$maxq) = @_;
     $maxq = $self->getparam('maxqueue',SOMAXCONN,1) unless defined $maxq;
@@ -2822,16 +2822,16 @@ sub TIESCALAR
     $self && $self->isconnected && $self;
 }
 
-#+attrs locked method
 sub FETCH
 {
+    use attrs qw(locked method);
     $_[0]->_trace(\@_,2);
     scalar $_[0]->READLINE;
 }
 
-#+attrs locked method
 sub STORE
 {
+    use attrs qw(locked method);
     $_[0]->_trace(\@_,2);
     my $self = shift;
     return if @_ == 1 and !defined $_[0];	# "undef $x"
@@ -2884,9 +2884,9 @@ sub _findxopt
 }
 
 #& _getxopt($this, $realp, [$level,] $what) : @values
-#+attrs locked method
 sub _getxopt
 {
+    use attrs qw(locked method);
     my($self,$realp,@args) = @_;
     my($aref,$level,$what,$rval,$format);
     @args = $self->_findxopt($realp, @args); # get the array ref
@@ -2921,9 +2921,9 @@ sub getropt
 }
 
 #& _setxopt($this, $realp, [$level,] $what, @vals) : boolean
-#+attrs locked method
 sub _setxopt
 {
+    use attrs qw(locked method);
     my($self,$realp,@args) = @_;
     my($aref,$level,$what,$rval,$format);
     @args = $self->_findxopt($realp, @args); # get the array ref and real args
@@ -3001,9 +3001,9 @@ sub fhvec
 }
 
 #& select($this [[, $read, $write, $xcept, $timeout]]) : $nready | @list
-#+attrs locked method
 sub select
 {
+    use attrs qw(locked method);
     $_[0]->_trace(\@_,4);
     my($self,$doread,$dowrite,$doxcept,$timer) = @_;
     my($fhvec,$rvec,$wvec,$xvec,$nfound,$timeleft) = $self->fhvec;
@@ -3027,9 +3027,9 @@ sub select
 }
 
 #& ioctl($this, @args) : $scalar
-#+attrs locked method
 sub ioctl
 {
+    use attrs qw(locked method);
     my $whoami = $_[0]->_trace(\@_,4);
     croak "Insufficient arguments to ${whoami}(@_), found"
 	if @_ < 3;
@@ -3039,9 +3039,9 @@ sub ioctl
 }
 
 #& fcntl($this, @args) : $scalar
-#+attrs locked method
 sub fcntl
 {
+    use attrs qw(locked method);
     my $whoami = $_[0]->_trace(\@_,4);
     croak "Insufficient arguments to ${whoami}(@_), found"
 	if @_ < 3;

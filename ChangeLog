@@ -1,3 +1,13 @@
+Release as v0.931.
+
+Sun Feb 20 18:40:17 2000  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* MANIFEST: re-add the lib/Net.../*.pm files for the PAUSE indexer.
+
+	* Makefile.PL (gen_pm_files): Don't push .pm files onto the
+	@delfiles array, or they won't be in the kit to be indexed
+	by PAUSE.
+
 Release as v0.93.
 
 Wed Jan 19 02:45:18 2000  Spider Boardman  <spider@Orb.Nashua.NH.US>

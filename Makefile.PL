@@ -1,6 +1,6 @@
 #!perl
 
-# rcsid: "@(#) $Id: Makefile.PL,v 1.20 2000/01/19 07:49:40 spider Exp $"
+# rcsid: "@(#) $Id: Makefile.PL,v 1.21 2000/02/20 23:50:56 spider Exp $"
 
 use 5.004_04;
 use ExtUtils::MakeMaker qw(WriteMakefile $Verbose);
@@ -109,7 +109,8 @@ sub gen_pm_files () {
 	next if $file eq 'lib/attrs.dat' and $have_attrs;
 	open $file, "<$file" or die "Cannot read $file file: $!";
 	open $outfile, ">$outfile" or die "Cannot write $outfile file: $!";
-	push @delfiles, $outfile;
+	#workaround for PAUSE indexer problem.
+	#push @delfiles, $outfile;
 	my $line;
 	my $attrlist;
 	while (defined($line = <$file>)) {
