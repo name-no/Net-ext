@@ -1,3 +1,11 @@
+Release as v0.932.
+
+Wed Aug  2 12:42:36 2000  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.dat: Update @EXPORT_OK with the SO_* values,
+	which I'd somehow missed before.  Thanks to
+	'"Ged the Grey's Hain" <Ged@FaerieMUD.org>' for the bug report.
+
 Release as v0.931.
 
 Sun Feb 20 18:40:17 2000  Spider Boardman  <spider@Orb.Nashua.NH.US>
