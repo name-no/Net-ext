@@ -1,3 +1,16 @@
+Release as v1.0.
+
+Sat Mar 30 04:25:08 2002  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* Makefile.PL: Override 'ci' rule to skip the .pm's.
+
+	* MANIFEST: Add manifake for cleaner 'ci' handling.
+
+	* Gen.dat, Gen.xs: Add AF_LOCAL & PF_LOCAL.
+
+	* all: email address updates, copyright updates, POD tweaks.
+	Re-version to 1.0.
+
 Release as v0.933.
 
 Wed Aug  2 12:42:36 2000  Spider Boardman  <spider@Orb.Nashua.NH.US>

@@ -1,4 +1,4 @@
-# Copyright 1997,2000 Spider Boardman.
+# Copyright 1997,2002 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -11,7 +11,7 @@
 # IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
 # WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
-# rcsid: "@(#) $Id: Server.dat,v 1.15 2000/08/05 20:33:14 spider Exp $"
+# rcsid: "@(#) $Id: Server.dat,v 1.16 2002/03/30 10:11:36 spider Exp $"
 
 package Net::TCP::Server;
 use 5.004_04;
@@ -23,7 +23,7 @@ sub croak { require Carp; goto &Carp::croak; }
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
 BEGIN {
-    $VERSION = '0.933';
+    $VERSION = '1.0';
     eval "sub Version () { __PACKAGE__ . ' v$VERSION' }";
 }
 
@@ -31,7 +31,7 @@ BEGIN {
 #use Exporter ();	# we inherit what we need here from Net::Gen
 #use Net::Inet;
 #use Net::Gen;
-use Net::TCP 0.93;
+use Net::TCP 1.0;
 
 
 BEGIN {
@@ -70,9 +70,8 @@ BEGIN {
 # inheritance, so new() and init() have to be here.
 
 #& new(classname, [[hostspec,] service,] [\%params]) : {$self | undef}
-sub new
+sub new : locked
 {
-    use attrs qw(locked);
     $_[0]->_trace(\@_,1);
     my ($xclass, @Args) = @_;
     if (@Args == 2 && ref $Args[1] && ref($Args[1]) eq 'HASH' or
@@ -94,9 +93,8 @@ sub new
 }
 
 #& init($self, [@stuff]) : {$self | undef}
-sub init
+sub init : locked method
 {
-    use attrs qw(locked method);
     my ($self, @Args) = @_;
     if (@Args == 2 && ref $Args[1] && ref $Args[1] eq 'HASH' or
 	@Args == 1 and not ref $Args[0]) {
@@ -179,7 +177,7 @@ The examples above show the indirect object syntax which many prefer,
 as well as the guaranteed-to-be-safe static method call.  There
 are occasional problems with the indirect object syntax, which
 tend to be rather obscure when encountered.  See
-http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.html
+http://www.xray.mpe.mpg.de/mailing-lists/perl5-porters/1998-01/msg01674.html
 for details.
 
 Simple example for server setup:
@@ -240,7 +238,8 @@ none
 
 This module has been tested with threaded perls, and should be as thread-safe
 as perl itself.  (As of 5.005_03 and 5.005_57, that's not all that safe
-just yet.)
+just yet.)  It also works with interpreter-based threads ('ithreads') in
+more recent perl releases.
 
 =head1 SEE ALSO
 
@@ -250,7 +249,7 @@ L<Net::Gen(3)|Net::Gen>
 
 =head1 AUTHOR
 
-Spider Boardman E<lt>spider@Orb.Nashua.NH.USE<gt>
+Spider Boardman E<lt>spidb@cpan.orgE<gt>
 
 =cut
 

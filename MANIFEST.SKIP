@@ -1,6 +1,5 @@
-(^|/)(RCS|CVS|SCCS|OLD|DL)$
+(^|/)(RCS|CVS|SCCS|OLD|DL|DOC)$
 (^|/)Net-ext-
-(^|/)lib/Net/.*\.pm$
 ^IANA
 \,v$
 ^[Mm]akefile$

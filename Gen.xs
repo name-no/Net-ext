@@ -1,6 +1,6 @@
 /*
 
-# Copyright 1995,1999 Spider Boardman.
+# Copyright 1995,2002 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -20,7 +20,7 @@
  * which they don't recognize, so do it the old-fashioned way.
  */
 
-static char const rcsid[] = "@(#) $Id: Gen.xs,v 1.22 1999/09/21 16:14:20 spider Exp $";
+static char const rcsid[] = "@(#) $Id: Gen.xs,v 1.23 2002/03/30 10:05:39 spider Exp $";
 
 #ifdef __cplusplus
 extern "C" {
@@ -131,14 +131,13 @@ extern "C" {
 #define	EWOULDBLOCK	EAGAIN
 #endif
 
-HV *missing;			/* not_there cases for AUTOLOAD() */
-
 static void
 #ifdef CAN_PROTOTYPE
-#define newmissing(_nm,_fl) S_newmissing(aTHX_ _nm, _fl)
-S_newmissing(pTHX_ char *name, char *file)
+#define newmissing(_hv,_nm,_fl) S_newmissing(aTHX_ _hv, _nm, _fl)
+S_newmissing(pTHX_ HV *missing, char *name, char *file)
 #else
-newmissing(name, file)
+newmissing(missing, name, file)
+HV *missing;
 char *name;
 char *file;
 #endif
@@ -151,6 +150,7 @@ char *file;
     sv_setsv((SV*)cv, &PL_sv_no); /* prototype it as "()" */
 }
 
+#ifndef CVf_CONST
 /*
  * cv_constant() exists so that the constant XSUBs will return their
  * proper values even when not inlined.
@@ -198,6 +198,9 @@ char * file;
     svop->op_next = Nullop;		/* terminate search in cv_const_sv() */
     CvSTART(cv) = svop;			/* voila!  we're a constant! */
 }
+#else	/* !defined CVf_CONST, now defined */
+#define newXSconst(_nm,_vsv,_fl) Perl_newCONSTSUB(aTHX_ Nullhv, _nm, _vsv)
+#endif	/* defined CVf_CONST */
 
 /*
  * Auxiliary routines to create constant XSUBs of various types.
@@ -333,7 +336,7 @@ MODULE = Net::Gen		PACKAGE = Net::Gen
 PROTOTYPES: ENABLE
 
 BOOT:
-	missing = perl_get_hv("Net::Gen::_missing", GV_ADDMULTI);
+	HV *missing = perl_get_hv("Net::Gen::_missing", GV_ADDMULTI);
 
 
 MODULE = Net::Gen		PACKAGE = Net::TCP	PREFIX = f_uc_
@@ -346,7 +349,7 @@ BOOT:
 #ifdef TCP_MAXSEG
 	newXSconstUV("Net::TCP::TCP_MAXSEG", TCP_MAXSEG, file);
 #else
-	newmissing("Net::TCP::TCP_MAXSEG", file);
+	newmissing(missing, "Net::TCP::TCP_MAXSEG", file);
 #endif
 	newXSconstUV("Net::TCP::TCP_MAXWIN", TCP_MAXWIN, file);
 	newXSconstUV("Net::TCP::TCP_MAX_WINSHIFT", TCP_MAX_WINSHIFT, file);
@@ -354,12 +357,12 @@ BOOT:
 #ifdef TCP_NODELAY
 	newXSconstUV("Net::TCP::TCP_NODELAY", TCP_NODELAY, file);
 #else
-	newmissing("Net::TCP::TCP_NODELAY", file);
+	newmissing(missing, "Net::TCP::TCP_NODELAY", file);
 #endif
 #ifdef TCP_RPTR2RXT
 	newXSconstUV("Net::TCP::TCP_RPTR2RXT", TCP_RPTR2RXT, file);
 #else
-	newmissing("Net::TCP::TCP_RPTR2RXT", file);
+	newmissing(missing, "Net::TCP::TCP_RPTR2RXT", file);
 #endif
 	newXSconstUV("Net::TCP::TH_ACK", TH_ACK, file);
 	newXSconstUV("Net::TCP::TH_FIN", TH_FIN, file);
@@ -410,17 +413,17 @@ BOOT:
 #ifdef IN_CLASSA_SUBHOST
 	newXSconstUV("Net::Inet::IN_CLASSA_SUBHOST", IN_CLASSA_SUBHOST, file);
 #else
-	newmissing("Net::Inet::IN_CLASSA_SUBHOST", file);
+	newmissing(missing, "Net::Inet::IN_CLASSA_SUBHOST", file);
 #endif
 #ifdef IN_CLASSA_SUBNET
 	newXSconstUV("Net::Inet::IN_CLASSA_SUBNET", IN_CLASSA_SUBNET, file);
 #else
-	newmissing("Net::Inet::IN_CLASSA_SUBNET", file);
+	newmissing(missing, "Net::Inet::IN_CLASSA_SUBNET", file);
 #endif
 #ifdef IN_CLASSA_SUBNSHIFT
 	newXSconstUV("Net::Inet::IN_CLASSA_SUBNSHIFT", IN_CLASSA_SUBNSHIFT, file);
 #else
-	newmissing("Net::Inet::IN_CLASSA_SUBNSHIFT", file);
+	newmissing(missing, "Net::Inet::IN_CLASSA_SUBNSHIFT", file);
 #endif
 	newXSconstUV("Net::Inet::IN_CLASSB_HOST", IN_CLASSB_HOST, file);
 	newXSconstUV("Net::Inet::IN_CLASSB_MAX", IN_CLASSB_MAX, file);
@@ -429,17 +432,17 @@ BOOT:
 #ifdef IN_CLASSB_SUBHOST
 	newXSconstUV("Net::Inet::IN_CLASSB_SUBHOST", IN_CLASSB_SUBHOST, file);
 #else
-	newmissing("Net::Inet::IN_CLASSB_SUBHOST", file);
+	newmissing(missing, "Net::Inet::IN_CLASSB_SUBHOST", file);
 #endif
 #ifdef IN_CLASSB_SUBNET
 	newXSconstUV("Net::Inet::IN_CLASSB_SUBNET", IN_CLASSB_SUBNET, file);
 #else
-	newmissing("Net::Inet::IN_CLASSB_SUBNET", file);
+	newmissing(missing, "Net::Inet::IN_CLASSB_SUBNET", file);
 #endif
 #ifdef IN_CLASSB_SUBNSHIFT
 	newXSconstUV("Net::Inet::IN_CLASSB_SUBNSHIFT", IN_CLASSB_SUBNSHIFT, file);
 #else
-	newmissing("Net::Inet::IN_CLASSB_SUBNSHIFT", file);
+	newmissing(missing, "Net::Inet::IN_CLASSB_SUBNSHIFT", file);
 #endif
 	newXSconstUV("Net::Inet::IN_CLASSC_HOST", IN_CLASSC_HOST, file);
 	newXSconstUV("Net::Inet::IN_CLASSC_MAX", IN_CLASSC_MAX, file);
@@ -452,7 +455,7 @@ BOOT:
 #ifdef IPFRAGTTL
 	newXSconstUV("Net::Inet::IPFRAGTTL", IPFRAGTTL, file);
 #else
-	newmissing("Net::Inet::IPFRAGTTL", file);
+	newmissing(missing, "Net::Inet::IPFRAGTTL", file);
 #endif
 	newXSconstUV("Net::Inet::IPOPT_CIPSO", IPOPT_CIPSO, file);
 	newXSconstUV("Net::Inet::IPOPT_CONTROL", IPOPT_CONTROL, file);
@@ -486,7 +489,7 @@ BOOT:
 #ifdef IPPORT_TIMESERVER
 	newXSconstUV("Net::Inet::IPPORT_TIMESERVER", IPPORT_TIMESERVER, file);
 #else
-	newmissing("Net::Inet::IPPORT_TIMESERVER", file);
+	newmissing(missing, "Net::Inet::IPPORT_TIMESERVER", file);
 #endif
 	newXSconstUV("Net::Inet::IPPORT_USERRESERVED", IPPORT_USERRESERVED, file);
 	newXSconstUV("Net::Inet::IPPROTO_EGP", IPPROTO_EGP, file);
@@ -521,86 +524,86 @@ BOOT:
 #ifdef IP_ADD_MEMBERSHIP
 	newXSconstUV("Net::Inet::IP_ADD_MEMBERSHIP", IP_ADD_MEMBERSHIP, file);
 #else
-	newmissing("Net::Inet::IP_ADD_MEMBERSHIP", file);
+	newmissing(missing, "Net::Inet::IP_ADD_MEMBERSHIP", file);
 #endif
 #ifdef IP_DEFAULT_MULTICAST_LOOP
 	newXSconstUV("Net::Inet::IP_DEFAULT_MULTICAST_LOOP", IP_DEFAULT_MULTICAST_LOOP, file);
 #else
-	newmissing("Net::Inet::IP_DEFAULT_MULTICAST_LOOP", file);
+	newmissing(missing, "Net::Inet::IP_DEFAULT_MULTICAST_LOOP", file);
 #endif
 #ifdef IP_DEFAULT_MULTICAST_TTL
 	newXSconstUV("Net::Inet::IP_DEFAULT_MULTICAST_TTL", IP_DEFAULT_MULTICAST_TTL, file);
 #else
-	newmissing("Net::Inet::IP_DEFAULT_MULTICAST_TTL", file);
+	newmissing(missing, "Net::Inet::IP_DEFAULT_MULTICAST_TTL", file);
 #endif
 	newXSconstUV("Net::Inet::IP_DF", IP_DF, file);
 #ifdef IP_DROP_MEMBERSHIP
 	newXSconstUV("Net::Inet::IP_DROP_MEMBERSHIP", IP_DROP_MEMBERSHIP, file);
 #else
-	newmissing("Net::Inet::IP_DROP_MEMBERSHIP", file);
+	newmissing(missing, "Net::Inet::IP_DROP_MEMBERSHIP", file);
 #endif
 #ifdef IP_HDRINCL
 	newXSconstUV("Net::Inet::IP_HDRINCL", IP_HDRINCL, file);
 #else
-	newmissing("Net::Inet::IP_HDRINCL", file);
+	newmissing(missing, "Net::Inet::IP_HDRINCL", file);
 #endif
 	newXSconstUV("Net::Inet::IP_MAXPACKET", IP_MAXPACKET, file);
 #ifdef IP_MAX_MEMBERSHIPS
 	newXSconstUV("Net::Inet::IP_MAX_MEMBERSHIPS", IP_MAX_MEMBERSHIPS, file);
 #else
-	newmissing("Net::Inet::IP_MAX_MEMBERSHIPS", file);
+	newmissing(missing, "Net::Inet::IP_MAX_MEMBERSHIPS", file);
 #endif
 	newXSconstUV("Net::Inet::IP_MF", IP_MF, file);
 	newXSconstUV("Net::Inet::IP_MSS", IP_MSS, file);
 #ifdef IP_MULTICAST_IF
 	newXSconstUV("Net::Inet::IP_MULTICAST_IF", IP_MULTICAST_IF, file);
 #else
-	newmissing("Net::Inet::IP_MULTICAST_IF", file);
+	newmissing(missing, "Net::Inet::IP_MULTICAST_IF", file);
 #endif
 #ifdef IP_MULTICAST_LOOP
 	newXSconstUV("Net::Inet::IP_MULTICAST_LOOP", IP_MULTICAST_LOOP, file);
 #else
-	newmissing("Net::Inet::IP_MULTICAST_LOOP", file);
+	newmissing(missing, "Net::Inet::IP_MULTICAST_LOOP", file);
 #endif
 #ifdef IP_MULTICAST_TTL
 	newXSconstUV("Net::Inet::IP_MULTICAST_TTL", IP_MULTICAST_TTL, file);
 #else
-	newmissing("Net::Inet::IP_MULTICAST_TTL", file);
+	newmissing(missing, "Net::Inet::IP_MULTICAST_TTL", file);
 #endif
 #ifdef IP_OPTIONS
 	newXSconstUV("Net::Inet::IP_OPTIONS", IP_OPTIONS, file);
 #else
-	newmissing("Net::Inet::IP_OPTIONS", file);
+	newmissing(missing, "Net::Inet::IP_OPTIONS", file);
 #endif
 #ifdef IP_RECVDSTADDR
 	newXSconstUV("Net::Inet::IP_RECVDSTADDR", IP_RECVDSTADDR, file);
 #else
-	newmissing("Net::Inet::IP_RECVDSTADDR", file);
+	newmissing(missing, "Net::Inet::IP_RECVDSTADDR", file);
 #endif
 #ifdef IP_RECVOPTS
 	newXSconstUV("Net::Inet::IP_RECVOPTS", IP_RECVOPTS, file);
 #else
-	newmissing("Net::Inet::IP_RECVOPTS", file);
+	newmissing(missing, "Net::Inet::IP_RECVOPTS", file);
 #endif
 #ifdef IP_RECVRETOPTS
 	newXSconstUV("Net::Inet::IP_RECVRETOPTS", IP_RECVRETOPTS, file);
 #else
-	newmissing("Net::Inet::IP_RECVRETOPTS", file);
+	newmissing(missing, "Net::Inet::IP_RECVRETOPTS", file);
 #endif
 #ifdef IP_RETOPTS
 	newXSconstUV("Net::Inet::IP_RETOPTS", IP_RETOPTS, file);
 #else
-	newmissing("Net::Inet::IP_RETOPTS", file);
+	newmissing(missing, "Net::Inet::IP_RETOPTS", file);
 #endif
 #ifdef IP_TOS
 	newXSconstUV("Net::Inet::IP_TOS", IP_TOS, file);
 #else
-	newmissing("Net::Inet::IP_TOS", file);
+	newmissing(missing, "Net::Inet::IP_TOS", file);
 #endif
 #ifdef IP_TTL
 	newXSconstUV("Net::Inet::IP_TTL", IP_TTL, file);
 #else
-	newmissing("Net::Inet::IP_TTL", file);
+	newmissing(missing, "Net::Inet::IP_TTL", file);
 #endif
 	newXSconstUV("Net::Inet::MAXTTL", MAXTTL, file);
 	newXSconstUV("Net::Inet::MAX_IPOPTLEN", MAX_IPOPTLEN, file);
@@ -608,7 +611,7 @@ BOOT:
 #ifdef SUBNETSHIFT
 	newXSconstUV("Net::Inet::SUBNETSHIFT", SUBNETSHIFT, file);
 #else
-	newmissing("Net::Inet::SUBNETSHIFT", file);
+	newmissing(missing, "Net::Inet::SUBNETSHIFT", file);
 #endif
     {
 	struct in_addr ina;
@@ -764,7 +767,7 @@ BOOT:
 #ifdef	RD_NODATA
 	newXSconstIV("Net::Gen::RD_NODATA", RD_NODATA, file);
 #else
-	newmissing("Net::Gen::RD_NODATA", file);
+	newmissing(missing, "Net::Gen::RD_NODATA", file);
 #endif
 	newXSconstIV("Net::Gen::SHUT_RD", SHUT_RD, file);
 	newXSconstIV("Net::Gen::SHUT_WR", SHUT_WR, file);
@@ -777,158 +780,158 @@ BOOT:
 #ifdef	VAL_O_NONBLOCK
 	newXSconstUV("Net::Gen::VAL_O_NONBLOCK", VAL_O_NONBLOCK, file);
 #else
-	newmissing("Net::Gen::VAL_O_NONBLOCK", file);
+	newmissing(missing, "Net::Gen::VAL_O_NONBLOCK", file);
 #endif
 #ifdef	VAL_EAGAIN
 	newXSconstUV("Net::Gen::VAL_EAGAIN", VAL_EAGAIN, file);
 #else
-	newmissing("Net::Gen::VAL_EAGAIN", file);
+	newmissing(missing, "Net::Gen::VAL_EAGAIN", file);
 #endif
 	newXSconstUV("Net::Gen::MSG_OOB", MSG_OOB, file);
 #ifdef	SO_ACCEPTCONN
 	newXSconstUV("Net::Gen::SO_ACCEPTCONN", SO_ACCEPTCONN, file);
 #else
-	newmissing("Net::Gen::SO_ACCEPTCONN", file);
+	newmissing(missing, "Net::Gen::SO_ACCEPTCONN", file);
 #endif
 #ifdef	SO_BROADCAST
 	newXSconstUV("Net::Gen::SO_BROADCAST", SO_BROADCAST, file);
 #else
-	newmissing("Net::Gen::SO_BROADCAST", file);
+	newmissing(missing, "Net::Gen::SO_BROADCAST", file);
 #endif
 #ifdef	SO_DEBUG
 	newXSconstUV("Net::Gen::SO_DEBUG", SO_DEBUG, file);
 #else
-	newmissing("Net::Gen::SO_DEBUG", file);
+	newmissing(missing, "Net::Gen::SO_DEBUG", file);
 #endif
 #ifdef	SO_DONTROUTE
 	newXSconstUV("Net::Gen::SO_DONTROUTE", SO_DONTROUTE, file);
 #else
-	newmissing("Net::Gen::SO_DONTROUTE", file);
+	newmissing(missing, "Net::Gen::SO_DONTROUTE", file);
 #endif
 #ifdef	SO_ERROR
 	newXSconstUV("Net::Gen::SO_ERROR", SO_ERROR, file);
 #else
-	newmissing("Net::Gen::SO_ERROR", file);
+	newmissing(missing, "Net::Gen::SO_ERROR", file);
 #endif
 #ifdef	SO_EXPANDED_RIGHTS
 	newXSconstUV("Net::Gen::SO_EXPANDED_RIGHTS", SO_EXPANDED_RIGHTS, file);
 #else
-	newmissing("Net::Gen::SO_EXPANDED_RIGHTS", file);
+	newmissing(missing, "Net::Gen::SO_EXPANDED_RIGHTS", file);
 #endif
 #ifdef	SO_KEEPALIVE
 	newXSconstUV("Net::Gen::SO_KEEPALIVE", SO_KEEPALIVE, file);
 #else
-	newmissing("Net::Gen::SO_KEEPALIVE", file);
+	newmissing(missing, "Net::Gen::SO_KEEPALIVE", file);
 #endif
 #ifdef	SO_OOBINLINE
 	newXSconstUV("Net::Gen::SO_OOBINLINE", SO_OOBINLINE, file);
 #else
-	newmissing("Net::Gen::SO_OOBINLINE", file);
+	newmissing(missing, "Net::Gen::SO_OOBINLINE", file);
 #endif
 #ifdef	SO_PAIRABLE
 	newXSconstUV("Net::Gen::SO_PAIRABLE", SO_PAIRABLE, file);
 #else
-	newmissing("Net::Gen::SO_PAIRABLE", file);
+	newmissing(missing, "Net::Gen::SO_PAIRABLE", file);
 #endif
 #ifdef	SO_REUSEADDR
 	newXSconstUV("Net::Gen::SO_REUSEADDR", SO_REUSEADDR, file);
 #else
-	newmissing("Net::Gen::SO_REUSEADDR", file);
+	newmissing(missing, "Net::Gen::SO_REUSEADDR", file);
 #endif
 #ifdef	SO_REUSEPORT
 	newXSconstUV("Net::Gen::SO_REUSEPORT", SO_REUSEPORT, file);
 #else
-	newmissing("Net::Gen::SO_REUSEPORT", file);
+	newmissing(missing, "Net::Gen::SO_REUSEPORT", file);
 #endif
 #ifdef	SO_USELOOPBACK
 	newXSconstUV("Net::Gen::SO_USELOOPBACK", SO_USELOOPBACK, file);
 #else
-	newmissing("Net::Gen::SO_USELOOPBACK", file);
+	newmissing(missing, "Net::Gen::SO_USELOOPBACK", file);
 #endif
 #ifdef	SO_XSE
 	newXSconstUV("Net::Gen::SO_XSE", SO_XSE, file);
 #else
-	newmissing("Net::Gen::SO_XSE", file);
+	newmissing(missing, "Net::Gen::SO_XSE", file);
 #endif
 #ifdef	SO_RCVBUF
 	newXSconstUV("Net::Gen::SO_RCVBUF", SO_RCVBUF, file);
 #else
-	newmissing("Net::Gen::SO_RCVBUF", file);
+	newmissing(missing, "Net::Gen::SO_RCVBUF", file);
 #endif
 #ifdef	SO_SNDBUF
 	newXSconstUV("Net::Gen::SO_SNDBUF", SO_SNDBUF, file);
 #else
-	newmissing("Net::Gen::SO_SNDBUF", file);
+	newmissing(missing, "Net::Gen::SO_SNDBUF", file);
 #endif
 #ifdef	SO_RCVTIMEO
 	newXSconstUV("Net::Gen::SO_RCVTIMEO", SO_RCVTIMEO, file);
 #else
-	newmissing("Net::Gen::SO_RCVTIMEO", file);
+	newmissing(missing, "Net::Gen::SO_RCVTIMEO", file);
 #endif
 #ifdef	SO_SNDTIMEO
 	newXSconstUV("Net::Gen::SO_SNDTIMEO", SO_SNDTIMEO, file);
 #else
-	newmissing("Net::Gen::SO_SNDTIMEO", file);
+	newmissing(missing, "Net::Gen::SO_SNDTIMEO", file);
 #endif
 #ifdef	SO_RCVLOWAT
 	newXSconstUV("Net::Gen::SO_RCVLOWAT", SO_RCVLOWAT, file);
 #else
-	newmissing("Net::Gen::SO_RCVLOWAT", file);
+	newmissing(missing, "Net::Gen::SO_RCVLOWAT", file);
 #endif
 #ifdef	SO_SNDLOWAT
 	newXSconstUV("Net::Gen::SO_SNDLOWAT", SO_SNDLOWAT, file);
 #else
-	newmissing("Net::Gen::SO_SNDLOWAT", file);
+	newmissing(missing, "Net::Gen::SO_SNDLOWAT", file);
 #endif
 #ifdef	SO_TYPE
 	newXSconstUV("Net::Gen::SO_TYPE", SO_TYPE, file);
 #else
-	newmissing("Net::Gen::SO_TYPE", file);
+	newmissing(missing, "Net::Gen::SO_TYPE", file);
 #endif
 #ifdef	SO_STATE
 	newXSconstUV("Net::Gen::SO_STATE", SO_STATE, file);
 #else
-	newmissing("Net::Gen::SO_STATE", file);
+	newmissing(missing, "Net::Gen::SO_STATE", file);
 #endif
 #ifdef	SO_FAMILY
 	newXSconstUV("Net::Gen::SO_FAMILY", SO_FAMILY, file);
 #else
-	newmissing("Net::Gen::SO_FAMILY", file);
+	newmissing(missing, "Net::Gen::SO_FAMILY", file);
 #endif
 #ifdef	SO_LINGER
 	newXSconstUV("Net::Gen::SO_LINGER", SO_LINGER, file);
 #else
-	newmissing("Net::Gen::SO_LINGER", file);
+	newmissing(missing, "Net::Gen::SO_LINGER", file);
 #endif
 #ifdef	SOL_SOCKET
 	newXSconstUV("Net::Gen::SOL_SOCKET", SOL_SOCKET, file);
 #else
-	newmissing("Net::Gen::SOL_SOCKET", file);
+	newmissing(missing, "Net::Gen::SOL_SOCKET", file);
 #endif
 #ifdef	SOCK_STREAM
 	newXSconstUV("Net::Gen::SOCK_STREAM", SOCK_STREAM, file);
 #else
-	newmissing("Net::Gen::SOCK_STREAM", file);
+	newmissing(missing, "Net::Gen::SOCK_STREAM", file);
 #endif
 #ifdef	SOCK_DGRAM
 	newXSconstUV("Net::Gen::SOCK_DGRAM", SOCK_DGRAM, file);
 #else
-	newmissing("Net::Gen::SOCK_DGRAM", file);
+	newmissing(missing, "Net::Gen::SOCK_DGRAM", file);
 #endif
 #ifdef	SOCK_RAW
 	newXSconstUV("Net::Gen::SOCK_RAW", SOCK_RAW, file);
 #else
-	newmissing("Net::Gen::SOCK_RAW", file);
+	newmissing(missing, "Net::Gen::SOCK_RAW", file);
 #endif
 #ifdef	SOCK_RDM
 	newXSconstUV("Net::Gen::SOCK_RDM", SOCK_RDM, file);
 #else
-	newmissing("Net::Gen::SOCK_RDM", file);
+	newmissing(missing, "Net::Gen::SOCK_RDM", file);
 #endif
 #ifdef	SOCK_SEQPACKET
 	newXSconstUV("Net::Gen::SOCK_SEQPACKET", SOCK_SEQPACKET, file);
 #else
-	newmissing("Net::Gen::SOCK_SEQPACKET", file);
+	newmissing(missing, "Net::Gen::SOCK_SEQPACKET", file);
 #endif
 #ifndef	AF_UNSPEC
 #define	AF_UNSPEC	0
@@ -941,12 +944,12 @@ BOOT:
 #ifdef	AF_INET
 	newXSconstUV("Net::Gen::AF_INET", AF_INET, file);
 #else
-	newmissing("Net::Gen::AF_INET", file);
+	newmissing(missing, "Net::Gen::AF_INET", file);
 #endif
 #ifdef	PF_INET
 	newXSconstUV("Net::Gen::PF_INET", PF_INET, file);
 #else
-	newmissing("Net::Gen::PF_INET", file);
+	newmissing(missing, "Net::Gen::PF_INET", file);
 #endif
 #ifndef	AF_UNIX
 #ifdef	AF_LOCAL
@@ -958,245 +961,265 @@ BOOT:
 #define	PF_UNIX	PF_LOCAL
 #endif
 #endif
+#ifndef	AF_LOCAL
+#ifdef	AF_UNIX
+#define	AF_LOCAL	AF_UNIX
+#endif
+#endif
+#ifndef	PF_LOCAL
+#ifdef	PF_UNIX
+#define	PF_LOCAL	PF_UNIX
+#endif
+#endif
 #ifdef	AF_UNIX
 	newXSconstUV("Net::Gen::AF_UNIX", AF_UNIX, file);
 #else
-	newmissing("Net::Gen::AF_UNIX", file);
+	newmissing(missing, "Net::Gen::AF_UNIX", file);
 #endif
 #ifdef	PF_UNIX
 	newXSconstUV("Net::Gen::PF_UNIX", PF_UNIX, file);
 #else
-	newmissing("Net::Gen::PF_UNIX", file);
+	newmissing(missing, "Net::Gen::PF_UNIX", file);
+#endif
+#ifdef	AF_LOCAL
+	newXSconstUV("Net::Gen::AF_LOCAL", AF_LOCAL, file);
+#else
+	newmissing(missing, "Net::Gen::AF_LOCAL", file);
+#endif
+#ifdef	PF_LOCAL
+	newXSconstUV("Net::Gen::PF_LOCAL", PF_LOCAL, file);
+#else
+	newmissing(missing, "Net::Gen::PF_LOCAL", file);
 #endif
 #ifdef	AF_IMPLINK
 	newXSconstUV("Net::Gen::AF_IMPLINK", AF_IMPLINK, file);
 #else
-	newmissing("Net::Gen::AF_IMPLINK", file);
+	newmissing(missing, "Net::Gen::AF_IMPLINK", file);
 #endif
 #ifdef	PF_IMPLINK
 	newXSconstUV("Net::Gen::PF_IMPLINK", PF_IMPLINK, file);
 #else
-	newmissing("Net::Gen::PF_IMPLINK", file);
+	newmissing(missing, "Net::Gen::PF_IMPLINK", file);
 #endif
 #ifdef	AF_PUP
 	newXSconstUV("Net::Gen::AF_PUP", AF_PUP, file);
 #else
-	newmissing("Net::Gen::AF_PUP", file);
+	newmissing(missing, "Net::Gen::AF_PUP", file);
 #endif
 #ifdef	PF_PUP
 	newXSconstUV("Net::Gen::PF_PUP", PF_PUP, file);
 #else
-	newmissing("Net::Gen::PF_PUP", file);
+	newmissing(missing, "Net::Gen::PF_PUP", file);
 #endif
 #ifdef	AF_CHAOS
 	newXSconstUV("Net::Gen::AF_CHAOS", AF_CHAOS, file);
 #else
-	newmissing("Net::Gen::AF_CHAOS", file);
+	newmissing(missing, "Net::Gen::AF_CHAOS", file);
 #endif
 #ifdef	PF_CHAOS
 	newXSconstUV("Net::Gen::PF_CHAOS", PF_CHAOS, file);
 #else
-	newmissing("Net::Gen::PF_CHAOS", file);
+	newmissing(missing, "Net::Gen::PF_CHAOS", file);
 #endif
 #ifdef	AF_NS
 	newXSconstUV("Net::Gen::AF_NS", AF_NS, file);
 #else
-	newmissing("Net::Gen::AF_NS", file);
+	newmissing(missing, "Net::Gen::AF_NS", file);
 #endif
 #ifdef	PF_NS
 	newXSconstUV("Net::Gen::PF_NS", PF_NS, file);
 #else
-	newmissing("Net::Gen::PF_NS", file);
+	newmissing(missing, "Net::Gen::PF_NS", file);
 #endif
 #ifdef	AF_ISO
 	newXSconstUV("Net::Gen::AF_ISO", AF_ISO, file);
 #else
-	newmissing("Net::Gen::AF_ISO", file);
+	newmissing(missing, "Net::Gen::AF_ISO", file);
 #endif
 #ifdef	PF_ISO
 	newXSconstUV("Net::Gen::PF_ISO", PF_ISO, file);
 #else
-	newmissing("Net::Gen::PF_ISO", file);
+	newmissing(missing, "Net::Gen::PF_ISO", file);
 #endif
 #ifdef	AF_OSI
 	newXSconstUV("Net::Gen::AF_OSI", AF_OSI, file);
 #else
-	newmissing("Net::Gen::AF_OSI", file);
+	newmissing(missing, "Net::Gen::AF_OSI", file);
 #endif
 #ifdef	PF_OSI
 	newXSconstUV("Net::Gen::PF_OSI", PF_OSI, file);
 #else
-	newmissing("Net::Gen::PF_OSI", file);
+	newmissing(missing, "Net::Gen::PF_OSI", file);
 #endif
 #ifdef	AF_ECMA
 	newXSconstUV("Net::Gen::AF_ECMA", AF_ECMA, file);
 #else
-	newmissing("Net::Gen::AF_ECMA", file);
+	newmissing(missing, "Net::Gen::AF_ECMA", file);
 #endif
 #ifdef	PF_ECMA
 	newXSconstUV("Net::Gen::PF_ECMA", PF_ECMA, file);
 #else
-	newmissing("Net::Gen::PF_ECMA", file);
+	newmissing(missing, "Net::Gen::PF_ECMA", file);
 #endif
 #ifdef	AF_DATAKIT
 	newXSconstUV("Net::Gen::AF_DATAKIT", AF_DATAKIT, file);
 #else
-	newmissing("Net::Gen::AF_DATAKIT", file);
+	newmissing(missing, "Net::Gen::AF_DATAKIT", file);
 #endif
 #ifdef	PF_DATAKIT
 	newXSconstUV("Net::Gen::PF_DATAKIT", PF_DATAKIT, file);
 #else
-	newmissing("Net::Gen::PF_DATAKIT", file);
+	newmissing(missing, "Net::Gen::PF_DATAKIT", file);
 #endif
 #ifdef	AF_CCITT
 	newXSconstUV("Net::Gen::AF_CCITT", AF_CCITT, file);
 #else
-	newmissing("Net::Gen::AF_CCITT", file);
+	newmissing(missing, "Net::Gen::AF_CCITT", file);
 #endif
 #ifdef	PF_CCITT
 	newXSconstUV("Net::Gen::PF_CCITT", PF_CCITT, file);
 #else
-	newmissing("Net::Gen::PF_CCITT", file);
+	newmissing(missing, "Net::Gen::PF_CCITT", file);
 #endif
 #ifdef	AF_SNA
 	newXSconstUV("Net::Gen::AF_SNA", AF_SNA, file);
 #else
-	newmissing("Net::Gen::AF_SNA", file);
+	newmissing(missing, "Net::Gen::AF_SNA", file);
 #endif
 #ifdef	PF_SNA
 	newXSconstUV("Net::Gen::PF_SNA", PF_SNA, file);
 #else
-	newmissing("Net::Gen::PF_SNA", file);
+	newmissing(missing, "Net::Gen::PF_SNA", file);
 #endif
 #ifdef	AF_DECnet
 	newXSconstUV("Net::Gen::AF_DECnet", AF_DECnet, file);
 #else
-	newmissing("Net::Gen::AF_DECnet", file);
+	newmissing(missing, "Net::Gen::AF_DECnet", file);
 #endif
 #ifdef	PF_DECnet
 	newXSconstUV("Net::Gen::PF_DECnet", PF_DECnet, file);
 #else
-	newmissing("Net::Gen::PF_DECnet", file);
+	newmissing(missing, "Net::Gen::PF_DECnet", file);
 #endif
 #ifdef	AF_DLI
 	newXSconstUV("Net::Gen::AF_DLI", AF_DLI, file);
 #else
-	newmissing("Net::Gen::AF_DLI", file);
+	newmissing(missing, "Net::Gen::AF_DLI", file);
 #endif
 #ifdef	PF_DLI
 	newXSconstUV("Net::Gen::PF_DLI", PF_DLI, file);
 #else
-	newmissing("Net::Gen::PF_DLI", file);
+	newmissing(missing, "Net::Gen::PF_DLI", file);
 #endif
 #ifdef	AF_LAT
 	newXSconstUV("Net::Gen::AF_LAT", AF_LAT, file);
 #else
-	newmissing("Net::Gen::AF_LAT", file);
+	newmissing(missing, "Net::Gen::AF_LAT", file);
 #endif
 #ifdef	PF_LAT
 	newXSconstUV("Net::Gen::PF_LAT", PF_LAT, file);
 #else
-	newmissing("Net::Gen::PF_LAT", file);
+	newmissing(missing, "Net::Gen::PF_LAT", file);
 #endif
 #ifdef	AF_HYLINK
 	newXSconstUV("Net::Gen::AF_HYLINK", AF_HYLINK, file);
 #else
-	newmissing("Net::Gen::AF_HYLINK", file);
+	newmissing(missing, "Net::Gen::AF_HYLINK", file);
 #endif
 #ifdef	PF_HYLINK
 	newXSconstUV("Net::Gen::PF_HYLINK", PF_HYLINK, file);
 #else
-	newmissing("Net::Gen::PF_HYLINK", file);
+	newmissing(missing, "Net::Gen::PF_HYLINK", file);
 #endif
 #ifdef	AF_APPLETALK
 	newXSconstUV("Net::Gen::AF_APPLETALK", AF_APPLETALK, file);
 #else
-	newmissing("Net::Gen::AF_APPLETALK", file);
+	newmissing(missing, "Net::Gen::AF_APPLETALK", file);
 #endif
 #ifdef	PF_APPLETALK
 	newXSconstUV("Net::Gen::PF_APPLETALK", PF_APPLETALK, file);
 #else
-	newmissing("Net::Gen::PF_APPLETALK", file);
+	newmissing(missing, "Net::Gen::PF_APPLETALK", file);
 #endif
 #ifdef	AF_ROUTE
 	newXSconstUV("Net::Gen::AF_ROUTE", AF_ROUTE, file);
 #else
-	newmissing("Net::Gen::AF_ROUTE", file);
+	newmissing(missing, "Net::Gen::AF_ROUTE", file);
 #endif
 #ifdef	PF_ROUTE
 	newXSconstUV("Net::Gen::PF_ROUTE", PF_ROUTE, file);
 #else
-	newmissing("Net::Gen::PF_ROUTE", file);
+	newmissing(missing, "Net::Gen::PF_ROUTE", file);
 #endif
 #ifdef	AF_LINK
 	newXSconstUV("Net::Gen::AF_LINK", AF_LINK, file);
 #else
-	newmissing("Net::Gen::AF_LINK", file);
+	newmissing(missing, "Net::Gen::AF_LINK", file);
 #endif
 #ifdef	PF_LINK
 	newXSconstUV("Net::Gen::PF_LINK", PF_LINK, file);
 #else
-	newmissing("Net::Gen::PF_LINK", file);
+	newmissing(missing, "Net::Gen::PF_LINK", file);
 #endif
 #ifdef	AF_NETMAN
 	newXSconstUV("Net::Gen::AF_NETMAN", AF_NETMAN, file);
 #else
-	newmissing("Net::Gen::AF_NETMAN", file);
+	newmissing(missing, "Net::Gen::AF_NETMAN", file);
 #endif
 #ifdef	PF_NETMAN
 	newXSconstUV("Net::Gen::PF_NETMAN", PF_NETMAN, file);
 #else
-	newmissing("Net::Gen::PF_NETMAN", file);
+	newmissing(missing, "Net::Gen::PF_NETMAN", file);
 #endif
 #ifdef	AF_X25
 	newXSconstUV("Net::Gen::AF_X25", AF_X25, file);
 #else
-	newmissing("Net::Gen::AF_X25", file);
+	newmissing(missing, "Net::Gen::AF_X25", file);
 #endif
 #ifdef	PF_X25
 	newXSconstUV("Net::Gen::PF_X25", PF_X25, file);
 #else
-	newmissing("Net::Gen::PF_X25", file);
+	newmissing(missing, "Net::Gen::PF_X25", file);
 #endif
 #ifdef	AF_CTF
 	newXSconstUV("Net::Gen::AF_CTF", AF_CTF, file);
 #else
-	newmissing("Net::Gen::AF_CTF", file);
+	newmissing(missing, "Net::Gen::AF_CTF", file);
 #endif
 #ifdef	PF_CTF
 	newXSconstUV("Net::Gen::PF_CTF", PF_CTF, file);
 #else
-	newmissing("Net::Gen::PF_CTF", file);
+	newmissing(missing, "Net::Gen::PF_CTF", file);
 #endif
 #ifdef	AF_WAN
 	newXSconstUV("Net::Gen::AF_WAN", AF_WAN, file);
 #else
-	newmissing("Net::Gen::AF_WAN", file);
+	newmissing(missing, "Net::Gen::AF_WAN", file);
 #endif
 #ifdef	PF_WAN
 	newXSconstUV("Net::Gen::PF_WAN", PF_WAN, file);
 #else
-	newmissing("Net::Gen::PF_WAN", file);
+	newmissing(missing, "Net::Gen::PF_WAN", file);
 #endif
 #ifdef	AF_USER
 	newXSconstUV("Net::Gen::AF_USER", AF_USER, file);
 #else
-	newmissing("Net::Gen::AF_USER", file);
+	newmissing(missing, "Net::Gen::AF_USER", file);
 #endif
 #ifdef	PF_USER
 	newXSconstUV("Net::Gen::PF_USER", PF_USER, file);
 #else
-	newmissing("Net::Gen::PF_USER", file);
+	newmissing(missing, "Net::Gen::PF_USER", file);
 #endif
 #ifdef	AF_LAST
 	newXSconstUV("Net::Gen::AF_LAST", AF_LAST, file);
 #else
-	newmissing("Net::Gen::AF_LAST", file);
+	newmissing(missing, "Net::Gen::AF_LAST", file);
 #endif
 #ifdef	PF_LAST
 	newXSconstUV("Net::Gen::PF_LAST", PF_LAST, file);
 #else
-	newmissing("Net::Gen::PF_LAST", file);
+	newmissing(missing, "Net::Gen::PF_LAST", file);
 #endif
 	newXSconstUV("Net::Gen::ENOENT", ENOENT, file);
 	newXSconstUV("Net::Gen::EINVAL", EINVAL, file);

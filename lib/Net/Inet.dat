@@ -1,4 +1,4 @@
-# Copyright 1995,2000 Spider Boardman.
+# Copyright 1995,2002 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -11,7 +11,7 @@
 # IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
 # WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
-# rcsid: "@(#) $Id: Inet.dat,v 1.25 2000/08/05 20:33:14 spider Exp $"
+# rcsid: "@(#) $Id: Inet.dat,v 1.26 2002/03/30 10:10:39 spider Exp $"
 
 package Net::Inet;
 use 5.004_04;			# new minimum Perl version for this package
@@ -24,13 +24,13 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD);
 
 
 BEGIN {
-    $VERSION = '0.933';
+    $VERSION = '1.0';
     eval "sub Version () { __PACKAGE__ . ' v$VERSION' }";
 }
 
 use AutoLoader;
 #use Exporter ();
-use Net::Gen 0.93 qw(:ALL);
+use Net::Gen 1.0 qw(:ALL);
 use Socket qw(/^inet_/);
 
 BEGIN {
@@ -435,7 +435,7 @@ sub new
 		   (defined $self ? "=$self" : " undefined") .
 		   " after sub-new");
     if ($self) {
-	dump if $debug > 1 and
+	CORE::dump if $debug > 1 and
 	    ref $self ne $class || "$self" !~ /HASH/;
 	# init object debug level
 	$self->setparams({'debug'=>$debug},-1);
@@ -3825,7 +3825,7 @@ The examples above show the indirect object syntax which many prefer,
 as well as the guaranteed-to-be-safe static method call.  There
 are occasional problems with the indirect object syntax, which
 tend to be rather obscure when encountered.  See
-http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.html
+http://www.xray.mpe.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.html
 for details.
 
 =item init
@@ -3937,7 +3937,8 @@ described in L<"Known Object Parameters"> below.)
 =back
 
 There are also various I<accessor> methods for the object parameters.
-See L<Net::Gen/Accessors> for calling details.
+See L<Net::Gen/"Public Methods"> (where it talks about C<Accessors>)
+for calling details.
 See L<"Known Object Parameters"> below
 for those defined by this class.
 
@@ -4153,7 +4154,20 @@ from the C<Socket> module.
 
 =item ntohs
 
-As you'd expect, I think.
+About as those who are used to them might expect, I think.
+However, these versions will return lists in list context, and will
+complain if given a multi-element list in scalar context.
+
+[For those who don't know what these are, and who don't have documentation
+on them in their existing system documentation, these functions convert data
+between 'host' and 'network' byte ordering, for 'short' or 'long' network
+data.  (This should explain the 'h', 'n', 's', and 'l' letters in the
+names.)  Long network data means 32-bit quantities, such as IP addresses, and
+short network data means 16-bit quantities, such as IP port numbers.
+You'd only need to use these functions if you're not using the methods from
+this package to build your packed 'sockaddr' structures or to unpack their
+data after a connect() or accept().]
+
 
 =item pack_sockaddr_in
 
@@ -4168,7 +4182,8 @@ $port arguments must be numbers, and the $in_addr argument must
 be a packed C<struct in_addr> such as the trailing elements from
 perl's gethostent() return list.  This differs from the
 implementation in the C<Socket> module in that the C<$family>
-argument is available (though optional).
+argument is available (though optional).  The C<$family> argument
+defaults to C<AF_INET>.
 
 =item unpack_sockaddr_in
 
@@ -4180,7 +4195,7 @@ Returns the address family, port, and packed C<struct in_addr>
 from the supplied packed C<struct sockaddr_in>.  This is the
 inverse of pack_sockaddr_in().  This differs from the
 implementation in the C<Socket> module in that the C<$family>
-value from the socket address is returned (and might not be AF_INET).
+value from the socket address is returned (and might not be C<AF_INET>).
 
 =item INADDR_UNSPEC_GROUP
 
@@ -4435,7 +4450,8 @@ for port 80.
 
 This module has been tested with threaded perls, and should be as thread-safe
 as perl itself.  (As of 5.005_03 and 5.005_57, that's not all that safe
-just yet.)
+just yet.)  It also works with interpreter-based threads ('ithreads') in
+more recent perl releases.
 
 =head1 SEE ALSO
 
@@ -4445,7 +4461,7 @@ L<Net::UDP(3)|Net::UDP>
 
 =head1 AUTHOR
 
-Spider Boardman E<lt>spider@Orb.Nashua.NH.USE<gt>
+Spider Boardman E<lt>spidb@cpan.orgE<gt>
 
 =cut
 

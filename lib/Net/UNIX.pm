@@ -1,4 +1,4 @@
-# Copyright 1995,2000 Spider Boardman.
+# Copyright 1995,2002 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -11,7 +11,7 @@
 # IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
 # WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
-# rcsid: "@(#) $Id: UNIX.dat,v 1.21 2000/08/05 20:33:14 spider Exp $"
+# rcsid: "@(#) $Id: UNIX.dat,v 1.22 2002/03/30 10:11:08 spider Exp $"
 
 package Net::UNIX;
 use 5.004_04;			# new minimum Perl version for this package
@@ -23,13 +23,13 @@ sub croak { require Carp; goto &Carp::croak; }
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS *AUTOLOAD);
 
 BEGIN {
-    $VERSION = '0.933';
+    $VERSION = '1.0';
     eval "sub Version { __PACKAGE__ . ' v$VERSION' }";
 }
 
 use AutoLoader;
 #use Exporter ();
-use Net::Gen 0.93 qw(/pack_sockaddr$/ :sockvals :families);
+use Net::Gen 1.0 qw(/pack_sockaddr$/ :sockvals :families);
 
 BEGIN {
     @ISA = 'Net::Gen';
@@ -117,9 +117,8 @@ sub unpack_sockaddr_un ($)
 my $debug = 0;
 
 #& _debug($this, [$newval]) : oldval
-sub _debug
+sub _debug : locked
 {
-    use attrs qw(locked);
     my ($this,$newval) = @_;
     return $this->debug($newval) if ref $this;
     my $prev = $debug;
@@ -140,9 +139,8 @@ my %Keys;			# for storing the registrations
 
 
 #& new($class, [\%params]) : {$obj | undef}
-sub new
+sub new : locked
 {
-    use attrs qw(locked);
     my $whoami = $_[0]->_trace(\@_,1);
     my($class,@Args,$self) = @_;
     $self = $class->SUPER::new(@Args);
@@ -235,9 +233,8 @@ sub _setconnpath
 }
 
 #& _init($self, whatpath[, $path][, \%params]) : {$self | undef}
-sub _init
+sub _init : locked method
 {
-    use attrs qw(locked method);
     my ($self,$what,@args,$path,$parms) = @_;
     if (@args == 1 or @args == 2) {
 	$parms = $args[-1];
@@ -278,9 +275,8 @@ sub init
 }
 
 #& connect($self [, $destpath] [, \%newparams]) : boolean
-sub connect
+sub connect : locked method
 {
-    use attrs qw(locked method);
     my($self,$path,$parms) = @_;
     if (@_ > 3 or @_ == 3 and (!ref($parms) or ref($path))) {
 	croak("Invalid arguments to " . __PACKAGE__ . "::connect(@_), called");
@@ -373,7 +369,7 @@ The examples above show the indirect object syntax which many prefer,
 as well as the guaranteed-to-be-safe static method call.  There
 are occasional problems with the indirect object syntax, which
 tend to be rather obscure when encountered.  See
-http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.html
+http://www.xray.mpe.mpg.de/mailing-lists/perl5-porters/1998-01/msg01674.html
 for details.
 
 =item init
@@ -616,7 +612,8 @@ Z<>
 
 This module has been tested with threaded perls, and should be as thread-safe
 as perl itself.  (As of 5.005_03 and 5.005_57, that's not all that safe
-just yet.)
+just yet.)  It also works with interpreter-based threads ('ithreads') in
+more recent perl releases.
 
 =head1 SEE ALSO
 
@@ -625,7 +622,7 @@ L<Net::UNIX::Server(3)|Net::UNIX::Server>
 
 =head1 AUTHOR
 
-Spider Boardman E<lt>spider@Orb.Nashua.NH.USE<gt>
+Spider Boardman E<lt>spidb@cpan.orgE<gt>
 
 =cut
 
@@ -635,18 +632,16 @@ Spider Boardman E<lt>spider@Orb.Nashua.NH.USE<gt>
 
 
 #& setdebug($this, [bool, [norecurse]]) : oldvalues
-sub setdebug
+sub setdebug : locked
 {
-    use attrs qw(locked);
     my $this = shift;
     $this->_debug($_[0]) .
 	((@_ > 1 && $_[1]) ? '' : $this->SUPER::setdebug(@_));
 }
 
 #& bind($self [, $destpath] [, \%newparams]) : boolean
-sub bind
+sub bind : locked method
 {
-    use attrs qw(locked method);
     my($self,$path,$parms) = @_;
     if (@_ > 3 or @_ == 3 and (!ref($parms) or ref($path))) {
 	my $whoami = $self->_trace;
@@ -678,9 +673,8 @@ sub _setbuf_unbuf
 }
 
 #& PRINT($self, @args) : boolean OKness
-sub PRINT
+sub PRINT : locked method
 {
-    use attrs qw(locked method);
     my $self = shift;
     if ($self->getparam('type',SOCK_DGRAM,1) != SOCK_STREAM and
 	$self->getparam('unbuffered_output'))
@@ -693,9 +687,8 @@ sub PRINT
 }
 
 #& READLINE($self) : $line | undef || @lines
-sub READLINE
+sub READLINE : locked method
 {
-    use attrs qw(locked method);
     my $whoami = $_[0]->_trace(\@_,5);
     carp "Excess arguments to ${whoami}, ignored" if @_ > 1;
     my $self = shift;

@@ -90,7 +90,7 @@ Should be the same (on most BSD-ish systems, anyway) as
 to the shell.
 
 
-Anyway, bug reports & feature requests to me (spider@Orb.Nashua.NH.US).
+Anyway, bug reports & feature requests to me (spidb@cpan.org).
 HOWEVER, if you have compilation difficulties, check the Makefile.PL
 file again, especially near "my @hfiles".  The list of required system
 include files is almost entirely tester-contributed.  If it doesn't
@@ -108,7 +108,7 @@ of perl5 than this code ever could have).  If you were using the internals
 of the implementation rather than sticking to the documented interfaces,
 you will have some work to do before your derived classes will work again.
 
-# Copyright 1995,2000 Spider Boardman.
+# Copyright 1995,2002 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software

@@ -1,6 +1,19 @@
 #!perl
 
-# rcsid: "@(#) $Id: Makefile.PL,v 1.21 2000/02/20 23:50:56 spider Exp $"
+# Copyright 1995,2002 Spider Boardman.
+# All rights reserved.
+#
+# Automatic licensing for this software is available.  This software
+# can be copied and used under the terms of the GNU Public License,
+# version 1 or (at your option) any later version, or under the
+# terms of the Artistic license.  Both of these can be found with
+# the Perl distribution, which this software is intended to augment.
+#
+# THIS PACKAGE IS PROVIDED "AS IS" AND WITHOUT ANY EXPRESS OR
+# IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+# WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+  
+# rcsid: "@(#) $Id: Makefile.PL,v 1.23 2002/03/30 11:32:09 spider Exp $"
 
 use 5.004_04;
 use ExtUtils::MakeMaker qw(WriteMakefile $Verbose);
@@ -28,7 +41,7 @@ WriteMakefile(
 		('ABSTRACT'	=>
 			'Provide OO socket manipulations, including friendly [get/set]sockopt',
 		 'AUTHOR'	=>
-			'Spider Boardman <spider@Orb.Nashua.NH.US>'
+			'Spider Boardman <spidb@cpan.org>'
 		)
 		: ()
 		,
@@ -97,9 +110,11 @@ sub MY::libscan
 # Here we create .pm files from the .dat files, based on whether we
 # have C<sub : attrs> or are stuck with C<use attrs qw(attrs)>.
 
-sub gen_pm_files () {
+sub gen_pm_files ()
+{
     open MANI, "<MANIFEST" or die "Cannot read MANIFEST file: $!";
     my @datfiles = grep { m/dat$/ } <MANI>;
+    close MANI;
     chomp @datfiles;
     my $file;
     for $file (@datfiles) {
@@ -122,13 +137,13 @@ sub gen_pm_files () {
 		    }
 		}
 		else {
-		    if ($line =~ m/^[{]/) { #'}' for vi's sake
+		    if ($line =~ m/^[\{]/) { #'}' for vi's sake
 			$line .= "    use attrs qw($attrlist);\n";
 			undef $attrlist;
 		    }
 		}
 	    }
-	    unless ($line =~ m/^[#][+]attrs (.*)$/) {
+	    unless ($line =~ m/^[\#][+]attrs (.*)$/) {
 		print $outfile $line;
 		next;
 	    }
@@ -494,6 +509,15 @@ sub MY::post_constants
 
     # Finally, make sure that MM gets its own chance.
     $self->MM::post_constants(@_);	# in case it's not empty now
+}
+
+# Override 'make ci' rule to account for the bogus .pm files.
+sub MY::dist_ci
+{
+'ci :
+	$(CI) `cat manifake`
+	$(RCS_LABEL) `cat manifake`
+'
 }
 
 # Generate the .pm files before we let MM scan the lib directory.

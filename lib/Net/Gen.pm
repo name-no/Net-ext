@@ -1,4 +1,4 @@
-# Copyright 1995,2000 Spider Boardman.
+# Copyright 1995,2002 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -11,7 +11,7 @@
 # IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
 # WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
-# rcsid: "@(#) $Id: Gen.dat,v 1.40 2000/08/05 20:33:14 spider Exp $"
+# rcsid: "@(#) $Id: Gen.dat,v 1.42 2002/03/30 10:17:03 spider Exp $"
 
 
 package Net::Gen;
@@ -23,7 +23,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS
 	    %_missing $AUTOLOAD $adebug);
 
 BEGIN {
-    $VERSION = '0.933';
+    $VERSION = '1.0';
     eval "sub Version () { __PACKAGE__ . ' v$VERSION' }";
 }
 
@@ -79,6 +79,7 @@ BEGIN {
 		    PF_NS PF_ISO PF_OSI PF_ECMA PF_DATAKIT PF_CCITT PF_SNA
 		    PF_DECnet PF_DLI PF_LAT PF_HYLINK PF_APPLETALK PF_ROUTE
 		    PF_LINK PF_NETMAN PF_X25 PF_CTF PF_WAN PF_USER PF_LAST
+		    AF_LOCAL PF_LOCAL
 		   );
 
     %EXPORT_TAGS = (
@@ -110,11 +111,13 @@ BEGIN {
 		       AF_NS AF_ISO AF_OSI AF_ECMA AF_DATAKIT AF_CCITT AF_SNA
 		       AF_DECnet AF_DLI AF_LAT AF_HYLINK AF_APPLETALK AF_ROUTE
 		       AF_LINK AF_NETMAN AF_X25 AF_CTF AF_WAN AF_USER AF_LAST
+		       AF_LOCAL
 		      )],
 	pf	=> [qw(PF_UNSPEC PF_UNIX PF_INET PF_IMPLINK PF_PUP PF_CHAOS
 		       PF_NS PF_ISO PF_OSI PF_ECMA PF_DATAKIT PF_CCITT PF_SNA
 		       PF_DECnet PF_DLI PF_LAT PF_HYLINK PF_APPLETALK PF_ROUTE
 		       PF_LINK PF_NETMAN PF_X25 PF_CTF PF_WAN PF_USER PF_LAST
+		       PF_LOCAL
 		      )],
 	ALL	=> [@EXPORT, @EXPORT_OK],
     );
@@ -145,9 +148,8 @@ my $nullsub = sub {};		# handy null warning handler
 # croak in the AUTOLOAD constant section, since we're being called from
 # inside the eval in initsockopts().
 
-sub AUTOLOAD
+sub AUTOLOAD : locked
 {
-    use attrs qw(locked);
     # This AUTOLOAD is used to validate possible missing constants from
     # the XS code, or to auto-create get/setattr subs.
     # The defined constants are already available as XSUBs, and the same
@@ -215,9 +217,8 @@ BEGIN {
 my %evalopts;			# avoid compiling an eval per sockopt
 
 #& initsockopts($class, $level+0, \%sockopts) : void
-sub initsockopts
+sub initsockopts : locked
 {
-    use attrs qw(locked);
     my ($class,$level,$opts) = @_;
     croak "Invalid arguments to " . __PACKAGE__ . "::initsockopts, called"
 	if @_ != 3 or ref $opts ne 'HASH';
@@ -302,9 +303,8 @@ my $debug = 0;			# module-wide debug hack -- don't use
 
 # can update $debug file variable
 #& _debug($this [, $newval]) : oldval
-sub _debug
+sub _debug : locked
 {
-    use attrs qw(locked);
     my ($this,$newval) = @_;
     return $this->debug($newval) if ref $this;
     # class method here
@@ -314,9 +314,8 @@ sub _debug
 }
 
 #& debug($self [, $newval]) : oldval
-sub debug
+sub debug : locked method
 {
-    use attrs qw(locked method);
     my ($self,$newval) = @_;
     my $oldval = $ {*$self}{Parms}{'debug'} if defined wantarray;
     $self->setparams({'debug'=>$newval}) if defined $newval;
@@ -354,9 +353,8 @@ my $nonblock_flag = eval 'pack("I",VAL_O_NONBLOCK)';
 my $eagain = eval 'VAL_EAGAIN';
 
 #& _accessor($self, $what [, $newval]) : oldvalue
-sub _accessor
+sub _accessor : locked method
 {
-    use attrs qw(locked method);
     my ($self, $what, $newval) = @_;
     croak "Usage: \$sock->$what or \$sock->$what(\$newvalue),"
 	if @_ > 3;
@@ -375,10 +373,12 @@ sub _setblocking
 	defined $ {*$self}{Parms}{$what};
     if ($newval) {
 	$_[2] = 1;	# canonicalise the new value
-	if (defined $F_GETFL and defined $F_SETFL and defined $nonblock_flag
-	    and $self->isopen) {
+	if (defined $F_GETFL and defined $F_SETFL and
+	    defined $nonblock_flag and $self->isopen)
+	{
 	    if ((CORE::fcntl($self, $F_GETFL, 0) & VAL_O_NONBLOCK) ==
-		VAL_O_NONBLOCK) {
+		VAL_O_NONBLOCK)
+	    {
 		$ {*$self}{Parms}{$what} = 0;  # note previous status
 		return 'Failed to clear non-blocking status'
 		    unless eval {CORE::fcntl($self, $F_SETFL,
@@ -390,12 +390,14 @@ sub _setblocking
     else {
 	$_[2] = 0;	# canonicalise the new value
 	unless (defined $F_GETFL and defined $F_SETFL and
-		defined $nonblock_flag) {
+		defined $nonblock_flag)
+	{
 	    return 'Non-blocking sockets unavailable in this configuration';
 	}
 	if ($self->isopen) {
 	    if ((CORE::fcntl($self, $F_GETFL, 0) & VAL_O_NONBLOCK) !=
-		VAL_O_NONBLOCK) {
+		VAL_O_NONBLOCK)
+	    {
 		$ {*$self}{Parms}{$what} = 1;  # note previous state
 		return 'Failed to set non-blocking status'
 		    unless eval {CORE::fcntl($self, $F_SETFL,
@@ -408,9 +410,8 @@ sub _setblocking
 }
 
 #& blocking($self [, $newval]) : canonical_oldval
-sub blocking
+sub blocking : locked method
 {
-    use attrs qw(locked method);
     my ($self, $newval) = @_;
     croak 'Usage: $sock->blocking or $sock->blocking(0|1),'
 	if @_ > 2;
@@ -448,9 +449,8 @@ my %Keys;
 my %Opts;
 
 #& register_param_keys($self, \@keys)
-sub register_param_keys
+sub register_param_keys : locked method
 {
-    use attrs qw(locked method);
     my ($self, $names) = @_;
     my $whoami = $self->_trace(\@_,3);
     croak "Invalid arguments to ${whoami}(@_), called"
@@ -465,9 +465,8 @@ sub registerParamKeys;	# helps with -w
 
 #& register_param_handlers($self, \@keys, [\]@handlers)
 #&  -or- ($self, \%key-handlers)
-sub register_param_handlers
+sub register_param_handlers : locked method
 {
-    use attrs qw(locked method);
     my ($self, $names, @handlers, $handlers) = @_;
     my $whoami = $self->_trace(\@_,3);
     if (ref $names eq 'HASH') {
@@ -492,9 +491,8 @@ sub registerParamHandlers;	# helps with -w
 *registerParamHandlers = \&register_param_handlers; # alias other form
 
 #& register_options($self, $levelname, $level, \%options)
-sub register_options
+sub register_options : locked method
 {
-    use attrs qw(locked method);
     my ($self, $levname, $level, $opts) = @_;
     my $whoami = $self->_trace(\@_,3);
     croak "Invalid arguments to ${whoami}(@_), called"
@@ -508,9 +506,8 @@ sub registerOptions;		# helps with -w
 
 # pseudo-subclass for saving parameters (ParamSaver, inspired by SelectSaver)
 #& param_saver($self, @params) : restoration_object
-sub param_saver
+sub param_saver : locked method
 {
-    use attrs qw(locked method);
     my ($self, @params) = @_;
     my @delparams =
 	# map { exists $ {*$self}{Parms}{$_} ? () : ($_) } @params;
@@ -579,9 +576,8 @@ sub new
 }
 
 #& setparams($this, \%newparams [, $newonly [, $check]]) : boolean
-sub setparams
+sub setparams : locked method
 {
-    use attrs qw(locked method);
     my ($self,$newparams,$newonly,$check) = @_;
     my $errs = 0;
 
@@ -620,7 +616,8 @@ sub setparams
 	    , $errs++, next
 		if $newonly > 0 && defined $$pslot;
 	if (defined($ {*$self}{Keys}{$parm}) and
-	    (ref($ {*$self}{Keys}{$parm}) eq 'CODE')) {
+	    (ref($ {*$self}{Keys}{$parm}) eq 'CODE'))
+	{
 	    my $rval = &{$ {*$self}{Keys}{$parm}}($self,$parm,$newval);
 	    (carp $rval), $errs++, next if $rval;
 	}
@@ -633,9 +630,8 @@ sub setparams
     
 
 #& delparams($self, \@paramnames) : boolean
-sub delparams
+sub delparams : locked method
 {
-    use attrs qw(locked method);
     $_[0]->_trace(\@_,1);
     my($self,$keysref) = @_;
     my(@k,%k);
@@ -648,9 +644,8 @@ sub delparams
 }
 
 #& checkparams($self) : boolean
-sub checkparams
+sub checkparams : locked method
 {
-    use attrs qw(locked method);
     my $whoami = $_[0]->_trace(\@_,1);
     my $self = shift;
     carp "Excess arguments to ${whoami} ignored"
@@ -676,9 +671,8 @@ sub init
 }
 
 #& getparam($self, $key [, $default [, $defaultifundef]]) : param_value
-sub getparam
+sub getparam : locked method
 {
-    use attrs qw(locked method);
     my $whoami = $_[0]->_trace(\@_,2);
     my($self,$key,$defval,$noundef) = @_;
     carp "Excess arguments to ${whoami}($self) ignored"
@@ -693,9 +687,8 @@ sub getparam
 }
 
 #& getparams($self, \@keys [, $noundef]) : (%hash)
-sub getparams
+sub getparams : locked method
 {
-    use attrs qw(locked method);
     my $whoami = $_[0]->_trace(\@_,2);
     my ($self,$aref,$noundef) = @_;
     croak "Insufficient arguments to ${whoami}($self), called"
@@ -738,9 +731,8 @@ sub getparams
     
 
 #& condition($self)
-sub condition
+sub condition : locked method
 {
-    use attrs qw(locked method);
     my $self = $_[0];
     my $sel = SelectSaver->new;
     CORE::select($self);
@@ -752,9 +744,8 @@ sub condition
 }
 
 #& open($self [, @ignore]) : boolean
-sub open
+sub open : locked method
 {
-    use attrs qw(locked method);
     $_[0]->_trace(\@_,2);
     my $self = shift;
     $self->stopio if $self->isopen;
@@ -885,9 +876,8 @@ sub _tryconnect
 }
 
 #& connect($self, [@ignored]) : boolean
-sub connect
+sub connect : locked method
 {
-    use attrs qw(locked method);
     $_[0]->_trace(\@_,2);
     my $self = shift;
     my $hval = *$self{HASH};
@@ -939,9 +929,8 @@ sub connect
 }
 
 #& getsockinfo($self, [@ignored]) : ?dest sockaddr?
-sub getsockinfo
+sub getsockinfo : locked method
 {
-    use attrs qw(locked method);
     $_[0]->_trace(\@_,4);
     my $self = shift;
     my ($sad,$dad);
@@ -960,9 +949,8 @@ sub getsockinfo
 my %to_shut_flags = (SHUT_RD,1, SHUT_WR,2, SHUT_RDWR,3);
 
 #& shutdown($self [, $how=SHUT_RDWR]) : boolean
-sub shutdown
+sub shutdown : locked method
 {
-    use attrs qw(locked method);
     $_[0]->_trace(\@_,3);
     my $self = shift;
     return 1 unless $self->isconnected or $self->isconnecting;
@@ -987,9 +975,8 @@ my @CloseVars = qw(FHVec isopen isbound didlisten wasconnected isconnected
 my @CloseKeys = qw(srcaddr dstaddr);
 
 #& close($self [, @ignored]) : boolean
-sub close
+sub close : locked method
 {
-    use attrs qw(locked method);
     $_[0]->_trace(\@_,3);
     my $self = shift;
     $self->shutdown if $self->isopen;
@@ -1000,9 +987,8 @@ sub CLOSE;
 *CLOSE = \&close;
 
 #& stopio($self [, @ignored]) : boolean
-sub stopio
+sub stopio : locked method
 {
-    use attrs qw(locked method);
     $_[0]->_trace(\@_,4);
     my $self = shift;
     my $wasopen = $self->isopen;
@@ -1080,9 +1066,8 @@ sub print;			# avoid -w error
 *print = \&put;			# maybe-useful alias
 
 #& ckeof($self) : boolean
-sub ckeof
+sub ckeof : locked method
 {
-    use attrs qw(locked method);
     my $saverr = $!+0;
     local $!;			# preserve this over fcntl() and such
     my $whoami = $_[0]->_trace(\@_,3);
@@ -1107,9 +1092,8 @@ sub ckeof
 }
 
 #& recv($self, [$maxlen, [$flags, [$from]]]) : {$buf | undef}
-sub recv
+sub recv : locked method
 {
-    use attrs qw(locked method);
     my $whoami = $_[0]->_trace(\@_,3);
     my($self,$maxlen,$flags) = @_;
     my($buf,$from,$xfrom) = '';
@@ -1166,9 +1150,8 @@ sub get;			# (helps with -w)
 *get = \&recv;			# a name that works for indirect references
 
 #& getline($self) : like scalar(<$fhandle>)
-sub getline
+sub getline : locked method
 {
-    use attrs qw(locked method);
     my $whoami = $_[0]->_trace(\@_,4);
     carp "Excess arguments to ${whoami} ignored"
 	if @_ > 1;
@@ -1353,7 +1336,7 @@ C<FETCH>, C<STORE>, C<TIESCALAR>
 Any of the I<keys> known to the C<getparam> and C<setparams> methods
 may be used as an I<accessor> function.  See L<"Known Object Parameters">
 below, and the related sections in the derived classes.  For an example,
-see L<"blocking"> below.
+see C<blocking>, below.
 
 =back
 
@@ -2554,7 +2537,7 @@ method will respect.
 
 =item PF
 
-Protocol family for this object.
+Protocol family for this object.  Will default from AF, and vice versa.
 
 =item proto
 
@@ -2666,7 +2649,7 @@ None.
 
 C<AF_APPLETALK> C<AF_CCITT> C<AF_CHAOS> C<AF_CTF> C<AF_DATAKIT>
 C<AF_DECnet> C<AF_DLI> C<AF_ECMA> C<AF_HYLINK> C<AF_IMPLINK>
-C<AF_INET> C<AF_ISO> C<AF_LAST> C<AF_LAT> C<AF_LINK> C<AF_NETMAN>
+C<AF_INET> C<AF_ISO> C<AF_LAST> C<AF_LAT> C<AF_LINK> C<AF_LOCAL> C<AF_NETMAN>
 C<AF_NS> C<AF_OSI> C<AF_PUP> C<AF_ROUTE> C<AF_SNA> C<AF_UNIX>
 C<AF_UNSPEC> C<AF_USER> C<AF_WAN> C<AF_X25> C<EADDRINUSE>
 C<EADDRNOTAVAIL> C<EAFNOSUPPORT> C<EAGAIN> C<EALREADY> C<EBADF>
@@ -2680,7 +2663,7 @@ C<EPROTOTYPE> C<ESHUTDOWN> C<ESOCKTNOSUPPORT> C<ETIME>
 C<ETIMEDOUT> C<ETOOMANYREFS> C<EWOULDBLOCK> C<pack_sockaddr>
 C<PF_APPLETALK> C<PF_CCITT> C<PF_CHAOS> C<PF_CTF> C<PF_DATAKIT>
 C<PF_DECnet> C<PF_DLI> C<PF_ECMA> C<PF_HYLINK> C<PF_IMPLINK>
-C<PF_INET> C<PF_ISO> C<PF_LAST> C<PF_LAT> C<PF_LINK> C<PF_NETMAN>
+C<PF_INET> C<PF_ISO> C<PF_LAST> C<PF_LAT> C<PF_LINK> C<PF_LOCAL> C<PF_NETMAN>
 C<PF_NS> C<PF_OSI> C<PF_PUP> C<PF_ROUTE> C<PF_SNA> C<PF_UNIX>
 C<PF_UNSPEC> C<PF_USER> C<PF_WAN> C<PF_X25> C<RD_NODATA>
 C<SHUT_RD> C<SHUT_RDWR> C<SHUT_WR> C<SOCK_DGRAM> C<SOCK_RAW>
@@ -2704,7 +2687,7 @@ together:
 
 C<AF_APPLETALK> C<AF_CCITT> C<AF_CHAOS> C<AF_CTF> C<AF_DATAKIT>
 C<AF_DECnet> C<AF_DLI> C<AF_ECMA> C<AF_HYLINK> C<AF_IMPLINK>
-C<AF_INET> C<AF_ISO> C<AF_LAST> C<AF_LAT> C<AF_LINK> C<AF_NETMAN>
+C<AF_INET> C<AF_ISO> C<AF_LAST> C<AF_LAT> C<AF_LINK> C<AF_LOCAL> C<AF_NETMAN>
 C<AF_NS> C<AF_OSI> C<AF_PUP> C<AF_ROUTE> C<AF_SNA> C<AF_UNIX>
 C<AF_UNSPEC> C<AF_USER> C<AF_WAN> C<AF_X25>
 
@@ -2733,7 +2716,7 @@ C<EOF_NONBLOCK> C<RD_NODATA> C<VAL_EAGAIN> C<VAL_O_NONBLOCK>
 
 C<PF_APPLETALK> C<PF_CCITT> C<PF_CHAOS> C<PF_CTF> C<PF_DATAKIT>
 C<PF_DECnet> C<PF_DLI> C<PF_ECMA> C<PF_HYLINK> C<PF_IMPLINK>
-C<PF_INET> C<PF_ISO> C<PF_LAST> C<PF_LAT> C<PF_LINK> C<PF_NETMAN>
+C<PF_INET> C<PF_ISO> C<PF_LAST> C<PF_LAT> C<PF_LINK> C<PF_LOCAL> C<PF_NETMAN>
 C<PF_NS> C<PF_OSI> C<PF_PUP> C<PF_ROUTE> C<PF_SNA> C<PF_UNIX>
 C<PF_UNSPEC> C<PF_USER> C<PF_WAN> C<PF_X25>
 
@@ -2773,7 +2756,8 @@ Z<>
 
 This module has been tested with threaded perls, and should be as thread-safe
 as perl itself.  (As of 5.005_03 and 5.005_57, that's not all that safe
-just yet.)
+just yet.)  It also works with interpreter-based threads ('ithreads') in
+more recent perl releases.
 
 =head1 SEE ALSO
 
@@ -2783,7 +2767,7 @@ Net::Dnet(3)
 
 =head1 AUTHOR
 
-Spider Boardman E<lt>spider@Orb.Nashua.NH.USE<gt>
+Spider Boardman E<lt>spidb@cpan.orgE<gt>
 
 =cut
 
@@ -2811,9 +2795,8 @@ sub setparam
 }
 
 #& bind($self [, @ignored]) : boolean
-sub bind
+sub bind : locked method
 {
-    use attrs qw(locked method);
     $_[0]->_trace(\@_,2);
     my $self = shift;
     $self->close if
@@ -2833,7 +2816,8 @@ sub bind
 	}
     }
     elsif (defined($ {*$self}{Parms}{srcaddr}) and
-	   length $ {*$self}{Parms}{srcaddr}) {
+	   length $ {*$self}{Parms}{srcaddr})
+    {
 	$rval = CORE::bind($self, $ {*$self}{Parms}{srcaddr});
     }
     else {
@@ -2846,9 +2830,8 @@ sub bind
 }
 
 #& unbind($self [, @ignored])
-sub unbind
+sub unbind : locked method
 {
-    use attrs qw(locked method);
     $_[0]->_trace(\@_,2);
     my($self) = @_;
     $self->close unless $self->isconnected || $self->isconnecting;
@@ -2863,9 +2846,8 @@ sub delparam
 }
 
 #& listen($self [, $maxq=SOMAXCONN]) : boolean
-sub listen
+sub listen : locked method
 {
-    use attrs qw(locked method);
     my $whoami = $_[0]->_trace(\@_,2);
     my ($self,$maxq) = @_;
     $maxq = $self->getparam('maxqueue',SOMAXCONN,1) unless defined $maxq;
@@ -2892,16 +2874,14 @@ sub TIESCALAR
     $self && $self->isconnected && $self;
 }
 
-sub FETCH
+sub FETCH : locked method
 {
-    use attrs qw(locked method);
     $_[0]->_trace(\@_,2);
     scalar $_[0]->READLINE;
 }
 
-sub STORE
+sub STORE : locked method
 {
-    use attrs qw(locked method);
     $_[0]->_trace(\@_,2);
     my $self = shift;
     return if @_ == 1 and !defined $_[0];	# "undef $x"
@@ -2954,9 +2934,8 @@ sub _findxopt
 }
 
 #& _getxopt($this, $realp, [$level,] $what) : @values
-sub _getxopt
+sub _getxopt : locked method
 {
-    use attrs qw(locked method);
     my($self,$realp,@args) = @_;
     my($aref,$level,$what,$rval,$format);
     @args = $self->_findxopt($realp, @args); # get the array ref
@@ -2991,9 +2970,8 @@ sub getropt
 }
 
 #& _setxopt($this, $realp, [$level,] $what, @vals) : boolean
-sub _setxopt
+sub _setxopt : locked method
 {
-    use attrs qw(locked method);
     my($self,$realp,@args) = @_;
     my($aref,$level,$what,$rval,$format);
     @args = $self->_findxopt($realp, @args); # get the array ref and real args
@@ -3071,9 +3049,8 @@ sub fhvec
 }
 
 #& select($this [[, $read, $write, $xcept, $timeout]]) : $nready | @list
-sub select
+sub select : locked method
 {
-    use attrs qw(locked method);
     $_[0]->_trace(\@_,4);
     my($self,$doread,$dowrite,$doxcept,$timer) = @_;
     my($fhvec,$rvec,$wvec,$xvec,$nfound,$timeleft) = $self->fhvec;
@@ -3097,9 +3074,8 @@ sub select
 }
 
 #& ioctl($this, @args) : $scalar
-sub ioctl
+sub ioctl : locked method
 {
-    use attrs qw(locked method);
     my $whoami = $_[0]->_trace(\@_,4);
     croak "Insufficient arguments to ${whoami}(@_), found"
 	if @_ < 3;
@@ -3109,9 +3085,8 @@ sub ioctl
 }
 
 #& fcntl($this, @args) : $scalar
-sub fcntl
+sub fcntl : locked method
 {
-    use attrs qw(locked method);
     my $whoami = $_[0]->_trace(\@_,4);
     croak "Insufficient arguments to ${whoami}(@_), found"
 	if @_ < 3;

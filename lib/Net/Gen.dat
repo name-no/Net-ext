@@ -1,4 +1,4 @@
-# Copyright 1995,2000 Spider Boardman.
+# Copyright 1995,2002 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -11,7 +11,7 @@
 # IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
 # WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
-# rcsid: "@(#) $Id: Gen.dat,v 1.40 2000/08/05 20:33:14 spider Exp $"
+# rcsid: "@(#) $Id: Gen.dat,v 1.42 2002/03/30 10:17:03 spider Exp $"
 
 
 package Net::Gen;
@@ -23,7 +23,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS
 	    %_missing $AUTOLOAD $adebug);
 
 BEGIN {
-    $VERSION = '0.933';
+    $VERSION = '1.0';
     eval "sub Version () { __PACKAGE__ . ' v$VERSION' }";
 }
 
@@ -79,6 +79,7 @@ BEGIN {
 		    PF_NS PF_ISO PF_OSI PF_ECMA PF_DATAKIT PF_CCITT PF_SNA
 		    PF_DECnet PF_DLI PF_LAT PF_HYLINK PF_APPLETALK PF_ROUTE
 		    PF_LINK PF_NETMAN PF_X25 PF_CTF PF_WAN PF_USER PF_LAST
+		    AF_LOCAL PF_LOCAL
 		   );
 
     %EXPORT_TAGS = (
@@ -110,11 +111,13 @@ BEGIN {
 		       AF_NS AF_ISO AF_OSI AF_ECMA AF_DATAKIT AF_CCITT AF_SNA
 		       AF_DECnet AF_DLI AF_LAT AF_HYLINK AF_APPLETALK AF_ROUTE
 		       AF_LINK AF_NETMAN AF_X25 AF_CTF AF_WAN AF_USER AF_LAST
+		       AF_LOCAL
 		      )],
 	pf	=> [qw(PF_UNSPEC PF_UNIX PF_INET PF_IMPLINK PF_PUP PF_CHAOS
 		       PF_NS PF_ISO PF_OSI PF_ECMA PF_DATAKIT PF_CCITT PF_SNA
 		       PF_DECnet PF_DLI PF_LAT PF_HYLINK PF_APPLETALK PF_ROUTE
 		       PF_LINK PF_NETMAN PF_X25 PF_CTF PF_WAN PF_USER PF_LAST
+		       PF_LOCAL
 		      )],
 	ALL	=> [@EXPORT, @EXPORT_OK],
     );
@@ -375,10 +378,12 @@ sub _setblocking
 	defined $ {*$self}{Parms}{$what};
     if ($newval) {
 	$_[2] = 1;	# canonicalise the new value
-	if (defined $F_GETFL and defined $F_SETFL and defined $nonblock_flag
-	    and $self->isopen) {
+	if (defined $F_GETFL and defined $F_SETFL and
+	    defined $nonblock_flag and $self->isopen)
+	{
 	    if ((CORE::fcntl($self, $F_GETFL, 0) & VAL_O_NONBLOCK) ==
-		VAL_O_NONBLOCK) {
+		VAL_O_NONBLOCK)
+	    {
 		$ {*$self}{Parms}{$what} = 0;  # note previous status
 		return 'Failed to clear non-blocking status'
 		    unless eval {CORE::fcntl($self, $F_SETFL,
@@ -390,12 +395,14 @@ sub _setblocking
     else {
 	$_[2] = 0;	# canonicalise the new value
 	unless (defined $F_GETFL and defined $F_SETFL and
-		defined $nonblock_flag) {
+		defined $nonblock_flag)
+	{
 	    return 'Non-blocking sockets unavailable in this configuration';
 	}
 	if ($self->isopen) {
 	    if ((CORE::fcntl($self, $F_GETFL, 0) & VAL_O_NONBLOCK) !=
-		VAL_O_NONBLOCK) {
+		VAL_O_NONBLOCK)
+	    {
 		$ {*$self}{Parms}{$what} = 1;  # note previous state
 		return 'Failed to set non-blocking status'
 		    unless eval {CORE::fcntl($self, $F_SETFL,
@@ -620,7 +627,8 @@ sub setparams
 	    , $errs++, next
 		if $newonly > 0 && defined $$pslot;
 	if (defined($ {*$self}{Keys}{$parm}) and
-	    (ref($ {*$self}{Keys}{$parm}) eq 'CODE')) {
+	    (ref($ {*$self}{Keys}{$parm}) eq 'CODE'))
+	{
 	    my $rval = &{$ {*$self}{Keys}{$parm}}($self,$parm,$newval);
 	    (carp $rval), $errs++, next if $rval;
 	}
@@ -1353,7 +1361,7 @@ C<FETCH>, C<STORE>, C<TIESCALAR>
 Any of the I<keys> known to the C<getparam> and C<setparams> methods
 may be used as an I<accessor> function.  See L<"Known Object Parameters">
 below, and the related sections in the derived classes.  For an example,
-see L<"blocking"> below.
+see C<blocking>, below.
 
 =back
 
@@ -2554,7 +2562,7 @@ method will respect.
 
 =item PF
 
-Protocol family for this object.
+Protocol family for this object.  Will default from AF, and vice versa.
 
 =item proto
 
@@ -2666,7 +2674,7 @@ None.
 
 C<AF_APPLETALK> C<AF_CCITT> C<AF_CHAOS> C<AF_CTF> C<AF_DATAKIT>
 C<AF_DECnet> C<AF_DLI> C<AF_ECMA> C<AF_HYLINK> C<AF_IMPLINK>
-C<AF_INET> C<AF_ISO> C<AF_LAST> C<AF_LAT> C<AF_LINK> C<AF_NETMAN>
+C<AF_INET> C<AF_ISO> C<AF_LAST> C<AF_LAT> C<AF_LINK> C<AF_LOCAL> C<AF_NETMAN>
 C<AF_NS> C<AF_OSI> C<AF_PUP> C<AF_ROUTE> C<AF_SNA> C<AF_UNIX>
 C<AF_UNSPEC> C<AF_USER> C<AF_WAN> C<AF_X25> C<EADDRINUSE>
 C<EADDRNOTAVAIL> C<EAFNOSUPPORT> C<EAGAIN> C<EALREADY> C<EBADF>
@@ -2680,7 +2688,7 @@ C<EPROTOTYPE> C<ESHUTDOWN> C<ESOCKTNOSUPPORT> C<ETIME>
 C<ETIMEDOUT> C<ETOOMANYREFS> C<EWOULDBLOCK> C<pack_sockaddr>
 C<PF_APPLETALK> C<PF_CCITT> C<PF_CHAOS> C<PF_CTF> C<PF_DATAKIT>
 C<PF_DECnet> C<PF_DLI> C<PF_ECMA> C<PF_HYLINK> C<PF_IMPLINK>
-C<PF_INET> C<PF_ISO> C<PF_LAST> C<PF_LAT> C<PF_LINK> C<PF_NETMAN>
+C<PF_INET> C<PF_ISO> C<PF_LAST> C<PF_LAT> C<PF_LINK> C<PF_LOCAL> C<PF_NETMAN>
 C<PF_NS> C<PF_OSI> C<PF_PUP> C<PF_ROUTE> C<PF_SNA> C<PF_UNIX>
 C<PF_UNSPEC> C<PF_USER> C<PF_WAN> C<PF_X25> C<RD_NODATA>
 C<SHUT_RD> C<SHUT_RDWR> C<SHUT_WR> C<SOCK_DGRAM> C<SOCK_RAW>
@@ -2704,7 +2712,7 @@ together:
 
 C<AF_APPLETALK> C<AF_CCITT> C<AF_CHAOS> C<AF_CTF> C<AF_DATAKIT>
 C<AF_DECnet> C<AF_DLI> C<AF_ECMA> C<AF_HYLINK> C<AF_IMPLINK>
-C<AF_INET> C<AF_ISO> C<AF_LAST> C<AF_LAT> C<AF_LINK> C<AF_NETMAN>
+C<AF_INET> C<AF_ISO> C<AF_LAST> C<AF_LAT> C<AF_LINK> C<AF_LOCAL> C<AF_NETMAN>
 C<AF_NS> C<AF_OSI> C<AF_PUP> C<AF_ROUTE> C<AF_SNA> C<AF_UNIX>
 C<AF_UNSPEC> C<AF_USER> C<AF_WAN> C<AF_X25>
 
@@ -2733,7 +2741,7 @@ C<EOF_NONBLOCK> C<RD_NODATA> C<VAL_EAGAIN> C<VAL_O_NONBLOCK>
 
 C<PF_APPLETALK> C<PF_CCITT> C<PF_CHAOS> C<PF_CTF> C<PF_DATAKIT>
 C<PF_DECnet> C<PF_DLI> C<PF_ECMA> C<PF_HYLINK> C<PF_IMPLINK>
-C<PF_INET> C<PF_ISO> C<PF_LAST> C<PF_LAT> C<PF_LINK> C<PF_NETMAN>
+C<PF_INET> C<PF_ISO> C<PF_LAST> C<PF_LAT> C<PF_LINK> C<PF_LOCAL> C<PF_NETMAN>
 C<PF_NS> C<PF_OSI> C<PF_PUP> C<PF_ROUTE> C<PF_SNA> C<PF_UNIX>
 C<PF_UNSPEC> C<PF_USER> C<PF_WAN> C<PF_X25>
 
@@ -2773,7 +2781,8 @@ Z<>
 
 This module has been tested with threaded perls, and should be as thread-safe
 as perl itself.  (As of 5.005_03 and 5.005_57, that's not all that safe
-just yet.)
+just yet.)  It also works with interpreter-based threads ('ithreads') in
+more recent perl releases.
 
 =head1 SEE ALSO
 
@@ -2783,7 +2792,7 @@ Net::Dnet(3)
 
 =head1 AUTHOR
 
-Spider Boardman E<lt>spider@Orb.Nashua.NH.USE<gt>
+Spider Boardman E<lt>spidb@cpan.orgE<gt>
 
 =cut
 
@@ -2833,7 +2842,8 @@ sub bind
 	}
     }
     elsif (defined($ {*$self}{Parms}{srcaddr}) and
-	   length $ {*$self}{Parms}{srcaddr}) {
+	   length $ {*$self}{Parms}{srcaddr})
+    {
 	$rval = CORE::bind($self, $ {*$self}{Parms}{srcaddr});
     }
     else {

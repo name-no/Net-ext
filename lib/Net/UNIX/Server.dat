@@ -1,4 +1,4 @@
-# Copyright 1997,2000 Spider Boardman.
+# Copyright 1997,2002 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -11,7 +11,7 @@
 # IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
 # WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
-# rcsid: "@(#) $Id: Server.dat,v 1.15 2000/08/05 20:33:14 spider Exp $"
+# rcsid: "@(#) $Id: Server.dat,v 1.16 2002/03/30 10:11:24 spider Exp $"
 
 package Net::UNIX::Server;
 use 5.004_04;
@@ -23,14 +23,14 @@ sub croak { require Carp; goto &Carp::croak; }
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
 BEGIN {
-    $VERSION = '0.933';
+    $VERSION = '1.0';
     eval "sub Version { __PACKAGE__ . ' v$VERSION' }";
 }
 
 #use AutoLoader;		# someday add back, along with AUTOLOAD, below
 #use Exporter ();
-use Net::UNIX 0.93;
-use Net::Gen 0.93 qw(/^SOCK_/);
+use Net::UNIX 1.0;
+use Net::Gen 1.0 qw(/^SOCK_/);
 
 BEGIN {
     @ISA = 'Net::UNIX';
@@ -164,7 +164,7 @@ The examples above show the indirect object syntax which many prefer,
 as well as the guaranteed-to-be-safe static method call.  There
 are occasional problems with the indirect object syntax, which
 tend to be rather obscure when encountered.  See
-http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.html
+http://www.xray.mpe.mpg.de/mailing-lists/perl5-porters/1998-01/msg01674.html
 for details.
 
 See L<Net::TCP::Server> for an example of running a server.  The
@@ -240,7 +240,8 @@ Z<>
 
 This module has been tested with threaded perls, and should be as thread-safe
 as perl itself.  (As of 5.005_03 and 5.005_57, that's not all that safe
-just yet.)
+just yet.)  It also works with interpreter-based threads ('ithreads') in
+more recent perl releases.
 
 =head1 SEE ALSO
 
@@ -249,7 +250,7 @@ L<Net::Gen(3)|Net::Gen>
 
 =head1 AUTHOR
 
-Spider Boardman E<lt>spider@Orb.Nashua.NH.USE<gt>
+Spider Boardman E<lt>spidb@cpan.orgE<gt>
 
 =cut
 
