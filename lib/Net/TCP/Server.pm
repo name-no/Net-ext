@@ -24,7 +24,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.81';
+    $VERSION = '0.82';
 }
 sub Version () { "$myclass v$VERSION" }
 
@@ -107,6 +107,10 @@ Usage:
     $obj = new Net::TCP::Server $service;
     $obj = new Net::TCP::Server $service, \%parameters;
     $obj = new Net::TCP::Server $lcladdr, $service, \%parameters;
+    $obj = 'Net::TCP::Server'->new();
+    $obj = 'Net::TCP::Server'->new($service);
+    $obj = 'Net::TCP::Server'->new($service, \%parameters);
+    $obj = 'Net::TCP::Server'->new($lcladdr, $service, \%parameters);
 
 Returns a newly-initialised object of the given class.  This is
 much like the regular C<new> method of the other modules
@@ -117,9 +121,16 @@ likely to succeed.  The C<SO_REUSEADDR> is really done in a base class,
 but it's enabled by defaulting the C<reuseaddr> object parameter to 1 in
 this constructor.
 
+The examples above show the indirect object syntax which many prefer,
+as well as the guaranteed-to-be-safe static method call.  There
+are occasional problems with the indirect object syntax, which
+tend to be rather obscure when encountered.  See
+F<E<lt>URL:http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.htmlE<gt>>
+for details.
+
 Simple example for server setup:
 
-    $lh = new Net::TCP::Server 7788 or die;
+    $lh = 'Net::TCP::Server'->new(7788) or die;
     while ($sh = $lh->accept) {
 	defined($pid=fork) or die "fork: $!\n";
 	if ($pid) {		# parent doesn't need client fh

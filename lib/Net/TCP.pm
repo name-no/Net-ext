@@ -24,7 +24,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.81';
+    $VERSION = '0.82';
 }
 sub Version () { "$myclass v$VERSION" }
 
@@ -208,6 +208,10 @@ Usage:
     $obj = new Net::TCP $host, $service;
     $obj = new Net::TCP \%parameters;
     $obj = new Net::TCP $host, $service, \%parameters;
+    $obj = 'Net::TCP'->new();
+    $obj = 'Net::TCP'->new($host, $service);
+    $obj = 'Net::TCP'->new(\%parameters);
+    $obj = 'Net::TCP'->new($host, $service, \%parameters);
 
 Returns a newly-initialised object of the given class.  If called
 for a derived class, no validation of the supplied parameters
@@ -219,6 +223,13 @@ inherits from C<Net::Inet>.  In particular, this means that if
 both a host and a service are given, then an object will only be
 returned if a connect() call was successful (or is still in progress,
 if the object is non-blocking).
+
+The examples above show the indirect object syntax which many prefer,
+as well as the guaranteed-to-be-safe static method call.  There
+are occasional problems with the indirect object syntax, which
+tend to be rather obscure when encountered.  See
+F<E<lt>URL:http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.htmlE<gt>>
+for details.
 
 =back
 

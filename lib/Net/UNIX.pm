@@ -24,7 +24,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.81';
+    $VERSION = '0.82';
 }
 sub Version { "$myclass v$VERSION" }
 
@@ -321,6 +321,10 @@ Usage:
     $obj = new Net::UNIX $pathname;
     $obj = new Net::UNIX \%parameters;
     $obj = new Net::UNIX $pathname, \%parameters;
+    $obj = 'Net::UNIX'->new();
+    $obj = 'Net::UNIX'->new($pathname);
+    $obj = 'Net::UNIX'->new(\%parameters);
+    $obj = 'Net::UNIX'->new($pathname, \%parameters);
 
 Returns a newly-initialised object of the given class.  If called
 for a derived class, no validation of the supplied parameters
@@ -330,6 +334,13 @@ the validation.)  Otherwise, it will cause the parameters to be
 validated by calling its C<init> method.  In particular, this
 means that if a pathname is given, an object will be returned
 only if a connect() call was successful.
+
+The examples above show the indirect object syntax which many prefer,
+as well as the guaranteed-to-be-safe static method call.  There
+are occasional problems with the indirect object syntax, which
+tend to be rather obscure when encountered.  See
+F<E<lt>URL:http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.htmlE<gt>>
+for details.
 
 =item Server::new
 

@@ -25,7 +25,7 @@ my $myclass;
 
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.81';
+    $VERSION = '0.82';
 }
 
 sub Version () { "$myclass v$VERSION" }
@@ -3783,6 +3783,10 @@ Usage:
     $obj = new Net::Inet $host, $service;
     $obj = new Net::Inet \%parameters;
     $obj = new Net::Inet $host, $service, \%parameters;
+    $obj = 'Net::Inet'->new();
+    $obj = 'Net::Inet'->new($host, $service);
+    $obj = 'Net::Inet'->new(\%parameters);
+    $obj = 'Net::Inet'->new($host, $service, \%parameters);
 
 Returns a newly-initialised object of the given class.  If called
 for a derived class, no validation of the supplied parameters
@@ -3793,6 +3797,13 @@ validated by calling its C<init> method.  In particular, this
 means that if both a host and a service are given, then an object
 will only be returned if a connect() call was successful, or if
 the object is non-blocking and a connect() call is in progress.
+
+The examples above show the indirect object syntax which many prefer,
+as well as the guaranteed-to-be-safe static method call.  There
+are occasional problems with the indirect object syntax, which
+tend to be rather obscure when encountered.  See
+F<E<lt>URL:http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.htmlE<gt>>
+for details.
 
 =item init
 

@@ -24,7 +24,7 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.81';
+    $VERSION = '0.82';
 }
 sub Version { "$myclass v$VERSION" }
 
@@ -99,6 +99,9 @@ Usage:
     $obj = new Net::UNIX::Server;
     $obj = new Net::UNIX::Server $pathname;
     $obj = new Net::UNIX::Server $pathname, \%parameters;
+    $obj = 'Net::UNIX::Server'->new();
+    $obj = 'Net::UNIX::Server'->new($pathname);
+    $obj = 'Net::UNIX::Server'->new($pathname, \%parameters);
 
 Returns a newly-initialised object of the given class.  This is
 much like the regular C<new> methods of other modules in this
@@ -106,6 +109,13 @@ distribution, except that it does a
 C<bind> rather than a C<connect>, and it does a C<listen>.  Unless
 specified otherwise with a C<type> object parameter, the underlying
 socket will be a datagram socket.
+
+The examples above show the indirect object syntax which many prefer,
+as well as the guaranteed-to-be-safe static method call.  There
+are occasional problems with the indirect object syntax, which
+tend to be rather obscure when encountered.  See
+F<E<lt>URL:http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.htmlE<gt>>
+for details.
 
 =item init
 

@@ -1,3 +1,15 @@
+Released as version 0.82.
+
+Sat Feb  7 14:56:06 1998  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/UDP.pm: Fixed bug in READLINE reported by Olivier
+ 	Bodenreider <olivier@nlm.nih.gov>.  I really need to work on
+	real regression tests soon....
+
+	* lib/** except Gen.pm: Fix up indirect object syntax examples,
+	and point people at the proto-FMTEYEWTK until Tom has the real one
+	up on perl.com.
+
 Released as version 0.81.
 
 Thu Jan 29 00:17:08 1998  Spider Boardman  <spider@Orb.Nashua.NH.US>

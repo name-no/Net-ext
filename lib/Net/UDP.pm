@@ -24,7 +24,7 @@ use vars qw($VERSION @ISA);
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.81';
+    $VERSION = '0.82';
 }
 sub Version () { "$myclass v$VERSION" }
 
@@ -124,6 +124,11 @@ Usage:
     $obj = new Net::UDP $host, $service;
     $obj = new Net::UDP \%parameters;
     $obj = new Net::UDP $host, $service, \%parameters;
+    $obj = 'Net::UDP'->new();
+    $obj = 'Net::UDP'->new($host);
+    $obj = 'Net::UDP'->new($host, $service);
+    $obj = 'Net::UDP'->new(\%parameters);
+    $obj = 'Net::UDP'->new($host, $service, \%parameters);
 
 Returns a newly-initialised object of the given class.  If called
 for a derived class, no validation of the supplied parameters
@@ -134,6 +139,13 @@ validated by calling its C<init> method, which C<Net::UDP>
 inherits from C<Net::Inet>.  In particular, this means that if
 both a host and a service are given, that an object will only be
 returned if a connect() call was successful.
+
+The examples above show the indirect object syntax which many prefer,
+as well as the guaranteed-to-be-safe static method call.  There
+are occasional problems with the indirect object syntax, which
+tend to be rather obscure when encountered.  See
+F<E<lt>URL:http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.htmlE<gt>>
+for details.
 
 =item PRINT
 
@@ -169,7 +181,9 @@ of the object parameter C<unbuffered_input>.  If that parameter is false
 (the default), then this method does line-buffering of its input as defined
 by the current setting of the $/ variable.  If that parameter is true, then
 the input records will be exact recv() datagrams, disregarding the setting
-of the $/ variable.
+of the $/ variable.  Note that invoking the C<READLINE> method in unbuffered
+mode in array context is likely to hang, since UDP sockets typically don't
+return EOF.
 
 =back
 
@@ -195,7 +209,8 @@ buffer as though it were a single separate line, independently of the setting
 of the $/ variable.  The default is false, which causes the C<READLINE>
 interface to return lines split at boundaries as appropriate for $/.
 (The C<READLINE> method for tied filehandles is the C<E<lt>FHE<gt>>
-operation.)
+operation.)  Note that calling the C<READLINE> method in unbuffered mode
+in array context is likely to hang.
 
 =item unbuffered_output
 
@@ -223,7 +238,7 @@ mentioned in regard to this module.
 
 Example:
 
-    tie $x,Net::UDP,0,'daytime' or die;
+    tie $x,'Net::UDP',0,'daytime' or die "tie to Net::UDP: $!";
     $x = "\n"; $x = "\n";
     print $y if defined($y = $x);
     untie $x;
@@ -281,7 +296,7 @@ sub READLINE			# $self; returns buffer or array of buffers
     my $self = shift;
     if ($self->getparam('unbuffered_input')) {
 	if (wantarray) {
-	    my ($line,@lines)
+	    my ($line,@lines);
 	    push @lines, $line while defined($line = $self->recv);
 	    @lines;
 	}
