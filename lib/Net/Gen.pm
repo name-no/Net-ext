@@ -1,4 +1,4 @@
-# Copyright 1995,1996 Spider Boardman.
+# Copyright 1995,1996,1997 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -13,21 +13,23 @@
 
 
 package Net::Gen;
-require 5.003;			# new minimum Perl version for this package
+use 5.00393;		# new minimum Perl version for this package
 
 use strict;
 use Carp;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD);
 
-my $myclass='Net::Gen';
-$VERSION = '0.72';
+my $myclass = &{+sub {(caller(0))[0]}};
+$VERSION = '0.74';
 
 sub Version { "$myclass v$VERSION" }
 
-use Socket;
+use Socket qw(!/pack_sockaddr/);
+use AutoLoader;
 require Exporter;
-require AutoLoader;
 require DynaLoader;
+use Fcntl qw(F_GETFL);
+use Symbol qw(gensym);
 
 @ISA = qw(Exporter DynaLoader);
 
@@ -44,15 +46,27 @@ require DynaLoader;
 
 %EXPORT_TAGS = (
 	NonBlockVals => [qw(EOF_NONBLOCK RD_NODATA VAL_EAGAIN VAL_O_NONBLOCK)],
+	ALL	=> [@EXPORT, @EXPORT_OK],
 );
+
+my %loaded;
+
+;# since I use these values in ckeof(), I need to predeclare them here
+
+sub EOF_NONBLOCK ();
+sub RD_NODATA	();
+sub VAL_EAGAIN	();
+sub VAL_O_NONBLOCK ();
 
 sub AUTOLOAD
 {
     # This AUTOLOAD is used to 'autoload' constants from the constant()
     # XS function.  If a constant is not found then control is passed
     # to the AUTOLOAD in AutoLoader.
-    my $constname;
-    ($constname = $AUTOLOAD) =~ s/.*:://;
+    my ($constname,$callpkg);
+    {				# block to preserve $1,$2,et al.
+	($callpkg,$constname) = $AUTOLOAD =~ /^(.*)::(.*)$/;
+    }
     my $val = constant($constname);
     if ($! != 0) {
 	if ($! =~ /Invalid/) {
@@ -60,12 +74,16 @@ sub AUTOLOAD
 	    goto &AutoLoader::AUTOLOAD;
 	}
 	else {
-	    croak "Your vendor has not defined Net::Gen macro $constname, used";
+	    croak "Your vendor has not defined $callpkg macro $constname, used";
 	}
     }
     no strict 'refs';		# allow various value types in autoload
-    *{$AUTOLOAD} = sub { $val };
-;#    eval "sub $AUTOLOAD { $val }";
+    unless ($loaded{$AUTOLOAD}) {
+	local($^W) = 0;		# suppress warning for sub redefined, etc.
+	*{$AUTOLOAD} = sub () { $val };
+;#	eval "sub $AUTOLOAD { $val }";
+	$loaded{$AUTOLOAD} = 1;
+    }
     $DB::sub = $AUTOLOAD if $DB::sub;
     goto &$AUTOLOAD;
 }
@@ -74,6 +92,7 @@ bootstrap Net::Gen $VERSION;
 
 # Preloaded methods go here.  Autoload methods go after __END__, and are
 # processed by the autosplit program.
+
 
 ;# This package has the core 'generic' routines for fiddling with
 ;# sockets.
@@ -96,10 +115,12 @@ sub initsockopts		# $class, $level+0, \%sockopts
     croak "Invalid arguments to ${myclass}::initsockopts, called"
 	if @_ != 3 or ref $opts ne 'HASH';
     $level += 0;		# force numeric
-    my($opt,$oval,@oval);
+    my($opt,$oval,@oval,$cref);
     foreach $opt (keys %$opts) {
-	$oval = eval {local($^W)=0;$class->$opt()} ||
-	    eval {local($^W)=0;no strict 'refs';&$opt()};
+	$oval = $class->can($opt);
+	if (defined $oval) {
+	    $oval = eval {local($^W)=0;&$oval()};
+	}
 	delete $$opts{$opt}, next if $@ or !defined($oval) or $oval eq '';
 	$oval += 0;		# force numeric
 	push(@{$$opts{$opt}}, $oval, $level);
@@ -154,13 +175,9 @@ my $mypkg = $myclass . '::';
 
 sub _genfh ()			# (void), returns orphan globref with HV slot.
 {
-    my $name = $nextfh++;
-    my $qname = $mypkg . $name;
-    no strict 'refs';		# for this block
-    local *{$qname};
-    *{$qname} = {};		# we need a hash slot
-    # return an 'orphan' globref (not in the symbol table)
-    \delete ${$mypkg}{$name};
+    my $rval = gensym;
+    *{$rval} = {};		# initialise a hash slot
+    $rval;
 }
 
 my $debug = 0;			# module-wide debug hack -- don't use
@@ -437,7 +454,6 @@ sub connect			# $self, [@ignored] ; returns boolean
 	$rval = connect($$self{fhref}, $$self{Parms}{dstaddr});
     }
     $$self{'isconnected'} = $rval;
-    return $rval unless $rval;
     $self->getsockinfo;
     $self->isconnected;
 }
@@ -470,7 +486,7 @@ sub shutdown			# $self [, $how=2] ; returns boolean
 }
 
 
-my @CloseVars = qw(isopen isbound didlisten);
+my @CloseVars = qw(isopen isbound didlisten wasconnected);
 my @CloseKeys = qw(srcaddr dstaddr);
 
 sub close			# $self [, @ignored] ; returns boolean
@@ -534,6 +550,27 @@ sub put				# $self, @stuff ; returns boolean
 sub PRINT;			# avoid -w error
 *PRINT = \&put;			# alias that may someday be used for tied FH
 
+sub ckeof			# $self ; returns boolean
+{
+    my $saverr = $!+0;
+    print STDERR "${myclass}::ckeof(@_)\n" if $debug > 2;
+    my($self) = @_;
+    my($fh);
+    croak "Invalid args to ${myclass}::ckeof, called"
+	if !@_ or !ref $self or !($fh = $$self{fhref});
+    # See whether need to test for non-blocking status.
+    unless (EOF_NONBLOCK) {
+	my $flags=fcntl($fh,F_GETFL,0+0);
+	if (defined($flags) && vec($flags,VAL_O_NONBLOCK,1) &&
+		$saverr == VAL_EAGAIN) {
+	    # *sigh* -- no way to tell, here
+	    return 0;
+	}
+    }
+    # 0-length read is assumed to be EOF for a stream socket.
+    unpack('I',getsockopt($fh,SOL_SOCKET,SO_TYPE)) == SOCK_STREAM;
+}
+
 sub recv			# $self, [$maxlen, [$flags, [$from]]] ;
 {				# returns $buf or undef
     print STDERR "${myclass}::recv(@_)\n" if $debug > 2;
@@ -555,18 +592,18 @@ sub recv			# $self, [$maxlen, [$flags, [$from]]] ;
 	$_[3] = $$self{lastRegFrom} if @_ > 3;
 	return $buf;
     }
-    $$self{lastFrom} = $xfrom = $from = recv($fh,$buf,$maxlen,$flags);
+    $xfrom = $from = recv($fh,$buf,$maxlen,$flags);
+    $xfrom = getpeername($fh) if defined($from) and $from eq '';
+    $from = $xfrom if defined($xfrom) and $from eq '' and $xfrom ne '';
+    $$self{lastFrom} = $from;
     $_[3] = $from if @_ > 3;
     $$self{lastRegFrom} = $from if !$flags;
     return undef if !defined $from;
-    $$self{lastFrom} = $xfrom = getpeername($fh) if ! length $from;
-    $_[3] = $xfrom if @_ > 3 and $from eq '' and $xfrom ne '';
-    $$self{lastRegFrom} = $xfrom if !$flags and $from eq '' and $xfrom ne '';
-    return $buf if length $buf or length $from;
-    # At this point, we have $from defined and eq '', and $buf the same.
-    # This only reliably indicates EOF on SOCK_STREAM connections, though.
-    return $buf unless
-	unpack('I',getsockopt($fh,SOL_SOCKET,SO_TYPE)) == SOCK_STREAM;
+    #;return $buf if length $buf or length $from;
+    return $buf if length $buf;
+    # At this point, we had a 0-length read with no error.
+    # Especially for a SOCK_STREAM connection, this may mean EOF.
+    return $buf unless $self->ckeof;
     $self->shutdown(0);		# make sure I know about this EOF
     $! = 0;			# no error for EOF
     undef;			# no buffer, either, though
@@ -618,6 +655,8 @@ sub getline			# $self ; returns like scalar(<$fhandle>)
     if (defined($buf) and ($tbuf = index($buf, $sep)) >= 0) {
 	$rval = substr($buf, 0, $tbuf + length($sep));
 	$tbuf = substr($buf, length($rval));
+	# duplicate annoyance of paragraph mode
+	$tbuf =~ s/^\n+//s if $/ eq '';
 	$$self{sockLineBuf} = $tbuf if length($tbuf);
 	return $rval;
     }
@@ -635,11 +674,7 @@ sub gets;			# another for FileHandle:: or IO:: compat.
 
 sub DESTROY
 {
-    local($!);			# preserve errno since asynchronous call
-    local($^W) = 0;		# ignore undef values if incomplete object
     print STDERR "${myclass}::DESTROY(@_)\n" if $debug;
-    my $self = shift;
-    $self->stopio;
 }
 
 sub isopen			# $self [, @ignored] ; returns boolean
@@ -715,10 +750,9 @@ sub bind			# $self [, @ignored] ; returns boolean
 	$rval = bind($$self{fhref}, $$self{Parms}{srcaddr});
     }
     else {
-	$rval = bind($$self{fhref}, pack('S@16',$$self{Parms}{AF}));
+	$rval = bind($$self{fhref}, pack_sockaddr($$self{Parms}{AF},''));
     }
     $$self{'isbound'} = $rval;
-    return undef unless $rval;
     $self->getsockinfo;
     $self->isbound;
 }
@@ -1017,6 +1051,26 @@ sub new_from_fh			# classname, $filehandle
     $self->isopen && $self;
 }
 
+sub accept			# $self ; returns new (ref $self) or undef
+{
+    my($self) = @_;
+    carp "Excess args to ${myclass}::accept(@_) ignored" if @_ > 1;
+    return undef unless $self->didlisten or $self->listen;
+    my $xclass = ref $self;
+    my $ns = $xclass->new;
+    return undef unless $ns;
+    $ns->stopio;		# make sure we can use the filehandle
+    $$ns{Parms} = { %{$$self{Parms}} };
+    $ns->checkparams;
+    return undef unless accept($$ns{fhref},$$self{fhref});
+    $$ns{'isopen'} = $$ns{'isbound'} = $$ns{'isconnected'} = 1;
+    $ns->getsockinfo;
+    return undef unless $ns->isconnected;
+    select((select($$ns{fhref}),$|=1)[0]); # keep stdio output unbuffered
+    binmode($$ns{fhref});	# keep proper I/O protocol
+    $ns;
+}
+
 # autoloaded methods go after the END clause (& pod) below
 
 __END__
@@ -1038,7 +1092,8 @@ implementors of other modules.  To this end, several housekeeping
 functions are provided for the use of derived classes, as well as
 several inheritable methods.
 
-Also provided in this distribution are C<Net::Inet> and C<Net::TCP>,
+Also provided in this distribution are C<Net::Inet>, C<Net::TCP>,
+C<Net::UDP>, and C<Net::UNIX>,
 which are layered atop C<Net::Gen>.
 
 =head2 Public Methods
@@ -1087,7 +1142,7 @@ Usage:
 
 Verifies that all previous parameter assignments are valid (via
 C<checkparams>).  Returns the incoming object on success, and
-C<undef> on failure.  This method is normally called from C<new>
+C<undef> on failure.  This method is normally called from the C<new>
 method appropriate to the class of the created object.
 
 =item checkparams
@@ -1201,7 +1256,7 @@ current object), or the specified default value if the parameter
 is not in the object's current parameter list.  If the optional
 C<$def_if_undef> parameter is true, then undefined values will be
 treated the same as non-existent keys, and thus will return the
-supplied default value.
+supplied default value (C<$defval>).
 
 =item open
 
@@ -1277,8 +1332,7 @@ currently connected, this will result in a call to its C<close>
 method, in order to ensure that any previous binding is removed.
 Even if the object is connected, the C<srcaddrlist> object
 parameter is removed (via the object's C<delparams> method).  The
-return value from this method is indeterminate, but will almost
-always be the value 1.
+return value from this method is indeterminate.
 
 =item connect
 
@@ -1492,6 +1546,17 @@ successfully, and the object is still bound.  If this method has
 not been overridden by a derived class, the value is C<undef> on
 failure and the C<$maxqueue> value used for the listen() builtin
 on success.
+
+=item accept
+
+Usage:
+
+    $newobj = $obj->accept;
+
+Returns a new object in the same class as the given object if an
+accept() call succeeds, and C<undef> otherwise.  If the accept()
+call succeeds, the new object is marked as being open, connected,
+and bound.
 
 =item getsopt
 
@@ -1735,6 +1800,24 @@ description, above.
 
 An alias for the C<registerParamHandlers> method.
 
+=item ckeof
+
+Usage:
+
+    $wasiteof = $obj->ckeof;
+
+After a 0-length read in the get() routine, it calls this method to
+determine whether such a 0-length read meant EOF.  The default method
+supplied here checks for non-blocking sockets (if necessary), and
+for a C<SOCK_STREAM> socket.  If EOF_NONBLOCK is true, or if the
+C<VAL_O_NONBLOCK> flag was not set in the fcntl() flags for the
+socket, or if the error code was not VAL_EAGAIN, I<and> the socket
+is of type C<SOCK_STREAM>, then this method returns true.  It
+returns a false value otherwise.  This method is overridable for
+classes like C<Net::Dnet>, which support C<SOCK_SEQPACKET> and
+need to make protocol-family-specific check to tell a 0-length
+packet from EOF.
+
 =item fileno
 
 Usage:
@@ -1871,6 +1954,40 @@ Usage:
 
 The inverse of pack_sockaddr().
 
+=item VAL_O_NONBLOCK
+
+Gives the value found by the F<Configure> script for setting a
+filehandle non-blocking.  The value available from the C<Config>
+module is a string representing the value found
+(C<$Config::Config{'o_nonblock'}>), whereas the value from
+C<VAL_O_NONBLOCK> is an integer, suitable for passing to
+sysopen() or for eventual use in fcntl().
+
+=item VAL_EAGAIN
+
+Gives the value of the error symbol found by the F<Configure>
+script which is set by a non-blocking filehandle when no data is
+available.  This differs from the value available from the
+C<Config> module (C<$Config::Config{'eagain'}>) in that the
+latter is a string, typically L<'EAGAIN'>.
+
+=item RD_NODATA
+
+Gives the integer return value found by the F<Configure> script
+for a read() system call on a non-blocking socket which has no
+data available.  This is similar to the string representation of
+the value available from the C<Config> module as
+C<$Config::Config{'rd_nodata'}>.
+
+=item EOF_NONBLOCK
+
+Returns a boolean value dependin on whether a read from a
+non-blocking socket can distinguish an end-of-file condition from
+a no-data-available condition.  This corresponds to the value
+available from the C<Config> module as
+C<$Config::Config{'d_eofnblk'}>), except that C<EOF_NONBLOCK> is
+always defined.
+
 =back
 
 =head2 Exports
@@ -1884,17 +2001,21 @@ None.
 =item exportable
 
 C<pack_sockaddr>,
-C<unpack_sockaddr>
+C<unpack_sockaddr>,
+C<VAL_O_NONBLOCK>,
+C<VAL_EAGAIN>,
+C<RD_NODATA>,
+C<EOF_NONBLOCK>
 
 =item tags
 
-None.
+	NonBlockVals => [qw(EOF_NONBLOCK RD_NODATA VAL_EAGAIN VAL_O_NONBLOCK)]
 
 =back
 
 =head1 AUTHOR
 
-Spider Boardman <F<spider@Orb.Nashua.NH.US>>
+Spider Boardman F<E<lt>spider@Orb.Nashua.NH.USE<gt>>
 
 =cut
 

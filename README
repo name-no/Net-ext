@@ -1,12 +1,9 @@
 What it is:
 
-	modules Net::Gen, Net::Inet, Net::UDP, and Net::TCP (so far).
+	modules Net::Gen, Net::Inet, Net::TCP, Net::UDP, and Net::UNIX.
 	Net::Gen is not a good name, I know that, but what's
 	in it really belongs in Socket, I think.  In any case,
 	I'm open to votes for a better name.
-
-	modules yet to come:  Net::Unix, Net::Dnet,
-	maybe a real Net::Telnet.
 
 What's different from other offerings:
 
@@ -27,10 +24,7 @@ What's still missing:
 
 	A proper set of regression & verification tests.
 
-	Better direct support for INADDR_{ANY,NONE,BROADCAST}
-	and the equivalents for multicast.  This needs some
-	thought, though, since the current ones work (for me)
-	for simple uses of this suite of packages.
+	Proper handling of timeout options.
 
 	Finished integration with 5.003_13 & later features.
 
@@ -47,7 +41,7 @@ Your mileage may vary.
 I'm not a tech. writer, nor do I usually play one on the net.  The
 documentation could still use a lot of work, I'm sure.
 
-Making it work requires perl 5.003_05 or later.
+Making it work requires perl 5.003_93 or later.
 
 A simple test script:
 
@@ -59,13 +53,15 @@ A simple test script:
 	die "Can't establish finger socket: $!\n" unless $f;
 
 	put $f "-s\n";
+	$f->shutdown(1);
 	print $line while defined($line = getline $f);
 	undef $f;
 
 	die "Can't tie to finger socket: $!\n" unless
-		tie $f,Net::TCP,0,'finger';
+		tie $f,'Net::TCP',0,'finger';
 
 	$f = "-s\n";
+	tied($f)->shutdown(1);
 	print $line while (defined $line=$f);
 	untie $f;
 

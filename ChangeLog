@@ -1,3 +1,63 @@
+Turned loose as version 0.74 (still alpha because of the Linux problem).
+
+Fri Mar 28 21:48:53 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* Gen.xs: Revamp `constant' subs for easier auto-generation.
+	Still to do: mark them as constant.
+
+	* lib/Net/Gen.pm: Fix up eof handling in get().  Fix up
+	subclass new() call in accept().  Eliminate private gensym
+	emulation and just use Symbol::gensym().  Document the new
+	ckeof() method.
+
+Thu Mar 27 02:12:41 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.pm: Declare missing constant routines so that they
+	have the right prototypes.
+
+	* lib/Net/TCP.pm: Declare routines which need to go through
+	constant() so that they always have the same prototype.
+
+	* Gen.xs (constant): Create routines for the constants which are
+        defined, so that we only call constant() in the AUTOLOAD routine
+        for missing macros.
+
+Tue Mar 25 11:50:01 1997  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* README: Updated.
+
+	* lib/Net/UNIX.pm: Finished the promised routines in the pod.
+	Cleaned up for new distribution structure.
+
+	* lib/Net/UDP.pm: Clean up for new distribution structure.
+	Query--Does this module need a Server sub-class like the TCP one?
+
+	* lib/Net/TCP.pm: Clean up for inherited autoloader.  Some pod
+        updates.
+
+	* lib/Net/Inet.pm: Add exporter tags.  Fix up to use more of the
+        routines which are in Socket (and which work well enough for me
+        now).  Significant pod updates.  In _setport, allow port/service
+        args like 'http(80)' for parity with IO::Socket.  In getsockinfo,
+        update the lcl* parameters if we have a binding, even if the
+        remote info is not available because we're not connected.
+
+	* lib/Net/Gen.pm: Fix paragraph-mode mismatch in getline().  Make
+	DESTROY() be null, since de-refs will do the right thing more
+	efficiently than the explicit Perl code which used to be there.
+	Significant pod updates.
+
+	* Gen.xs: Eliminate 'privatized' versions of things in Socket.
+        I'm cleaning up the alternate versions now that Socket works.
+
+	* Makefile.PL: Restructure distribution layout to be friendly to
+        CPAN.pm.  This also eliminates all the .xs files except for
+        Gen.xs, which now has all the constants.  This makes for only one
+        loadable library, which should be more efficient.  The Net::Dnet
+        module has been split out into a separate distribution.
+
+This was 'released' as version 0.72 (a.k.a alpha 8).
+
 Sun Dec 22 09:58:02 1996  Spider Boardman  <spider@Orb.Nashua.NH.US>
 
 	* Snapshot work-in-progress, even though should be updated

@@ -2,9 +2,14 @@ use ExtUtils::MakeMaker;
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 WriteMakefile(
-    'NAME'	=> 'Net::Dnet',
-    'VERSION_FROM' => 'Dnet.pm', # finds $VERSION
+    'NAME'	=> 'Net::Gen',
+    'DISTNAME'	=> 'Net-ext',
+    'VERSION_FROM' => 'lib/Net/Gen.pm', # finds $VERSION
     'LIBS'	=> [''],   # e.g., '-lm' 
     'DEFINE'	=> '',     # e.g., '-DHAVE_SOMETHING' 
     'INC'	=> '',     # e.g., '-I/usr/include/other' 
+    'dist'	=> {
+		COMPRESS	=>	'gzip -9fNv',
+		SUFFIX		=>	'.gz',
+		},
 );

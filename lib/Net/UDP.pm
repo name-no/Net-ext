@@ -1,4 +1,4 @@
-# Copyright 1995,1996 Spider Boardman.
+# Copyright 1995,1996,1997 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -13,22 +13,23 @@
 
 
 package Net::UDP;
-require 5.003;			# new minimum Perl version for this package
+use 5.00393;			# new minimum Perl version for this package
 
 use strict;
 use Carp;
 use vars qw($VERSION @ISA);
 
-my $myclass = 'Net::UDP';
-$VERSION = '0.72';
+my $myclass = &{+sub {(caller(0))[0]}};
+$VERSION = '0.74';
 sub Version { "$myclass v$VERSION" }
 
-require AutoLoader;
+use AutoLoader;
+
 use Net::Inet;
 use Net::Gen;
-use Socket;
+use Socket qw(!/^[a-z]/);
 
-@ISA = qw(AutoLoader Net::Inet);
+@ISA = qw(Net::Inet);
 
 # Preloaded methods go here.  Autoload methods go after
 # __END__, and are processed by the autosplit program.
@@ -154,7 +155,7 @@ none
 
 =head1 AUTHOR
 
-Spider Boardman <F<spider@Orb.Nashua.NH.US>>
+Spider Boardman F<E<lt>spider@Orb.Nashua.NH.USE<gt>>
 
 =cut
 

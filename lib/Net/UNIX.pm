@@ -1,4 +1,4 @@
-# Copyright 1995,1996 Spider Boardman.
+# Copyright 1995,1996,1997 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -13,24 +13,23 @@
 
 
 package Net::UNIX;
-require 5.003;			# new minimum Perl version for this package
+use 5.00393;			# new minimum Perl version for this package
 
 use strict;
 use Carp;
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD);
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
-my $myclass = 'Net::UNIX';
-$VERSION = '0.72';
+my $myclass = &{+sub {(caller(0))[0]}};
+$VERSION = '0.74';
 
 sub Version { "$myclass v$VERSION" }
 
+use AutoLoader;
 require Exporter;
-require DynaLoader;
-require AutoLoader;
-use Net::Gen;
+use Net::Gen qw(/pack_sockaddr$/);
 use Socket qw(!pack_sockaddr_un !unpack_sockaddr_un);
 
-@ISA = qw(Exporter DynaLoader Net::Gen);
+@ISA = qw(Exporter Net::Gen);
 
 # Items to export into callers namespace by default.
 # (Move infrequently used names to @EXPORT_OK below.)
@@ -47,44 +46,46 @@ use Socket qw(!pack_sockaddr_un !unpack_sockaddr_un);
 	routines	=> [qw(pack_sockaddr_un unpack_sockaddr_un)],
 );
 
-sub AUTOLOAD {
-    # This AUTOLOAD is used to 'autoload' constants from the constant()
-    # XS function.  If a constant is not found then control is passed
-    # to the AUTOLOAD in AutoLoader.
-
-    my $constname;
-    ($constname = $AUTOLOAD) =~ s/.*:://;
-    my $val = constant($constname, @_ + 0);
-    if ($! != 0) {
-	if ($! =~ /Invalid/) {
-	    $AutoLoader::AUTOLOAD = $AUTOLOAD;
-	    goto &AutoLoader::AUTOLOAD;
-	}
-	else {
-	    croak "Your vendor has not defined Net::UNIX macro $constname, used";
-	}
-    }
-    no strict 'refs';
-    *$AUTOLOAD = sub { $val };
-;#    eval "sub $AUTOLOAD { $val }";
-    goto &$AUTOLOAD;
-}
-
-bootstrap Net::UNIX $VERSION;
+;# sub AUTOLOAD inherited from Net::Gen
 
 # Preloaded methods go here.  Autoload methods go after __END__, and are
 # processed by the autosplit program.
 
 ;# No additional sockopts for UNIX-domain sockets (?)
 
-sub pack_sockaddr_un		# [$family,] $path
+my $sun_path_len =
+    length(Socket::unpack_sockaddr_un(Socket::pack_sockaddr_un('')));
+
+sub _canonpath ($)		# $path; returns NUL-padded $path for sun_addr
 {
-    my(@args) = @_;
-    unshift(@args,AF_UNIX) if @args == 1;
-    _pack_sockaddr_un(@args);
+    my $path = shift;
+    my $ix;
+    # extend to proper length
+    $ix = index($path, "\0");
+    if ($ix >= 0) {
+	substr($path,$ix) = "\0" x ($sun_path_len - $ix)
+	    if $ix < $sun_path_len;
+    }
+    else {
+	$ix = length($path);
+	if ($ix < $sun_path_len) {
+	    $path .= "\0" x ($sun_path_len - $ix);
+	}
+	else {
+	    $path .= "\0";
+	}
+    }
+    $path;
 }
 
-sub unpack_sockaddr_un		# $sockaddr_un; returns [$fam,] $path
+sub pack_sockaddr_un ($;$)	# [$family,] $path
+{
+    my(@args) = @_;
+    unshift(@args, AF_UNIX) if @args == 1;
+    pack_sockaddr($args[0], _canonpath($args[1]));
+}
+
+sub unpack_sockaddr_un ($)	# $sockaddr_un; returns [$fam,] $path
 {
     my $addr = shift;
     my ($fam,$path) = unpack_sockaddr($addr);
@@ -95,9 +96,6 @@ sub unpack_sockaddr_un		# $sockaddr_un; returns [$fam,] $path
     $fam ||= AF_UNIX;
     wantarray ? ($fam, $path) : $path;
 }
-
-my $sun_path_len =
-    length(Socket::unpack_sockaddr_un(Socket::pack_sockaddr_un('')));
 
 my $debug = 0;
 
@@ -132,21 +130,6 @@ sub new				# $class, [\%params]
     $self;
 }
 
-sub _canonpath			# $path; returns NUL-padded $path for sun_addr
-{
-    my $path = shift;
-    my $ix;
-    # extend to proper length
-    $ix = index($path, "\0");
-    if ($ix >= 0) {
-	substr($path,$ix) = "\0" x ($sun_path_len - $ix);
-    }
-    else {
-	$path .= "\0" x ($sun_path_len - length($path));
-    }
-    $path;
-}
-
 sub _setbindpath		# $self, 'thispath', $path
 {
     my($self,$what,$path) = @_;
@@ -164,7 +147,7 @@ sub _setbindpath		# $self, 'thispath', $path
 	$_[2] = undef;
     }
     else {
-	$$self{Parms}{srcaddrlist} = [_pack_sockaddr_un(AF_UNIX,$path)];
+	$$self{Parms}{srcaddrlist} = [Socket::pack_sockaddr_un($path)];
     }
     '';
 }
@@ -185,16 +168,121 @@ sub _setconnpath		# $self, 'destpath', $path
 	"$what parameter has no path: $path";
     }
     else {			# just try it here
-	$$self{Parms}{dstaddrlist} = [_pack_sockaddr_un(AF_UNIX,$path)];
+	$$self{Parms}{dstaddrlist} = [Socket::pack_sockaddr_un($path)];
 	'';
     }
 }
 
+sub _init			# $self, whatpath[, $path][, \%params]
+{
+    my ($self,$what,@args,$path,$parms) = @_;
+    if (@args == 1 or @args == 2) {
+	$parms = $args[$#args];
+	$parms = undef
+	    unless $parms and ref($parms) eq 'HASH';
+	$path = $args[0];
+	$path = undef
+	    if defined($path) and ref($path);
+    }
+    croak("Invalid call to ${myclass}::init(@_)")
+	if @args == 2 and !$parms or @args > 2 or !$what;
+    $parms ||= {};
+    $$parms{$what} = $path if defined $path;
+    return undef unless $self->SUPER::init($parms);
+    if ($self->getparams([qw(srcaddr srcaddrlist dstaddr dstaddrlist)],1) >0) {
+	$self->setparams({type=>SOCK_DGRAM},-1);
+	return undef unless $self->isopen or $self->open;
+	$self->setsopt('SO_REUSEADDR',1)
+	    if (ref $self) =~ /::Server$/;
+	if ($self->getparams([qw(srcaddr srcaddrlist)],1) > 0) {
+	    return undef unless $self->isbound or $self->bind;
+	}
+	if ($self->getparams([qw(dstaddr dstaddrlist)],1) > 0) {
+	    return undef unless $self->isconnected or $self->connect;
+	}
+    }
+    $self;
+}
+
+sub init			# $self [, $destpath][, \%params]
+{
+    my ($self,@args) = @_;
+    $self->_init('destpath',@args);
+}
 
 1;
 
 # these would have been autoloaded, but autoload and inheritance conflict
 
+package Net::UNIX::Server;
+
+my $srvpkg = &{+sub {(caller(0))[0]}};
+
+use vars qw(@ISA);
+
+@ISA = $myclass;
+
+sub new
+{
+    print STDERR "${srvpkg}::new(@_)\n" if $debug;
+    my($class,@Args,$self) = @_;
+    $self = $class->SUPER::new(@Args);
+    print STDERR "${myclass}::new(@_), self=$self after sub-new\n"
+	if $debug > 1;
+    if ($self) {
+	$self = $self->init(@Args) if $class eq $myclass;
+    }
+    print STDERR "${myclass}::new returning self=$self\n" if $debug;
+    $self;
+}
+
+sub init			# $self [, $thispath][, \%params]
+{
+    my ($self,@args) = @_;
+    return undef unless $self->_init('thispath',@args);
+    return undef unless
+	$self->isconnected or $self->didlisten or $self->listen;
+    $self;
+}
+
+package Net::UNIX;		# back to original package for Autoloader
+
+sub bind			# $self [, $thispath]
+{
+    my($self,$path) = @_;
+    if (@_ > 2 or @_ == 2 and ref $path) {
+	croak("Invalid arguments to ${myclass}::bind(@_), called");
+    }
+    if (@_ == 2) {
+	return undef unless $self->setparams({thispath=>$path});
+    }
+    $self->SUPER::bind;
+}
+
+sub connect			# $self [, $destpath]
+{
+    my($self,$path) = @_;
+    if (@_ > 2 or @_ == 2 and ref $path) {
+	croak("Invalid arguments to ${myclass}::connect(@_), called");
+    }
+    if (@_ == 2) {
+	return undef unless $self->setparams({destpath=>$path});
+    }
+    $self->SUPER::connect;
+}
+
+sub format_addr			# ($class|$obj) , $sockaddr
+{
+    my ($this,$addr) = @_;
+    my ($fam,$sdata) = unpack_sockaddr($addr);
+    if ($fam == AF_UNIX) {
+	$sdata = unpack_sockaddr_un($addr);
+    }
+    else {
+	$sdata = $this->SUPER::format_addr($addr);
+    }
+    $sdata;
+}
 
 # autoloaded methods go after the END token (& pod) below
 
@@ -303,15 +391,6 @@ Usage:
 Returns a formatted representation of the socket address.  This
 is normally just a pathname, or the constant string C<''>.
 
-=item accept
-
-Usage:
-
-    $newobj = $obj->accept;
-
-Returns a new object in the same class as the given object if an
-accept() call succeeds, and C<undef> otherwise.
-
 =back
 
 =head2 Protected Methods
@@ -357,17 +436,22 @@ Usage:
 
 Returns the packed C<struct sockaddr_un> corresponding to the
 provided $family and $pathname arguments.  The $family argument
-as assumed to be C<AF_UNIX> if it is missing.
+as assumed to be C<AF_UNIX> if it is missing.  This is otherwise
+the same as the pack_sockaddr_un() routine in the C<Socket>
+module.
 
 =item unpack_sockaddr_un
 
 Usage:
 
     ($family, $pathname) = unpack_sockaddr_un($connected_address);
+    $pathname = unpack_sockaddr_un($connected_address);
 
 Returns the address family and pathname (if known) from the
 supplied packed C<struct sockaddr_un>.  This is the inverse of
-pack_sockaddr_un().
+pack_sockaddr_un().  It differs from the implementation in the
+C<Socket> module in its return of the C<$family> value, and in
+that it trims the returned pathname at the first null character.
 
 =back
 
@@ -386,7 +470,7 @@ C<unpack_sockaddr_un>
 
 =item tags
 
-None.
+	routines	=> [qw(pack_sockaddr_un unpack_sockaddr_un)]
 
 =back
 

@@ -1,0 +1,13 @@
+ChangeLog
+Gen.xs
+MANIFEST
+MANIFEST.SKIP
+Makefile.PL
+README
+lib/Net/Gen.pm
+lib/Net/Inet.pm
+lib/Net/TCP.pm
+lib/Net/UDP.pm
+lib/Net/UNIX.pm
+t/basic.t
+typemap

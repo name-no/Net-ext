@@ -1,4 +1,4 @@
-# Copyright 1995,1996 Spider Boardman.
+# Copyright 1995,1996,1997 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -13,23 +13,22 @@
 
 
 package Net::Inet;
-require 5.003;			# new minimum Perl version for this package
+use 5.00393;			# new minimum Perl version for this package
 
 use strict;
 use Carp;
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD);
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
-my $myclass = 'Net::Inet';
-$VERSION = '0.72';
+my $myclass = &{+sub {(caller(0))[0]}};
+$VERSION = '0.74';
 sub Version { "$myclass v$VERSION" }
 
+use AutoLoader;
 require Exporter;
-require AutoLoader;
-require DynaLoader;
-use Net::Gen;
-use Socket qw(!pack_sockaddr_in !unpack_sockaddr_in !inet_aton);
+use Net::Gen qw(:ALL);
+use Socket qw(!/^[a-z]/ /^inet_/);
 
-@ISA = qw(Exporter DynaLoader Net::Gen);
+@ISA = qw(Exporter Net::Gen);
 
 # Items to export into callers namespace by default
 # (move infrequently used names to @EXPORT_OK below)
@@ -196,33 +195,76 @@ use Socket qw(!pack_sockaddr_in !unpack_sockaddr_in !inet_aton);
 	routines	=> [qw(pack_sockaddr_in unpack_sockaddr_in
 			       inet_ntoa inet_aton inet_addr
 			       htonl ntohl htons ntohs)],
+	icmpvalues	=> [qw(ICMP_ADVLENMIN ICMP_ECHO ICMP_ECHOREPLY
+			       ICMP_IREQ ICMP_IREQREPLY ICMP_MASKLEN
+			       ICMP_MASKREPLY ICMP_MASKREQ ICMP_MAXTYPE
+			       ICMP_MINLEN ICMP_PARAMPROB ICMP_REDIRECT
+			       ICMP_REDIRECT_HOST ICMP_REDIRECT_NET
+			       ICMP_REDIRECT_TOSHOST ICMP_REDIRECT_TOSNET
+			       ICMP_SOURCEQUENCH ICMP_TIMXCEED
+			       ICMP_TIMXCEED_INTRANS ICMP_TIMXCEED_REASS
+			       ICMP_TSLEN ICMP_TSTAMP ICMP_TSTAMPREPLY
+			       ICMP_UNREACH ICMP_UNREACH_HOST
+			       ICMP_UNREACH_NEEDFRAG ICMP_UNREACH_NET
+			       ICMP_UNREACH_PORT ICMP_UNREACH_PROTOCOL
+			       ICMP_UNREACH_SRCFAIL)],
+	ipoptions	=> [qw(IPOPT_CONTROL IPOPT_DEBMEAS IPOPT_EOL
+			       IPOPT_LSRR IPOPT_MINOFF IPOPT_NOP IPOPT_OFFSET
+			       IPOPT_OLEN IPOPT_OPTVAL
+			       IPOPT_RESERVED1 IPOPT_RESERVED2
+			       IPOPT_RR IPOPT_SATID
+			       IPOPT_SECURITY IPOPT_SECUR_CONFID
+			       IPOPT_SECUR_EFTO IPOPT_SECUR_MMMM
+			       IPOPT_SECUR_RESTR IPOPT_SECUR_SECRET
+			       IPOPT_SECUR_TOPSECRET IPOPT_SECUR_UNCLASS
+			       IPOPT_SSRR
+			       IPOPT_TS IPOPT_TS_PRESPEC
+			       IPOPT_TS_TSANDADDR IPOPT_TS_TSONLY)],
+	iptosvalues	=> [qw(IPTOS_LOWDELAY IPTOS_PREC_CRITIC_ECP
+			       IPTOS_PREC_FLASH IPTOS_PREC_FLASHOVERRIDE
+			       IPTOS_PREC_IMMEDIATE IPTOS_PREC_INTERNETCONTROL
+			       IPTOS_PREC_NETCONTROL IPTOS_PREC_PRIORITY
+			       IPTOS_PREC_ROUTINE IPTOS_RELIABILITY
+			       IPTOS_THROUGHPUT)],
+	protocolvalues	=> [qw(INADDR_ALLHOSTS_GROUP INADDR_ANY
+			       INADDR_BROADCAST INADDR_LOOPBACK
+			       INADDR_MAX_LOCAL_GROUP INADDR_NONE
+			       INADDR_UNSPEC_GROUP
+			       IP_DF IP_MAXPACKET IP_MF IP_MSS
+			       IPPORT_RESERVED IPPORT_USERRESERVED
+			       IPPROTO_EGP IPPROTO_EON IPPROTO_GGP
+			       IPPROTO_HELLO IPPROTO_ICMP IPPROTO_IDP
+			       IPPROTO_IGMP IPPROTO_IP IPPROTO_MAX
+			       IPPROTO_PUP IPPROTO_RAW IPPROTO_TCP IPPROTO_TP
+			       IPPROTO_UDP
+			       IPFRAGTTL
+			       IPTTLDEC IPVERSION)],
+	ipmulticast	=> [qw(IP_ADD_MEMBERSHIP IP_DEFAULT_MULTICAST_LOOP
+			       IP_DEFAULT_MULTICAST_TTL IP_DROP_MEMBERSHIP
+			       IP_MAX_MEMBERSHIPS IP_MULTICAST_IF
+			       IP_MULTICAST_LOOP IP_MULTICAST_TTL)],
 );
 
-sub AUTOLOAD
+;# sub AUTOLOAD inherited from Net::Gen
+
+;# Get the prototypes right for the autoloaded values, to avoid confusing
+;# the caller's code with changes in prototypes.
+
+;# sub inet_aton in Socket.xs
+
+sub inet_addr;			# (helps with -w)
+*inet_addr = \&inet_aton;	# same code for old interface
+
 {
-    # This AUTOLOAD is used to 'autoload' constants from the constant()
-    # XS function.  If a constant is not found then control is passed
-    # to the AUTOLOAD in AutoLoader.
-    my $constname;
-    ($constname = $AUTOLOAD) =~ s/.*:://;
-    my $val = constant($constname);
-    if ($! != 0) {
-	if ($! =~ /Invalid/) {
-	    $AutoLoader::AUTOLOAD = $AUTOLOAD;
-	    goto &AutoLoader::AUTOLOAD;
-	}
-	else {
-	    croak "Your vendor has not defined Net::Inet macro $constname, used";
+    my $n;
+    no strict 'refs';
+    local ($^W) = 0;
+    for $n (@EXPORT, @EXPORT_OK) {
+	unless (defined &$n) {
+	    eval "sub $n () ;";
 	}
     }
-    no strict 'refs';		# allow various value types in autoload
-    *{$AUTOLOAD} = sub { $val };
-;#    eval "sub $AUTOLOAD { $val }";
-    $DB::sub = $AUTOLOAD if $DB::sub;
-    goto &$AUTOLOAD;
 }
-
-bootstrap Net::Inet $VERSION;
 
 # Preloaded methods go here.  Autoload methods go after __END__, and are
 # processed by the autosplit program.
@@ -233,30 +275,30 @@ my %sockopts;
 	     # socket options from the list above
 	     # simple booleans first
 
-	     IP_HDRINCL		=> ['I'],
-	     IP_RECVDSTADDR	=> ['I'],
-	     IP_RECVOPTS	=> ['I'],
-	     IP_RECVRETOPTS	=> ['I'],
+	     'IP_HDRINCL'	=> ['I'],
+	     'IP_RECVDSTADDR'	=> ['I'],
+	     'IP_RECVOPTS'	=> ['I'],
+	     'IP_RECVRETOPTS'	=> ['I'],
 
 	     # simple integer options
 
-	     IP_TOS		=> ['I'],
-	     IP_TTL		=> ['I'],
+	     'IP_TOS'		=> ['I'],
+	     'IP_TTL'		=> ['I'],
 
 	     # structured options
 
-	     IP_ADD_MEMBERSHIP	=> ['a4a4'], # ip_mreq
-	     IP_DROP_MEMBERSHIP	=> ['a4a4'], # ip_mreq
-	     IP_MULTICAST_IF	=> ['a4'], # inet_addr
-	     IP_MULTICAST_LOOP	=> ['C'], # u_char
-	     IP_MULTICAST_TTL	=> ['C'], # u_char
-	     IP_OPTIONS		=> ['a4C40'], # ip_options
-	     IP_RETOPTS		=> ['a4C40'], # ip_options
+	     'IP_ADD_MEMBERSHIP'=> ['a4a4'], # ip_mreq
+	     'IP_DROP_MEMBERSHIP'=> ['a4a4'], # ip_mreq
+	     'IP_MULTICAST_IF'	=> ['a4'], # inet_addr
+	     'IP_MULTICAST_LOOP'=> ['C'], # u_char
+	     'IP_MULTICAST_TTL'	=> ['C'], # u_char
+	     'IP_OPTIONS'	=> ['a4C40'], # ip_options
+	     'IP_RETOPTS'	=> ['a4C40'], # ip_options
 
 	     # out of known IP options
 	     );
 
-$myclass->initsockopts( &IPPROTO_IP, \%sockopts );
+$myclass->initsockopts( &IPPROTO_IP(), \%sockopts );
 
 sub htonl			# number ; number // or array of same
 {
@@ -286,30 +328,24 @@ sub ntohs			# number ; number // or array of same
     unpack('S*', pack('n*', @_));
 }
 
-sub inet_aton			# (string) ; returns packed n_long or undef
-{
-    use integer;
-    return undef unless @_ == 1;
-    my(@pieces,$piece);
-    @pieces = split(/\./,$_[0],-1);
-    return undef if @pieces > 4 or !@pieces or $pieces[-1] eq '';
-    foreach $piece (@pieces) {
-	return undef unless $piece =~ /^(?:0x[a-f\d]+|0[0-7]*|[1-9]\d*)$/s;
-	$piece = 0 + ((substr($piece, 0, 1) eq '0') ? oct($piece) : $piece);
-    }
-    _inet_aton(@pieces);
-}
-
-sub inet_addr;			# (helps with -w)
-*inet_addr = \&inet_aton;	# same code for old interface
-
 ;# removed inet_ntoa that was here -- the one in Socket is good enough for me
 
-sub pack_sockaddr_in		# [$family,] $port, $in_addr
+sub pack_sockaddr_in ($$;$)	# [$family,] $port, $in_addr
 {
     my(@args) = @_;
     unshift(@args,AF_INET) if @args == 2;
-    _pack_sockaddr_in(@args);
+    pack_sockaddr($args[0],
+		  (unpack_sockaddr(Socket::pack_sockaddr_in($args[1],
+							    $args[2])))[1]
+		  );
+}
+
+sub unpack_sockaddr_in ($)	# $sockaddr_in; returns ($fam,$port,$in_addr)
+{
+    my ($fam,$port,$inaddr);
+    ($fam) = unpack_sockaddr($_[0]);
+    ($port,$inaddr) = Socket::unpack_sockaddr_in($_[0]);
+    ($fam,$port,$inaddr);
 }
 
 my $debug = 0;
@@ -340,7 +376,7 @@ sub new				# $class, [\%params]
 	$self->registerParamHandlers(\@hostkeys,\@hostkeyHandlers);
 	$self->registerParamHandlers(\@protokeys,\@protokeyHandlers);
 	# register our socket options
-	$self->registerOptions('IPPROTO_IP', &IPPROTO_IP+0, \%sockopts);
+	$self->registerOptions('IPPROTO_IP', &IPPROTO_IP()+0, \%sockopts);
 	# set our required parameters
 	$self->setparams({PF => PF_INET, AF => AF_INET});
 	$self = $self->init(@Args) if $class eq $myclass;
@@ -477,7 +513,8 @@ sub _setport			# ($self,$key,$newval)
     return "Invalid arguments to ${myclass}::_setport(@_), called"
 	if @_ != 3 || !exists($$self{Keys}{$key});
     print STDERR " - ${myclass}::_setport(@_)\n" if $debug;
-    my($skey,$hkey,$pkey,$svc,$port,$proto,$type,$host,$reval,$pname,@serv);
+    my($skey,$hkey,$pkey,$svc,$port,$proto,$type,$host,$reval);
+    my($pname,$defport,@serv);
     ($skey = $key) =~ s/port$/service/;	# a key known to be for a service
     ($pkey = $key) =~ s/service$/port/;	# and one for the port
     ($hkey = $pkey) =~ s/port$/host/; # another for calling _sethost
@@ -503,28 +540,34 @@ sub _setport			# ($self,$key,$newval)
 	&& defined($type = $self->getparam('type'))) {
 	# try to infer protocol from SO_TYPE
 	if ($type == SOCK_STREAM) {
-	    $proto = &IPPROTO_TCP;
+	    $proto = &IPPROTO_TCP();
 	}
 	elsif ($type == SOCK_DGRAM) {
-	    $proto = &IPPROTO_UDP;
+	    $proto = &IPPROTO_UDP();
 	}
     }
     if (defined $proto and not defined $pname) {
 	$pname = getprotobynumber($proto);
 	unless (defined $pname) {
-	    if ($proto == &IPPROTO_UDP) {
+	    if ($proto == &IPPROTO_UDP()) {
 		$pname = 'udp';
 	    }
-	    elsif ($proto == &IPPROTO_TCP) {
+	    elsif ($proto == &IPPROTO_TCP()) {
 		$pname = 'tcp';
+	    }
+	    elsif ($proto == &IPPROTO_ICMP()) {
+		$pname = 'icmp';
 	    }
 	}
     }
+    
     $reval = $newval;		# make resetting $_[2] simple
     $svc = $$self{Parms}{$skey}; # keep earlier values around (to preserve)
     $port = $$self{Parms}{$pkey};
     $port = undef if
 	defined($port) and $port =~ /\D/; # but stored ports must be numeric
+    ($newval,$defport) = ($1,$2+0)
+	if  $newval =~ /^(.+)\((\d+)\)$/;
     if ($skey eq $key || $newval =~ /\D/) { # trying to set a service
 	@serv = getservbyname($newval,$pname); # try to find the port info
     }
@@ -535,6 +578,10 @@ sub _setport			# ($self,$key,$newval)
     if (@serv) {		# if we resolved name/number input
 	$svc = $serv[0];	# save the canonical service name (and number?)
 	$port = 0+$serv[2] unless $key eq $pkey and $newval !~ /\D/;
+    }
+    elsif ($defport && $newval) {
+	$svc = $newval;
+	$port = $defport;
     }
     elsif ($key eq $skey or $newval =~ /\D/) { # setting unknown service
 	return "Unknown service $newval, found";
@@ -587,6 +634,9 @@ sub _setproto			# $this, $key, $newval
 	elsif ($proto == &IPPROTO_TCP) {
 	    $pname = 'tcp';
 	}
+	elsif ($proto == &IPPROTO_ICMP) {
+	    $pname = 'icmp';
+	}
     }
     $$self{Parms}{IPproto} = $pname; # update our values
     $$self{Parms}{proto} = $proto;
@@ -611,14 +661,18 @@ sub getsockinfo			# $this
 {
     my($self) = @_;
     my($rem,$lcl,$port,$serv,$name,$addr);
-    return undef unless $rem = $self->SUPER::getsockinfo;
-    ($name, $addr, $serv, $port) = $self->_addrinfo($rem);
-    $self->setparams({remhost => $name, remaddr => $addr,
-		      remservice => $serv, remport => $port});
+    $rem = $self->SUPER::getsockinfo;
+    if (defined $rem and length($rem)) {
+	($name, $addr, $serv, $port) = $self->_addrinfo($rem);
+	$self->setparams({remhost => $name, remaddr => $addr,
+			  remservice => $serv, remport => $port});
+    }
     $lcl = $self->getparam('srcaddr');
-    ($name, $addr, $serv, $port) = $self->_addrinfo($lcl);
-    $self->setparams({lclhost => $name, lcladdr => $addr,
-		      lclservice => $serv, lclport => $port});
+    if (defined $lcl and length($lcl)) {
+	($name, $addr, $serv, $port) = $self->_addrinfo($lcl);
+	$self->setparams({lclhost => $name, lcladdr => $addr,
+			  lclservice => $serv, lclport => $port});
+    }
     $rem;
 }
 
@@ -682,7 +736,7 @@ Net::Inet - Internet socket interface module
 The C<Net::Inet> module provides basic services for handling
 socket-based communications for the Internet protocol family.  It
 inherits from C<Net::Gen>, and is a base for C<Net::TCP> and
-C<Net::UDP> (future).
+C<Net::UDP>.
 
 =head2 Public Methods
 
@@ -735,7 +789,7 @@ the inherited C<bind> method.
 
 Example:
 
-    $ok = $obj->bind(0, 'echo'); # attach to the TCP echo port
+    $ok = $obj->bind(0, 'echo(7)'); # attach to the local TCP echo port
 
 =item unbind
 
@@ -1001,7 +1055,9 @@ Usage:
     $in_addr = inet_aton('192.0.2.1');
 
 Returns the packed C<AF_INET> address in network order, if it is
-validly formed, or C<undef> on error.
+validly formed, or C<undef> on error.  This used to be a separate
+implementation in this package, but is now inherited from the
+C<Socket> module.
 
 =item inet_addr
 
@@ -1017,7 +1073,9 @@ Usage:
     $addr_string = inet_ntoa($in_addr);
 
 Returns the ASCII representation of the C<AF_INET> address
-provided (if possible), or C<undef> on error.
+provided (if possible), or C<undef> on error.  This used to be a
+separate implementation in this package, but is now inherited
+from the C<Socket> module.
 
 =item htonl/htons/ntohl/ntohs
 
@@ -1033,7 +1091,9 @@ Returns the packed C<struct sockaddr_in> corresponding to the
 provided $family, $port, and $in_addr arguments.  The $family and
 $port arguments must be numbers, and the $in_addr argument must
 be a packed C<struct in_addr> such as the trailing elements from
-perl's gethostent() return list.
+perl's gethostent() return list.  This differs from the
+implementation in the C<Socket> module in that the C<$family>
+argument is present and used.
 
 =item unpack_sockaddr_in
 
@@ -1043,7 +1103,9 @@ Usage:
 
 Returns the address family, port, and packed C<struct in_addr>
 from the supplied packed C<struct sockaddr_in>.  This is the
-inverse of pack_sockaddr_in().
+inverse of pack_sockaddr_in().  This differs from the
+implementation in the C<Socket> module in that the C<$family>
+value from the socket address is returned.
 
 =back
 
@@ -1206,9 +1268,78 @@ C<unpack_sockaddr_in>
 
 =item tags
 
-None, yet.  Taking suggestions for useful groupings.
+	sockopts	=> [qw(IP_HDRINCL IP_RECVDSTADDR IP_RECVOPTS
+			       IP_RECVRETOPTS IP_TOS IP_TTL IP_ADD_MEMBERSHIP
+			       IP_DROP_MEMBERSHIP IP_MULTICAST_IF
+			       IP_MULTICAST_LOOP IP_MULTICAST_TTL
+			       IP_OPTIONS IP_RETOPTS)]
+	routines	=> [qw(pack_sockaddr_in unpack_sockaddr_in
+			       inet_ntoa inet_aton inet_addr
+			       htonl ntohl htons ntohs)]
+	icmpvalues	=> [qw(ICMP_ADVLENMIN ICMP_ECHO ICMP_ECHOREPLY
+			       ICMP_IREQ ICMP_IREQREPLY ICMP_MASKLEN
+			       ICMP_MASKREPLY ICMP_MASKREQ ICMP_MAXTYPE
+			       ICMP_MINLEN ICMP_PARAMPROB ICMP_REDIRECT
+			       ICMP_REDIRECT_HOST ICMP_REDIRECT_NET
+			       ICMP_REDIRECT_TOSHOST ICMP_REDIRECT_TOSNET
+			       ICMP_SOURCEQUENCH ICMP_TIMXCEED
+			       ICMP_TIMXCEED_INTRANS ICMP_TIMXCEED_REASS
+			       ICMP_TSLEN ICMP_TSTAMP ICMP_TSTAMPREPLY
+			       ICMP_UNREACH ICMP_UNREACH_HOST
+			       ICMP_UNREACH_NEEDFRAG ICMP_UNREACH_NET
+			       ICMP_UNREACH_PORT ICMP_UNREACH_PROTOCOL
+			       ICMP_UNREACH_SRCFAIL)]
+	ipoptions	=> [qw(IPOPT_CONTROL IPOPT_DEBMEAS IPOPT_EOL
+			       IPOPT_LSRR IPOPT_MINOFF IPOPT_NOP IPOPT_OFFSET
+			       IPOPT_OLEN IPOPT_OPTVAL
+			       IPOPT_RESERVED1 IPOPT_RESERVED2
+			       IPOPT_RR IPOPT_SATID
+			       IPOPT_SECURITY IPOPT_SECUR_CONFID
+			       IPOPT_SECUR_EFTO IPOPT_SECUR_MMMM
+			       IPOPT_SECUR_RESTR IPOPT_SECUR_SECRET
+			       IPOPT_SECUR_TOPSECRET IPOPT_SECUR_UNCLASS
+			       IPOPT_SSRR
+			       IPOPT_TS IPOPT_TS_PRESPEC
+			       IPOPT_TS_TSANDADDR IPOPT_TS_TSONLY)]
+	iptosvalues	=> [qw(IPTOS_LOWDELAY IPTOS_PREC_CRITIC_ECP
+			       IPTOS_PREC_FLASH IPTOS_PREC_FLASHOVERRIDE
+			       IPTOS_PREC_IMMEDIATE IPTOS_PREC_INTERNETCONTROL
+			       IPTOS_PREC_NETCONTROL IPTOS_PREC_PRIORITY
+			       IPTOS_PREC_ROUTINE IPTOS_RELIABILITY
+			       IPTOS_THROUGHPUT)]
+	protocolvalues	=> [qw(INADDR_ALLHOSTS_GROUP INADDR_ANY
+			       INADDR_BROADCAST INADDR_LOOPBACK
+			       INADDR_MAX_LOCAL_GROUP INADDR_NONE
+			       INADDR_UNSPEC_GROUP
+			       IP_DF IP_MAXPACKET IP_MF IP_MSS
+			       IPPORT_RESERVED IPPORT_USERRESERVED
+			       IPPROTO_EGP IPPROTO_EON IPPROTO_GGP
+			       IPPROTO_HELLO IPPROTO_ICMP IPPROTO_IDP
+			       IPPROTO_IGMP IPPROTO_IP IPPROTO_MAX
+			       IPPROTO_PUP IPPROTO_RAW IPPROTO_TCP IPPROTO_TP
+			       IPPROTO_UDP
+			       IPFRAGTTL
+			       IPTTLDEC IPVERSION)]
+	ipmulticast	=> [qw(IP_ADD_MEMBERSHIP IP_DEFAULT_MULTICAST_LOOP
+			       IP_DEFAULT_MULTICAST_TTL IP_DROP_MEMBERSHIP
+			       IP_MAX_MEMBERSHIPS IP_MULTICAST_IF
+			       IP_MULTICAST_LOOP IP_MULTICAST_TTL)]
 
 =back
+
+=head1 NOTES
+
+Anywhere a L<service> or L<port> argument is used above, the
+allowed syntax is either a service name, a port number, or a
+service name with a caller-supplied default port number.
+Examples are C<'echo'>, C<7>, and C<'echo(7)'>, respectively.
+For a L<service> argument, a bare port number must be
+translatable into a service name with getservbyport() or an error
+will result.  A service name must be translatable into a port
+with getservbyname() or an error will result.  However, a service
+name with a default port number will succeed (by using the
+supplied default) even if the translation with getservbyname()
+fails.
 
 =head1 NYI
 
@@ -1232,7 +1363,7 @@ arrays, but you get the idea.
 
 =head1 AUTHOR
 
-Spider Boardman <F<spider@Orb.Nashua.NH.US>>
+Spider Boardman F<E<lt>spider@Orb.Nashua.NH.USE<gt>>
 
 =cut
 
