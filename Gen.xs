@@ -1,6 +1,6 @@
 /*
 
-# Copyright 1995,1996,1997,1998 Spider Boardman.
+# Copyright 1995,1999 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -106,167 +106,19 @@ extern "C" {
 #define	EWOULDBLOCK	EAGAIN
 #endif
 
-static U32
-constant(name)
-char *name;
-{
-    errno = 0;
-    switch (*name) {
-      case 'I':
-	switch (name[1]) {
-	  case 'N':
-#ifndef IN_CLASSA_SUBHOST
-	    if (strEQ(name, "IN_CLASSA_SUBHOST"))
-		goto not_there;
-#endif
-#ifndef IN_CLASSA_SUBNET
-	    if (strEQ(name, "IN_CLASSA_SUBNET"))
-		goto not_there;
-#endif
-#ifndef IN_CLASSA_SUBNSHIFT
-	    if (strEQ(name, "IN_CLASSA_SUBNSHIFT"))
-		goto not_there;
-#endif
-#ifndef IN_CLASSB_SUBHOST
-	    if (strEQ(name, "IN_CLASSB_SUBHOST"))
-		goto not_there;
-#endif
-#ifndef IN_CLASSB_SUBNET
-	    if (strEQ(name, "IN_CLASSB_SUBNET"))
-		goto not_there;
-#endif
-#ifndef IN_CLASSB_SUBNSHIFT
-	    if (strEQ(name, "IN_CLASSB_SUBNSHIFT"))
-		goto not_there;
-#endif
-	    break;
-	  case 'P':
-	    switch(name[2]) {
-	      case 'F':
-#ifndef IPFRAGTTL
-		if (strEQ(name, "IPFRAGTTL"))
-		    goto not_there;
-#endif
-		break;
-	      case 'P':
-#ifndef IPPORT_TIMESERVER
-		if (strEQ(name, "IPPORT_TIMESERVER"))
-		    goto not_there;
-#endif
-		break;
-	      case '_':
-#ifndef IP_ADD_MEMBERSHIP
-		if (strEQ(name, "IP_ADD_MEMBERSHIP"))
-		    goto not_there;
-#endif
-#ifndef IP_DEFAULT_MULTICAST_LOOP
-		if (strEQ(name, "IP_DEFAULT_MULTICAST_LOOP"))
-		    goto not_there;
-#endif
-#ifndef IP_DEFAULT_MULTICAST_TTL
-		if (strEQ(name, "IP_DEFAULT_MULTICAST_TTL"))
-		    goto not_there;
-#endif
-#ifndef IP_DROP_MEMBERSHIP
-		if (strEQ(name, "IP_DROP_MEMBERSHIP"))
-		    goto not_there;
-#endif
-#ifndef IP_HDRINCL
-		if (strEQ(name, "IP_HDRINCL"))
-		    goto not_there;
-#endif
-#ifndef IP_MAX_MEMBERSHIPS
-		if (strEQ(name, "IP_MAX_MEMBERSHIPS"))
-		    goto not_there;
-#endif
-#ifndef IP_MULTICAST_IF
-		if (strEQ(name, "IP_MULTICAST_IF"))
-		    goto not_there;
-#endif
-#ifndef IP_MULTICAST_LOOP
-		if (strEQ(name, "IP_MULTICAST_LOOP"))
-		    goto not_there;
-#endif
-#ifndef IP_MULTICAST_TTL
-		if (strEQ(name, "IP_MULTICAST_TTL"))
-		    goto not_there;
-#endif
-#ifndef IP_OPTIONS
-		if (strEQ(name, "IP_OPTIONS"))
-		    goto not_there;
-#endif
-#ifndef IP_RECVDSTADDR
-		if (strEQ(name, "IP_RECVDSTADDR"))
-		    goto not_there;
-#endif
-#ifndef IP_RECVOPTS
-		if (strEQ(name, "IP_RECVOPTS"))
-		    goto not_there;
-#endif
-#ifndef IP_RECVRETOPTS
-		if (strEQ(name, "IP_RECVRETOPTS"))
-		    goto not_there;
-#endif
-#ifndef IP_RETOPTS
-		if (strEQ(name, "IP_RETOPTS"))
-		    goto not_there;
-#endif
-#ifndef IP_TOS
-		if (strEQ(name, "IP_TOS"))
-		    goto not_there;
-#endif
-#ifndef IP_TTL
-		if (strEQ(name, "IP_TTL"))
-		    goto not_there;
-#endif
-		break;
-	    }
-	    break;
-	}
-	break;
-      case 'R':
-#ifndef RD_NODATA
-	if (strEQ(name, "RD_NODATA"))
-	    goto not_there;
-#endif
-	break;
-      case 'S':
-#ifndef SUBNETSHIFT
-	if (strEQ(name, "SUBNETSHIFT"))
-	    goto not_there;
-#endif
-	break;
-      case 'T':
-#ifndef TCP_MAXSEG
-	if (strEQ(name, "TCP_MAXSEG"))
-	    goto not_there;
-#endif
-#ifndef TCP_NODELAY
-	if (strEQ(name, "TCP_NODELAY"))
-	    goto not_there;
-#endif
-#ifndef TCP_RPTR2RXT
-	if (strEQ(name, "TCP_RPTR2RXT"))
-	    goto not_there;
-#endif
-	break;
-      case 'V':
-#ifndef VAL_O_NONBLOCK
-	if (strEQ(name, "VAL_O_NONBLOCK"))
-	    goto not_there;
-#endif
-#ifndef VAL_EAGAIN
-	if (strEQ(name, "VAL_EAGAIN"))
-	    goto not_there;
-#endif
-	break;
-    }
-    errno = EINVAL;
-    return 0;
+HV *missing;			/* not_there cases for AUTOLOAD() */
 
-  not_there:
-    errno = ENOENT;
-    return 0;
+static void
+newmissing(name, file)
+char *name;
+char *file;
+{
+    STRLEN klen;
+    CV *cv;
+    klen = strlen(name);
+    (void) hv_fetch(missing, name, klen, TRUE);
+    cv = newXS(name, NULL, file); /* newSUB with no block */
+    sv_setsv((SV*)cv, &PL_sv_no); /* prototype it as "()" */
 }
 
 /*
@@ -415,6 +267,9 @@ MODULE = Net::Gen		PACKAGE = Net::Gen
 
 PROTOTYPES: ENABLE
 
+BOOT:
+	missing = perl_get_hv("Net::Gen::_missing", GV_ADDMULTI);
+
 
 MODULE = Net::Gen		PACKAGE = Net::TCP	PREFIX = f_uc_
 
@@ -425,15 +280,21 @@ BOOT:
 	newXSconstUV("Net::TCP::TCPOPT_WINDOW", TCPOPT_WINDOW, file);
 #ifdef TCP_MAXSEG
 	newXSconstUV("Net::TCP::TCP_MAXSEG", TCP_MAXSEG, file);
+#else
+	newmissing("Net::TCP::TCP_MAXSEG", file);
 #endif
 	newXSconstUV("Net::TCP::TCP_MAXWIN", TCP_MAXWIN, file);
 	newXSconstUV("Net::TCP::TCP_MAX_WINSHIFT", TCP_MAX_WINSHIFT, file);
 	newXSconstUV("Net::TCP::TCP_MSS", TCP_MSS, file);
 #ifdef TCP_NODELAY
 	newXSconstUV("Net::TCP::TCP_NODELAY", TCP_NODELAY, file);
+#else
+	newmissing("Net::TCP::TCP_NODELAY", file);
 #endif
 #ifdef TCP_RPTR2RXT
 	newXSconstUV("Net::TCP::TCP_RPTR2RXT", TCP_RPTR2RXT, file);
+#else
+	newmissing("Net::TCP::TCP_RPTR2RXT", file);
 #endif
 	newXSconstUV("Net::TCP::TH_ACK", TH_ACK, file);
 	newXSconstUV("Net::TCP::TH_FIN", TH_FIN, file);
@@ -483,12 +344,18 @@ BOOT:
 	newXSconstUV("Net::Inet::IN_CLASSA_NSHIFT", IN_CLASSA_NSHIFT, file);
 #ifdef IN_CLASSA_SUBHOST
 	newXSconstUV("Net::Inet::IN_CLASSA_SUBHOST", IN_CLASSA_SUBHOST, file);
+#else
+	newmissing("Net::Inet::IN_CLASSA_SUBHOST", file);
 #endif
 #ifdef IN_CLASSA_SUBNET
 	newXSconstUV("Net::Inet::IN_CLASSA_SUBNET", IN_CLASSA_SUBNET, file);
+#else
+	newmissing("Net::Inet::IN_CLASSA_SUBNET", file);
 #endif
 #ifdef IN_CLASSA_SUBNSHIFT
 	newXSconstUV("Net::Inet::IN_CLASSA_SUBNSHIFT", IN_CLASSA_SUBNSHIFT, file);
+#else
+	newmissing("Net::Inet::IN_CLASSA_SUBNSHIFT", file);
 #endif
 	newXSconstUV("Net::Inet::IN_CLASSB_HOST", IN_CLASSB_HOST, file);
 	newXSconstUV("Net::Inet::IN_CLASSB_MAX", IN_CLASSB_MAX, file);
@@ -496,12 +363,18 @@ BOOT:
 	newXSconstUV("Net::Inet::IN_CLASSB_NSHIFT", IN_CLASSB_NSHIFT, file);
 #ifdef IN_CLASSB_SUBHOST
 	newXSconstUV("Net::Inet::IN_CLASSB_SUBHOST", IN_CLASSB_SUBHOST, file);
+#else
+	newmissing("Net::Inet::IN_CLASSB_SUBHOST", file);
 #endif
 #ifdef IN_CLASSB_SUBNET
 	newXSconstUV("Net::Inet::IN_CLASSB_SUBNET", IN_CLASSB_SUBNET, file);
+#else
+	newmissing("Net::Inet::IN_CLASSB_SUBNET", file);
 #endif
 #ifdef IN_CLASSB_SUBNSHIFT
 	newXSconstUV("Net::Inet::IN_CLASSB_SUBNSHIFT", IN_CLASSB_SUBNSHIFT, file);
+#else
+	newmissing("Net::Inet::IN_CLASSB_SUBNSHIFT", file);
 #endif
 	newXSconstUV("Net::Inet::IN_CLASSC_HOST", IN_CLASSC_HOST, file);
 	newXSconstUV("Net::Inet::IN_CLASSC_MAX", IN_CLASSC_MAX, file);
@@ -513,6 +386,8 @@ BOOT:
 	newXSconstUV("Net::Inet::IN_LOOPBACKNET", IN_LOOPBACKNET, file);
 #ifdef IPFRAGTTL
 	newXSconstUV("Net::Inet::IPFRAGTTL", IPFRAGTTL, file);
+#else
+	newmissing("Net::Inet::IPFRAGTTL", file);
 #endif
 	newXSconstUV("Net::Inet::IPOPT_CIPSO", IPOPT_CIPSO, file);
 	newXSconstUV("Net::Inet::IPOPT_CONTROL", IPOPT_CONTROL, file);
@@ -545,6 +420,8 @@ BOOT:
 	newXSconstUV("Net::Inet::IPPORT_RESERVED", IPPORT_RESERVED, file);
 #ifdef IPPORT_TIMESERVER
 	newXSconstUV("Net::Inet::IPPORT_TIMESERVER", IPPORT_TIMESERVER, file);
+#else
+	newmissing("Net::Inet::IPPORT_TIMESERVER", file);
 #endif
 	newXSconstUV("Net::Inet::IPPORT_USERRESERVED", IPPORT_USERRESERVED, file);
 	newXSconstUV("Net::Inet::IPPROTO_EGP", IPPROTO_EGP, file);
@@ -578,61 +455,95 @@ BOOT:
 	newXSconstUV("Net::Inet::IPVERSION", IPVERSION, file);
 #ifdef IP_ADD_MEMBERSHIP
 	newXSconstUV("Net::Inet::IP_ADD_MEMBERSHIP", IP_ADD_MEMBERSHIP, file);
+#else
+	newmissing("Net::Inet::IP_ADD_MEMBERSHIP", file);
 #endif
 #ifdef IP_DEFAULT_MULTICAST_LOOP
 	newXSconstUV("Net::Inet::IP_DEFAULT_MULTICAST_LOOP", IP_DEFAULT_MULTICAST_LOOP, file);
+#else
+	newmissing("Net::Inet::IP_DEFAULT_MULTICAST_LOOP", file);
 #endif
 #ifdef IP_DEFAULT_MULTICAST_TTL
 	newXSconstUV("Net::Inet::IP_DEFAULT_MULTICAST_TTL", IP_DEFAULT_MULTICAST_TTL, file);
+#else
+	newmissing("Net::Inet::IP_DEFAULT_MULTICAST_TTL", file);
 #endif
 	newXSconstUV("Net::Inet::IP_DF", IP_DF, file);
 #ifdef IP_DROP_MEMBERSHIP
 	newXSconstUV("Net::Inet::IP_DROP_MEMBERSHIP", IP_DROP_MEMBERSHIP, file);
+#else
+	newmissing("Net::Inet::IP_DROP_MEMBERSHIP", file);
 #endif
 #ifdef IP_HDRINCL
 	newXSconstUV("Net::Inet::IP_HDRINCL", IP_HDRINCL, file);
+#else
+	newmissing("Net::Inet::IP_HDRINCL", file);
 #endif
 	newXSconstUV("Net::Inet::IP_MAXPACKET", IP_MAXPACKET, file);
 #ifdef IP_MAX_MEMBERSHIPS
 	newXSconstUV("Net::Inet::IP_MAX_MEMBERSHIPS", IP_MAX_MEMBERSHIPS, file);
+#else
+	newmissing("Net::Inet::IP_MAX_MEMBERSHIPS", file);
 #endif
 	newXSconstUV("Net::Inet::IP_MF", IP_MF, file);
 	newXSconstUV("Net::Inet::IP_MSS", IP_MSS, file);
 #ifdef IP_MULTICAST_IF
 	newXSconstUV("Net::Inet::IP_MULTICAST_IF", IP_MULTICAST_IF, file);
+#else
+	newmissing("Net::Inet::IP_MULTICAST_IF", file);
 #endif
 #ifdef IP_MULTICAST_LOOP
 	newXSconstUV("Net::Inet::IP_MULTICAST_LOOP", IP_MULTICAST_LOOP, file);
+#else
+	newmissing("Net::Inet::IP_MULTICAST_LOOP", file);
 #endif
 #ifdef IP_MULTICAST_TTL
 	newXSconstUV("Net::Inet::IP_MULTICAST_TTL", IP_MULTICAST_TTL, file);
+#else
+	newmissing("Net::Inet::IP_MULTICAST_TTL", file);
 #endif
 #ifdef IP_OPTIONS
 	newXSconstUV("Net::Inet::IP_OPTIONS", IP_OPTIONS, file);
+#else
+	newmissing("Net::Inet::IP_OPTIONS", file);
 #endif
 #ifdef IP_RECVDSTADDR
 	newXSconstUV("Net::Inet::IP_RECVDSTADDR", IP_RECVDSTADDR, file);
+#else
+	newmissing("Net::Inet::IP_RECVDSTADDR", file);
 #endif
 #ifdef IP_RECVOPTS
 	newXSconstUV("Net::Inet::IP_RECVOPTS", IP_RECVOPTS, file);
+#else
+	newmissing("Net::Inet::IP_RECVOPTS", file);
 #endif
 #ifdef IP_RECVRETOPTS
 	newXSconstUV("Net::Inet::IP_RECVRETOPTS", IP_RECVRETOPTS, file);
+#else
+	newmissing("Net::Inet::IP_RECVRETOPTS", file);
 #endif
 #ifdef IP_RETOPTS
 	newXSconstUV("Net::Inet::IP_RETOPTS", IP_RETOPTS, file);
+#else
+	newmissing("Net::Inet::IP_RETOPTS", file);
 #endif
 #ifdef IP_TOS
 	newXSconstUV("Net::Inet::IP_TOS", IP_TOS, file);
+#else
+	newmissing("Net::Inet::IP_TOS", file);
 #endif
 #ifdef IP_TTL
 	newXSconstUV("Net::Inet::IP_TTL", IP_TTL, file);
+#else
+	newmissing("Net::Inet::IP_TTL", file);
 #endif
 	newXSconstUV("Net::Inet::MAXTTL", MAXTTL, file);
 	newXSconstUV("Net::Inet::MAX_IPOPTLEN", MAX_IPOPTLEN, file);
 	newXSconstUV("Net::Inet::MINTTL", MINTTL, file);
 #ifdef SUBNETSHIFT
 	newXSconstUV("Net::Inet::SUBNETSHIFT", SUBNETSHIFT, file);
+#else
+	newmissing("Net::Inet::SUBNETSHIFT", file);
 #endif
     {
 	struct in_addr ina;
@@ -787,6 +698,8 @@ BOOT:
 	newXSconstIV("Net::Gen::EOF_NONBLOCK", f_ic_EOF_NONBLOCK, file);
 #ifdef	RD_NODATA
 	newXSconstIV("Net::Gen::RD_NODATA", RD_NODATA, file);
+#else
+	newmissing("Net::Gen::RD_NODATA", file);
 #endif
 	newXSconstIV("Net::Gen::SHUT_RD", SHUT_RD, file);
 	newXSconstIV("Net::Gen::SHUT_WR", SHUT_WR, file);
@@ -798,9 +711,13 @@ MODULE = Net::Gen		PACKAGE = Net::Gen	PREFIX = f_uc_
 BOOT:
 #ifdef	VAL_O_NONBLOCK
 	newXSconstUV("Net::Gen::VAL_O_NONBLOCK", VAL_O_NONBLOCK, file);
+#else
+	newmissing("Net::Gen::VAL_O_NONBLOCK", file);
 #endif
 #ifdef	VAL_EAGAIN
 	newXSconstUV("Net::Gen::VAL_EAGAIN", VAL_EAGAIN, file);
+#else
+	newmissing("Net::Gen::VAL_EAGAIN", file);
 #endif
 	newXSconstUV("Net::Gen::MSG_OOB", MSG_OOB, file);
 	newXSconstUV("Net::Gen::ENOENT", ENOENT, file);
@@ -846,10 +763,6 @@ BOOT:
 
 
 MODULE = Net::Gen		PACKAGE = Net::Gen
-
-U32
-constant(name)
-	char *	name
 
 SV *
 pack_sockaddr(family,address)

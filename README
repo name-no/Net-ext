@@ -1,6 +1,7 @@
 What it is:
 
-	Modules Net::Gen, Net::Inet, Net::TCP, Net::UDP, and Net::UNIX.
+	Modules Net::Gen, Net::Inet, Net::TCP, Net::UDP, Net::UNIX,
+	Net::TCP::Server, and Net::UNIX::Server.
 	Net::Gen is not a good name, I know that, but what's in it
 	really belongs in Socket, I think.  In any case, I'm open to
 	votes for a better name.  Well, I would be, but it's appeared in
@@ -38,7 +39,8 @@ What's still missing:
 	Linux systems have as enums rather than as #defines.  (I think I
 	have this one covered now, but that isn't proved yet.)  Other
 	UNIX variants may need tweaking, and I've no idea whether it'll
-	work on Win32 Perl.
+	work on Win32 Perl.  Also, the non-blocking/timed connect() support
+	won't work with SOCKSified perl.
 
 	Better support (besides the plethora of protocol constants) for
 	raw socket communications (required for the ICMP values to be
@@ -53,7 +55,7 @@ the methods.
 I'm not a technical writer, nor do I usually play one on the net.
 The documentation could still use a lot of work, I'm sure.
 
-Making it all work requires perl 5.004_05 or later.
+Making it all work requires perl 5.004_05(maint trial 8) or later.
 
 A simple test script:
 
@@ -99,7 +101,7 @@ of perl5 than this code ever could have).  If you were using the internals
 of the implementation rather than sticking to the documented interfaces,
 you will have some work to do before your derived classes will work again.
 
-# Copyright 1995,1996,1997,1998 Spider Boardman.
+# Copyright 1995,1999 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software

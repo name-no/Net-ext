@@ -20,6 +20,14 @@ WriteMakefile(
     'NAME'	=> 'Net::Gen',
     'DISTNAME'	=> 'Net-ext',
     'VERSION_FROM' => 'lib/Net/Gen.pm', # finds $VERSION
+    "$]" ge "5.005" ?
+		('ABSTRACT'	=>
+			'Provide OO socket manipulations, including friendly [get/set]sockopt',
+		 'AUTHOR'	=>
+			'Spider Boardman <spider@Orb.Nashua.NH.US>'
+		)
+		: ()
+		,
     'LIBS'	=> [''],   # e.g., '-lm' 
     'DEFINE'	=> '',     # e.g., '-DHAVE_SOMETHING'
 			   # DEFINE is modified by hint-files.
@@ -28,6 +36,8 @@ WriteMakefile(
 		COMPRESS	=>	'gzip -9fNv',
 		SUFFIX		=>	'.gz',
 		TARFLAGS	=>	'cvof',
+		PREOP		=>	'$(CHMOD) ugo-w `cat MANIFEST`',
+		POSTOP		=>	'$(CHMOD) u+w `cat MANIFEST`',
 		},
     'clean'	=> {
 		FILES	=>	qq[$tempfile $hfile],
@@ -36,6 +46,15 @@ WriteMakefile(
     'CONFIG'	=> [qw(usrinc locincpth)],
 #    'MAN3PODS'	=> {},
 );
+}
+
+# Fix up NOOP for my development environment.
+
+sub MY::post_initialize
+{
+    my $self = shift;
+    $self->{NOOP} = ':' if $^O eq 'dec_osf';
+    $self->MM::post_initialize(@_);
 }
 
 # Since the .h file is dependent upon this Makefile.PL file, an override
@@ -55,7 +74,12 @@ sub MY::makefile
 sub MY::libscan
 {
     my $self = shift;
-    return '' if $_[0] =~ /\~$/;
+    return ''
+	if $_[0] =~ /\~$/ or
+	    $_[0] =~ /\.ORIG$/i or
+		$_[0] =~ m,(?:^|/)Net-ext-, or
+		    $_[0] =~ m,(?:^|/)(?:OLD|DL)$,
+		    ;
     $self->MM::libscan(@_);
 }
 
@@ -110,6 +134,7 @@ my %defdefines = (
 
 	IPPORT_RESERVED		=>		'1024',
 	IPPORT_USERRESERVED	=>		'5000',
+	IPPORT_DYNAMIC		=>		'49152',
 
 	IN_CLASSA_NET		=>		'((U32)0xff000000)',
 	IN_CLASSA_NSHIFT	=>		'24',

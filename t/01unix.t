@@ -6,9 +6,12 @@ use strict;
 
 # Special-case the constants we need later
 use Socket 'SOCK_STREAM';
+sub Net::Gen::SOMAXCONN () ;
 
 # Pre-declarations a la `sub SOCK_STREAM' would also have done.
 
+# Just in case, because of problems with some OSes, don't die on SIGPIPE.
+$SIG{PIPE} = 'IGNORE';
 
 # Start defining the tests as subroutines, and using BEGIN blocks to
 # populate the test vector.  This way, we can call plan() in a BEGIN block
@@ -36,19 +39,35 @@ my %todos;			# hash (indexed by stringified code ref)
 
 END { for my $endcv (@endav) { $endcv->() } }
 
-# I'm ass-u-ming (for the nonce) that ok() and skip() return their
-# `ok-ness' (as they do in 1.08), so that the test routines can just
-# propagate that return back out to the actual test driver, which will
-# `remember' it in %testvals.  If JPRIT agrees that this should be part
-# of the interface, I win.  If not, I'll have to re-think the calling
-# sequence.
+# Note that ok() and skip() return their `ok-ness', so that test
+# routines can just propagate that return back out to the actual
+# test driver, which will `remember' it in %testvals.
+
+my $ok;				# continuation flag
 
 sub tdriver ()			# run the code refs in @testvec
 {
     for my $cv (@testvec) {
-	my $ok = $cv->();
+	$ok = $cv->();
 	$testvals{"$cv"} = $ok;
     }
+}
+
+sub ptest ()			# print out the test name
+{
+    my $who = (caller(1))[3];
+    $who =~ s/^.*:://;
+    print "# $who\n";
+}
+
+sub xerror ()			# get int & string parts of $!
+{
+    "(errno=".($!+0)."): $!";
+}
+
+sub okval ($)			# get printable value instead of C<undef>
+{
+    defined($_[0]) ? $_[0] : '<undef>';
 }
 
 
@@ -71,18 +90,20 @@ my $acpt;			# secondary (accept()ing) server socket
 
 # get a server socket to use
 sub t_open_srvr_dgram {
+    ptest;
     unlink $sockname;
     $srvr = 'Net::UNIX::Server'->new($sockname);
     my $srvok = $srvr && $srvr->isbound;
     push(@endav, sub { unlink $sockname}) if $srvok;
-    ok $srvok;
+    ok okval $srvok, 1, xerror;
 }
 push @testvec, \&t_open_srvr_dgram;
 
 # get a client to talk to the server
 sub t_open_clnt_dgram {
+    ptest;
     $clnt = 'Net::UNIX'->new($sockname);
-    ok $clnt && $clnt->isconnected;
+    ok okval($clnt && $clnt->isconnected), 1, xerror;
 }
 push @testvec, \&t_open_clnt_dgram;
 
@@ -90,6 +111,7 @@ push @testvec, \&t_open_clnt_dgram;
 sub t_dgram_both_open {
     exit 1	unless $testvals{\&t_open_clnt_dgram}
 		       && $testvals{\&t_open_srvr_dgram};
+    ptest;
     ok 1;
 }
 push @testvec, \&t_dgram_both_open;
@@ -97,14 +119,16 @@ push @testvec, \&t_dgram_both_open;
 # send a hello
 my $sentmsg;
 sub t_send_hello_dgram {
+    ptest;
     $sentmsg = "Wowsers!";
     my $sendok = $clnt->send($sentmsg);
-    ok $sendok;
+    ok okval $sendok, length $sentmsg, xerror;
 }
 push @testvec, \&t_send_hello_dgram;
 
 # check receipt
 sub t_chk_hello_dgram {
+    ptest;
     my $gotmsg = $srvr->recv(40);
     ok $gotmsg, $sentmsg;
 }
@@ -112,6 +136,7 @@ push @testvec, \&t_chk_hello_dgram;
 
 # fail to reply
 sub t_chk_noreply_dgram {
+    ptest;
     $sentmsg = "Sorry, chief.";
     my $sendok = $srvr->send($sentmsg);
     ok !$sendok;
@@ -120,22 +145,27 @@ push @testvec, \&t_chk_noreply_dgram;
 
 # check close status
 sub t_chk_closes_dgram {
-    ok $srvr->close && $clnt->close;
+    ptest;
+    ok okval($srvr->close && $clnt->close), 1, xerror;
 }
 push @testvec, \&t_chk_closes_dgram;
 
 # get a new server for stream sockets
 sub t_open_srvr_strm {
+    ptest;
     unlink $sockname;
-    $srvr = 'Net::UNIX::Server'->new($sockname, {type => SOCK_STREAM});
-    ok $srvr && $srvr->isbound && $srvr->didlisten;
+    $srvr = 'Net::UNIX::Server'->new($sockname, {'type' => SOCK_STREAM,
+					         'timeout' => 0});
+    $ok = $srvr && $srvr->isbound && $srvr->didlisten;
+    ok okval $ok, Net::Gen::SOMAXCONN, xerror;
 }
 push @testvec, \&t_open_srvr_strm;
 
-# get a new client for stream sockets
+# get a new unconnected client for stream sockets
 sub t_open_clnt_strm {
-    $clnt = 'Net::UNIX'->new($sockname, {type => SOCK_STREAM});
-    ok $clnt && $clnt->isconnected;
+    ptest;
+    $clnt = 'Net::UNIX'->new({type => SOCK_STREAM});
+    $clnt ? ok($clnt) : ok('<undef>',1,xerror);
 }
 push @testvec, \&t_open_clnt_strm;
 
@@ -143,26 +173,48 @@ push @testvec, \&t_open_clnt_strm;
 sub t_stream_both_open {
     exit 1 unless $testvals{\&t_open_srvr_strm}
 		  && $testvals{\&t_open_clnt_strm};
+    ptest;
     ok 1;
 }
 push @testvec, \&t_stream_both_open;
 
+# issue a connect request for the client
+my $connok;
+sub t_clnt_iconn_strm {
+    ptest;
+    $connok = $clnt->connect($sockname, {'timeout'=>0});
+    $ok = $connok || $clnt->isconnecting;
+    ok okval $ok, 1, xerror;
+}
+push @testvec, \&t_clnt_iconn_strm;
+
 # accept the client connection (and drop the listener)
 sub t_srvr_accept_strm {
+    ptest;
     $acpt = $srvr->accept;
-    ok $acpt && $srvr->close;
+    ok okval($acpt && $srvr->close), 1, xerror;
 }
 push @testvec, \&t_srvr_accept_strm;
 
+# finish the client connect if it was pending
+sub t_clnt_fconn_strm {
+    ptest;
+    $ok = $connok || $clnt->connect($sockname, {'timeout'=>1});
+    ok okval $ok, 1, xerror;
+}
+push @testvec, \&t_clnt_fconn_strm;
+
 # send a greeting
 sub t_srvr_greet_strm {
+    ptest;
     $sentmsg = "Wowsers!\n";	# a full line for checks below
-    ok $acpt->send($sentmsg);
+    ok okval $acpt->send($sentmsg), length($sentmsg), xerror;
 }
 push @testvec, \&t_srvr_greet_strm;
 
 # check receipt
 sub t_clnt_greeted_strm {
+    ptest;
     my $gotmsg = $clnt->getline;
     ok $gotmsg, $sentmsg;
 }
@@ -170,13 +222,15 @@ push @testvec, \&t_clnt_greeted_strm;
 
 # reply
 sub t_clnt_reply_strm {
+    ptest;
     $sentmsg = "Gadget!\n";
-    ok $clnt->send($sentmsg);
+    ok okval $clnt->send($sentmsg), length($sentmsg), xerror;
 }
 push @testvec, \&t_clnt_reply_strm;
 
 # check return receipt
 sub t_srvr_greeted_strm {
+    ptest;
     my $gotmsg = $acpt->getline;
     ok $gotmsg, $sentmsg;
 }
@@ -184,12 +238,15 @@ push @testvec, \&t_srvr_greeted_strm;
 
 # check close statuses
 sub t_close_both_strm {
-    ok $acpt->close && $clnt->close;
+    ptest;
+    $ok = $acpt->close && $clnt->close;
+    ok okval $ok, 1, xerror;
 }
 push @testvec, \&t_close_both_strm;
 
 # be sure we survive DESTROY
 sub t_destroy_ok {
+    ptest;
     $acpt = $srvr = $clnt = undef; # force the DESTROY call
     ok 1;
 }

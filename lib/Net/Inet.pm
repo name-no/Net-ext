@@ -1,4 +1,4 @@
-# Copyright 1995,1996,1997,1998 Spider Boardman.
+# Copyright 1995,1999 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -25,14 +25,14 @@ my $myclass;
 
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.88';
+    $VERSION = '0.90';
 }
 
 sub Version () { "$myclass v$VERSION" }
 
 use AutoLoader;
 #use Exporter ();
-use Net::Gen 0.88 qw(:ALL);
+use Net::Gen 0.90 qw(:ALL);
 use Socket qw(!/^[a-z]/ /^inet_/ !SOMAXCONN);
 
 BEGIN {
@@ -51,6 +51,7 @@ BEGIN {
 	INADDR_UNSPEC_GROUP
 	IPPORT_RESERVED
 	IPPORT_USERRESERVED
+	IPPORT_DYNAMIC
 	IPPROTO_EGP
 	IPPROTO_EON
 	IPPROTO_GGP
@@ -264,6 +265,7 @@ BEGIN {
 			       INADDR_UNSPEC_GROUP
 			       IN_LOOPBACKNET
 			       IPPORT_RESERVED IPPORT_USERRESERVED
+			       IPPORT_DYNAMIC
 			       IPPROTO_EGP IPPROTO_EON IPPROTO_GGP
 			       IPPROTO_HELLO IPPROTO_ICMP IPPROTO_IDP
 			       IPPROTO_IGMP IPPROTO_IP IPPROTO_IPIP
@@ -389,19 +391,7 @@ sub pack_sockaddr_in ($$;$)	# [$family,] $port, $in_addr
 # sub inet_aton in Socket.xs
 
 sub inet_addr;			# (helps with -w)
-BEGIN {
-    *inet_addr = \&inet_aton;	# same code for old interface
-
-;# pre-declare some things to keep the prototypes in sync
-
-    my $name;
-    local ($^W) = 0;		# prevent sub redefined warnings
-    no strict 'refs';		# so we can do the defined() checks
-    for $name (@EXPORT, @EXPORT_OK) {
-	# declare alone is not enough--need reference to silence -w
-	eval "sub $name (); \&$name;" unless defined(&$name);
-    }
-}
+*inet_addr = \&inet_aton;	# same code for old interface
 
 
 my $debug = 0;
@@ -4240,7 +4230,9 @@ vendor-defined socket options, as listed in L<"Exports"> below.
 C<INADDR_ALLHOSTS_GROUP> C<INADDR_ALLRTRS_GROUP> C<INADDR_ANY>
 C<INADDR_BROADCAST> C<INADDR_LOOPBACK> C<INADDR_MAX_LOCAL_GROUP>
 C<INADDR_NONE> C<INADDR_UNSPEC_GROUP> C<IPPORT_RESERVED>
-C<IPPORT_USERRESERVED> C<IPPROTO_EGP> C<IPPROTO_EON> C<IPPROTO_GGP>
+C<IPPORT_USERRESERVED>
+C<IPPORT_DYNAMIC>
+C<IPPROTO_EGP> C<IPPROTO_EON> C<IPPROTO_GGP>
 C<IPPROTO_HELLO> C<IPPROTO_ICMP> C<IPPROTO_IDP> C<IPPROTO_IGMP>
 C<IPPROTO_IP> C<IPPROTO_IPIP> C<IPPROTO_MAX> C<IPPROTO_PUP>
 C<IPPROTO_RAW> C<IPPROTO_RSVP> C<IPPROTO_TCP> C<IPPROTO_TP>
@@ -4346,7 +4338,9 @@ C<IPTOS_THROUGHPUT>
 C<DEFTTL> C<INADDR_ALLHOSTS_GROUP> C<INADDR_ALLRTRS_GROUP>
 C<INADDR_ANY> C<INADDR_BROADCAST> C<INADDR_LOOPBACK>
 C<INADDR_MAX_LOCAL_GROUP> C<INADDR_NONE> C<INADDR_UNSPEC_GROUP>
-C<IN_LOOPBACKNET> C<IPPORT_RESERVED> C<IPPORT_USERRESERVED>
+C<IN_LOOPBACKNET> C<IPPORT_RESERVED>
+C<IPPORT_USERRESERVED>
+C<IPPORT_DYNAMIC>
 C<IPPROTO_EGP> C<IPPROTO_EON> C<IPPROTO_GGP> C<IPPROTO_HELLO>
 C<IPPROTO_ICMP> C<IPPROTO_IDP> C<IPPROTO_IGMP> C<IPPROTO_IP>
 C<IPPROTO_IPIP> C<IPPROTO_MAX> C<IPPROTO_PUP> C<IPPROTO_RAW>

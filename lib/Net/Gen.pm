@@ -1,4 +1,4 @@
-# Copyright 1995,1996,1997,1998 Spider Boardman.
+# Copyright 1995,1999 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -17,15 +17,14 @@ use 5.004_05;		# new minimum Perl version for this package
 
 use strict;
 #use Carp; # no!  just require Carp when we want to croak.
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD $adebug);
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS
+	    %_missing $AUTOLOAD $adebug);
 
-my $myclass;
 BEGIN {
-    $myclass = __PACKAGE__;
-    $VERSION = '0.89';
+    $VERSION = '0.91';
 }
 
-sub Version () { "$myclass v$VERSION" }
+sub Version () { __PACKAGE__ . " v$VERSION" }
 
 use Socket qw(!/pack_sockaddr/ !/^MSG_OOB$/ !SOMAXCONN);
 use AutoLoader;
@@ -85,13 +84,6 @@ BEGIN {
 
 my %loaded;
 
-# since I use these values in ckeof(), I need to predeclare them here
-
-sub EOF_NONBLOCK 	();
-sub RD_NODATA		();
-sub VAL_EAGAIN		();
-sub VAL_O_NONBLOCK	();
-
 my $nullsub = sub {};		# handy null warning handler
 # If the warning handler is this exact code ref, don't bother calling
 # croak in the AUTOLOAD constant section, since we're being called from
@@ -99,12 +91,14 @@ my $nullsub = sub {};		# handy null warning handler
 
 sub AUTOLOAD
 {
-    # This AUTOLOAD is used to validate possible constants from the constant()
-    # XS function.  The implemention of the associated XS file means that
-    # constant() will never actually return with $! == 0, since the defined
-    # constants were already found as XSUBs.  If the constant is missing,
-    # we croak as usual for such things (except for when $nullsub is the
-    # die handler).  If the name isn't known to constant(), but it is known
+    # This AUTOLOAD is used to validate possible missing constants from
+    # the XS code, or to auto-create get/setattr subs.
+    # The defined constants are already available as XSUBs, and the same
+    # XS code which handles that also sets up the %_missing hash to note
+    # which names were known but are undefined.
+    # If the name is in %_missing, we'll croak as a normal AUTOLOAD with
+    # a constant() XS function (except for when $nullsub is the die handler).
+    # If the name isn't known to %_missing, but it is known
     # as a key for setparams/getparams, it will be simulated via _accessor().
     # Otherwise, control will be passed to the AUTOLOAD in AutoLoader.
 
@@ -114,60 +108,31 @@ sub AUTOLOAD
     {				# block to preserve $1,$2,et al.
 	($callpkg,$constname) = $AUTOLOAD =~ /^(.*)::(.*)$/;
     }
-    my $val = constant($constname);
-    if ($! != 0) {
-	if ($! =~ /Invalid/) {
-	    if (@_ && ref $_[0] && @_ < 3 && exists ${*{$_[0]}}{Keys}{$constname})
-	    {
-		no strict 'refs';	# allow us to define the sub
-		my $what = $constname;  # don't tie up $constname for closures
-		warn "Auto-generating accessor $AUTOLOAD\n" if $adebug;
-		*$AUTOLOAD = sub {
-		    splice @_, 1, 0, $what;
-		    goto &_accessor;
-		};
-		goto &$AUTOLOAD;
-	    }
-	    warn "Autoloading $AUTOLOAD\n" if $adebug;
-	    $AutoLoader::AUTOLOAD = $AUTOLOAD;
-	    goto &AutoLoader::AUTOLOAD;
-	}
-	else {
-	    my $wh = $SIG{__WARN__};
-	    die "\n"
-		if ($wh and (ref($wh) eq 'CODE') and $wh == $nullsub);
-	    require Carp;
-	    Carp::croak "Your vendor has not defined $callpkg macro $constname, used";
-	}
+    if (exists $_missing{$AUTOLOAD}) {
+	my $wh = $SIG{__WARN__};
+	die "\n"
+	    if ($wh and (ref($wh) eq 'CODE') and $wh == $nullsub);
+	require Carp;
+	Carp::croak "Your vendor has not defined $callpkg macro $constname, used";
     }
-
-    # I don't think we can actually get here any more, but I'm leaving it
-    # in place since I haven't proved it (yet).
-
-    no strict 'refs';		# allow various value types in autoload
-    unless ($loaded{$AUTOLOAD}) {
-	local($^W) = 0;		# suppress warning for sub redefined, etc.
-	*{$AUTOLOAD} = sub () { $val };
-#	eval "sub $AUTOLOAD () { $val }";
-	$loaded{$AUTOLOAD} = 1;
+    if (@_ && ref $_[0] && @_ < 3 && exists ${*{$_[0]}}{Keys}{$constname}) {
+	no strict 'refs';	# allow us to define the sub
+	my $what = $constname;	# don't tie up $constname for closures
+	warn "Auto-generating accessor $AUTOLOAD\n" if $adebug;
+	*$AUTOLOAD = sub {
+	    splice @_, 1, 0, $what;
+	    goto &_accessor;
+	};
+	goto &$AUTOLOAD;
     }
-#    $DB::sub = $AUTOLOAD if $DB::sub;  # pp_goto does this if debugging now.
-    goto &$AUTOLOAD;
+    warn "Autoloading $AUTOLOAD\n" if $adebug;
+    $AutoLoader::AUTOLOAD = $AUTOLOAD;
+    goto &AutoLoader::AUTOLOAD;
 }
 
 BEGIN {
 # do this now so the constant XSUBs really are
-    $myclass->bootstrap($VERSION);
-
-;# pre-declare some things to keep the prototypes in sync
-
-    my $name;
-    local ($^W) = 0;		# prevent sub redefined warnings
-    no strict 'refs';		# so we can do the defined() checks
-    for $name (@EXPORT, @EXPORT_OK) {
-	# declare alone is not enough--need reference to silence -w
-	eval "sub $name (); \&$name;" unless defined(&$name);
-    }
+    __PACKAGE__->DynaLoader::bootstrap($VERSION);
 }
 
 
@@ -210,7 +175,7 @@ sub initsockopts		# $class, $level+0, \%sockopts
 {
     use attrs 'locked';
     my ($class,$level,$opts) = @_;
-    croak "Invalid arguments to ${myclass}::initsockopts, called"
+    croak "Invalid arguments to " . __PACKAGE__ . "::initsockopts, called"
 	if @_ != 3 or ref $opts ne 'HASH';
     $level += 0;		# force numeric
     my($opt,$oval,@oval,$esub);
@@ -218,7 +183,8 @@ sub initsockopts		# $class, $level+0, \%sockopts
     # The above has to be there, since the file-scope 'my' won't be seen
     # in the generated closure.
     $evalopts{$class} ||= eval "package $class; no strict 'refs';" .
-	'sub ($) {local($SIG{__WARN__})=$nullwarn;&{$_[0]}()}';
+	'sub ($) {local($SIG{__WARN__})=$nullwarn;local($SIG{__DIE__});' .
+	    '&{$_[0]}()}';
     $esub = $evalopts{$class};
     foreach $opt (keys %$opts) {
 	$oval = eval {&$esub($opt)};
@@ -267,7 +233,7 @@ my %sockopts;
 	     # Out of known socket options
 	     );
 
-$myclass->initsockopts( SOL_SOCKET(), \%sockopts );
+__PACKAGE__->initsockopts( SOL_SOCKET(), \%sockopts );
 
 
 sub _genfh ()			# (void), returns orphan globref with HV slot.
@@ -304,8 +270,7 @@ sub debug			# $self [, $newval] ; returns oldval
 sub _trace			# $this , \@args, minlevel, [$moretext]
 {
     my ($this,$aref,$level,$msg) = @_;
-    my $rtn = (caller(0))[3];
-    $rtn = (caller(1))[3] if $rtn eq __PACKAGE__ . '::_trace';
+    my $rtn = (caller(1))[3];
 #    local $^W=0;		# keep the arglist interpolation from carping
     $msg = '' unless defined $msg;
     print STDERR "${rtn}(@{$aref||[]})${msg}\n"
@@ -383,6 +348,7 @@ sub _setblocking		# $self, $name, $newval
 
 sub blocking			# $self [, $newval] ; returns canonical oldval
 {
+    use attrs 'locked', 'method';
     my ($self, $newval) = @_;
     croak 'Usage: $sock->blocking or $sock->blocking(0|1),'
 	if @_ > 2;
@@ -521,7 +487,7 @@ sub new				# classname [, \%params]
 	%Keys = %{${*$self}{Keys}};
 	%Opts = %{${*$self}{Sockopts}};
     }
-    if ($pack eq $myclass) {
+    if ($pack eq __PACKAGE__) {
 	unless ($self->init) {
 	    local $!;		# preserve errno
 	    undef $self;	# against the side-effects of this
@@ -545,15 +511,15 @@ sub setparams			# $this, \%newparams [, $newonly [, $check]]
     my ($self,$newparams,$newonly,$check) = @_;
     my $errs = 0;
 
-    croak "Bad arguments to ${myclass}::setparams, called"
+    croak "Bad arguments to " . __PACKAGE__ . "::setparams, called"
 	unless @_ > 1 and ref $newparams eq 'HASH';
-    carp "Excess arguments to ${myclass}::setparams ignored"
+    carp "Excess arguments to " . __PACKAGE__ . "::setparams ignored"
 	if @_ > 4;
 
     $newonly ||= 0;		# undefined or zero is equiv now (-w problem)
     my ($parm,$newval);
     while (($parm,$newval) = each %$newparams) {
-	print STDERR "${myclass}::setparams $self $parm" .
+	print STDERR __PACKAGE__ . "::setparams $self $parm" .
 	    (defined $newval ? " $newval" : "") . "\n"
 		if $self->debug;
 	(carp "Unknown parameter type $parm for a " . (ref $self) . " object")
@@ -569,8 +535,10 @@ sub setparams			# $this, \%newparams [, $newonly [, $check]]
 			!defined($newval) ||
 			${*$self}{Parms}{$parm} eq $newval ||
 			    ${*$self}{Parms}{$parm} !~ /\D/ &&
-				$newval !~ /\D/ &&
-				    ${*$self}{Parms}{$parm} == $newval
+			    $newval !~ /\D/ &&
+				length($newval) &&
+				length(${*$self}{Parms}{$parm}) &&
+				${*$self}{Parms}{$parm} == $newval
 	    ;
 	}
 	carp("Overwrite of $parm parameter for ".(ref $self)." object ignored")
@@ -727,6 +695,66 @@ sub open			# $self [, @ignore] ; returns boolean
 
 # sub listen - autoloaded
 
+# hashes for async. connect error values
+my %connok = ( EISCONN,1 );
+my %connip = ( EWOULDBLOCK,1 , EINPROGRESS,1 , EAGAIN,1 , EALREADY,1 );
+
+sub _valconnect			# $self, $addr, $timeout ; returns boolean
+{
+    my ($self,$addr,$timeout) = @_;
+    my ($fhvec,$rdvec,$wrvec,$nfound) = ${*$self}{FHVec};
+    # don't block if socket is non-blocking
+    $timeout = 0 if
+	!defined $timeout && !${*$self}{Parms}{'blocking'};
+    # assume caller checked for ->isconnecting
+    $rdvec = $wrvec = $fhvec;
+    $nfound = CORE::select($rdvec, $wrvec, undef, $timeout);
+    # If socket is 'ready', then the connect is complete (possibly failed).
+    ${*$self}{'isconnecting'} = 0 if $nfound;
+    # If we don't think the connect has finished, just try to invent a
+    # reasonable error and bug out.
+    if (!$nfound) {
+	$! = EINPROGRESS || EWOULDBLOCK || EALREADY || EAGAIN;
+	return;
+    }
+    my $rval;
+    # If we can try to find out with SO_ERROR, give it a shot.
+    # This won't give valid results with SOCKS.  Tough.
+    if (${*$self}{Sockopts}{'SOL_SOCKET'}{'SO_ERROR'}) {
+	# Don't try the getsockopt if the connect is still pending!
+	# Solaris 2.5.1 (at least) hangs the getsockopt in that case.
+	# The connect is complete -- figure out whether we believe
+	# the status.
+	$rval = getsockopt($self,SOL_SOCKET,SO_ERROR);
+	return unless defined $rval;
+	$rval = unpack("I", $rval);
+	if ($rval) {
+	    $! = $rval;
+	    return;
+	}
+	return unless defined getpeername($self);
+	return 1;
+    }
+    # Here, we can't use SO_ERROR (it's not available).
+    # The canonical test for success here involves a read() attempt, but
+    # we can't use that unless we have a stream socket.  SOCK_SEQPACKET and
+    # real datagram services would lose their initial transmission to a
+    # read check.  So, we try it here only if we think we are SOCK_STREAM.
+    my $type = ${*$self}{Parms}{'type'};
+    if ($type && $type==SOCK_STREAM) {
+	my $buf = "";
+	$rval = sysread($self,$buf,0);
+	return unless defined $rval;
+	# It succeeded.  Should it have?  If getpeername says so,
+	# we still can't be sure, and we'll have to use a second connect().
+    }
+    return unless defined getpeername($self);
+    $rval = CORE::connect($self,$addr);
+    return $rval if $rval;
+    return 1 if $connok{0+$!};
+    $rval;
+}
+
 sub _tryconnect			# $self, $addr, $timeout ; returns boolean
 {
     my ($self,$addr,$timeout) = @_;
@@ -734,6 +762,8 @@ sub _tryconnect			# $self, $addr, $timeout ; returns boolean
 	if (${*$self}{Parms}{'dstaddr'} and
 	    (${*$self}{Parms}{'dstaddr'} ne $addr))
 	{
+	    carp "$self->_tryconnect: different destination address while ->isconnecting!"
+		if ${*$self}{Parms}{'debug'} > 2;
 	    $self->stopio;
 	    return undef unless $self->open;
 	    if ($self->getparam('srcaddr') || $self->getparam('srcaddrlist')
@@ -743,24 +773,20 @@ sub _tryconnect			# $self, $addr, $timeout ; returns boolean
 	    }
 	}
     }
-    my $rval = CORE::connect($self,$addr);
-    return $rval if $rval;
-    return 1  if $! == EISCONN;
-    return $rval unless $! == EWOULDBLOCK or $! == EINPROGRESS or
-	$! == EAGAIN or $! == EALREADY;
-    my $fhvec = ${*$self}{FHVec};
-    ${*$self}{'isconnecting'} = 1;
-    ${*$self}{Parms}{'dstaddr'} = $addr;
-    return $rval unless defined $timeout;
-    my $nfound = CORE::select(undef,$fhvec,undef,$timeout);
-    return $rval unless $nfound;
-    ${*$self}{'isconnecting'} = 0;
-    # Now, for the black magick of async sockets--re-try the connect
-    # to see whether it already worked.  This is necessary in order to
-    # get the right errno value for failed connections.
-    $rval = connect($self,$addr);
-    $rval = 1 if !$rval and $! == EISCONN;
-    $rval;
+    # Apparently, some versions of Solaris don't like a second connect.
+    # So, if we're retrying a non-blocking connect, check by other means
+    # before trying to use a second connect to get the status.
+    # Warning: This will not work with SOCKS.
+    unless (${*$self}{'isconnecting'}) {
+	my $rval = CORE::connect($self,$addr);
+	return $rval if $rval;
+	return 1  if $connok{0+$!};
+	return $rval unless $connip{0+$!};
+	${*$self}{'isconnecting'} = 1;
+	${*$self}{Parms}{'dstaddr'} = $addr;
+	return $rval unless defined $timeout;
+    }
+    &_valconnect;
 }
 
 sub connect			# $self, [@ignored] ; returns boolean
@@ -768,43 +794,46 @@ sub connect			# $self, [@ignored] ; returns boolean
     use attrs 'locked', 'method';
     $_[0]->_trace(\@_,2);
     my $self = shift;
+    my $hval = *$self{HASH};
+    my $parms = $hval->{Parms};
     $self->close if
-	${*$self}{'wasconnected'} || ${*$self}{'isconnected'};
-    ${*$self}{'wasconnected'} = '0 but true';
+	$hval->{'isconnected'} ||
+	(!$hval->{'isconnecting'} && $hval->{'wasconnected'});
     return undef unless $self->isopen or $self->open;
-    if ($self->getparam('srcaddr') || $self->getparam('srcaddrlist')
-	and !$self->isbound) {
+    if ($parms->{'srcaddr'} || $parms->{'srcaddrlist'}
+	and !$hval->{'isconnecting'} and !$self->isbound)
+    {
 	return undef unless $self->bind;
     }
     my $rval;
     my $error = 0;	# errno to propagate if failing
     {
 	my ($saveblocking,$timeout);
-	if (defined ($timeout = $self->getparam('timeout'))) {
+	if (defined ($timeout = $parms->{'timeout'}) && $self->blocking) {
 	    $saveblocking = $self->param_saver('blocking');
 	    $self->setparams({'blocking'=>0}) or undef $timeout;
 	}
-	if (defined(${*$self}{Parms}{dstaddrlist}) and
-	    ref(${*$self}{Parms}{dstaddrlist}) eq 'ARRAY' and
-	    !${*$self}{'isconnecting'})
+	my $dlist = $parms->{dstaddrlist};
+	if (defined($dlist) and
+	    ref($dlist) eq 'ARRAY' and
+	    !$hval->{'isconnecting'})
 	{
 	    my $tryaddr;
-	    foreach $tryaddr (@{${*$self}{Parms}{dstaddrlist}}) {
+	    foreach $tryaddr (@{$dlist}) {
 		$rval = _tryconnect($self, $tryaddr, $timeout);
-		${*$self}{Parms}{dstaddr} = $tryaddr  if $rval;
+		$parms->{dstaddr} = $tryaddr  if $rval;
 		last if $rval or
 		    defined $timeout && !$timeout
-		    and ($! == EINPROGRESS || $! == EWOULDBLOCK
-			 || $! == EAGAIN || $! == EALREADY);
+		    and $connip{0+$!};
 	    }
 	}
 	else {
-	    $rval = _tryconnect($self, ${*$self}{Parms}{dstaddr},
-				$timeout);
+	    $rval = _tryconnect($self, $parms->{dstaddr}, $timeout);
 	}
 	$error = $!+0 unless $rval;
     }
-    ${*$self}{'isconnected'} = $rval;
+    $hval->{'isconnected'} = $rval;
+    $hval->{'wasconnected'} = '0 but true';
     if (!$rval) {
 	$! = $error;
 	return $rval;
@@ -875,9 +904,10 @@ sub stopio			# $self [, @ignored] ; returns boolean
     use attrs 'locked', 'method';
     $_[0]->_trace(\@_,4);
     my $self = shift;
+    my $wasopen = $self->isopen;
     @{*$self}{@CloseVars} = ();	# these flags no longer true
     $self->delparams(\@CloseKeys); # connection values now invalid
-    return 1 unless $self->isopen;
+    return 1 unless $wasopen;
     CORE::close($self);
 }
 
@@ -1031,7 +1061,8 @@ sub getline			# $self ; returns like scalar(<$fhandle>)
     if (!defined($/)) {
 	$rval = <$self>;	# return all of the input
 	# what about non-blocking sockets here?!?
-	$self->shutdown(SHUT_RD);	# keep track of EOF
+	# $self->shutdown(SHUT_RD);	# keep track of EOF
+	# Above removed because ->recv does it on real EOF already.
 	if (defined($buf) and defined($rval)) {
 	    return $buf . $rval
 	}
@@ -2718,7 +2749,7 @@ sub select			# $this [[, $read, $write, $xcept, $timeout]]
     $_[0]->_trace(\@_,4);
     my($self,$doread,$dowrite,$doxcept,$timer) = @_;
     my($fhvec,$rvec,$wvec,$xvec,$nfound,$timeleft) = $self->fhvec;
-    return () unless $fhvec;
+    return unless $fhvec;
     $rvec = $doread ? $fhvec : undef;
     $wvec = $dowrite ? $fhvec : undef;
     $xvec = $doxcept ? $fhvec : undef;
@@ -2883,8 +2914,20 @@ sub TIEHANDLE			# $class, $host, $port [,\%options]
 {				# redirects via $class->new(...)
     $_[0]->_trace(\@_,1);
     my $class = shift;
-    my $self = $class->new(@_);
-    $self && $self->isconnected && $self;
+    my $self;
+    if (ref $class and defined fileno($class)) {
+	if ($class->isa(__PACKAGE__)) {
+	    $self = $class->new_from_fh($class,@_) || $class->new(@_);
+	}
+	else {
+	    $self = __PACKAGE__->new_from_fh($class,@_) ||
+		__PACKAGE__->new($class,@_);
+	}
+    }
+    else {
+	$self = $class->new(@_);
+	$self && $self->isconnected && $self;
+    }
 }
 
 sub PRINTF			# $self, $format [,@args]
@@ -2994,10 +3037,11 @@ sub WRITE			# $self,$buffer,$len[,$offset] ; returns length
 {
     my $whoami = $_[0]->_trace(\@_,3);
     my ($self,$buf,$len,$offset,$blen) = @_;
-    croak "Invalid args to ${whoami}, called" if @_ < 3 or @_ > 4 or
+    croak "Invalid args to ${whoami}, called" if @_ < 2 or @_ > 4 or
 	!ref $self;
     $offset = 0 if @_ == 3;
     $blen = length $buf;
+    $len = $blen unless defined $len;
     if ($offset < 0) {
 	$offset += $blen;
 	croak "Offset outside of string in ${whoami}, called" if

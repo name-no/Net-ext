@@ -1,4 +1,4 @@
-# Copyright 1995,1996,1997,1998 Spider Boardman.
+# Copyright 1995,1999 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -24,14 +24,14 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD);
 my $myclass;
 BEGIN {
     $myclass = __PACKAGE__;
-    $VERSION = '0.87';
+    $VERSION = '0.90';
 }
 sub Version () { "$myclass v$VERSION" }
 
-use AutoLoader;
+#use AutoLoader;	# disable this until we have autoloadable subs again
 #use Exporter ();	# we inherit what we need here from Net::Gen
-use Net::Inet 0.85;
-use Net::Gen 0.87;
+use Net::Inet 0.90;
+use Net::Gen 0.90;
 use Socket qw(!/^[a-z]/ !SOMAXCONN);
 
 BEGIN {
@@ -70,17 +70,6 @@ BEGIN {
 			       TH_ACK TH_FIN TH_PUSH TH_RST TH_SYN TH_URG)],
 	ALL		=> [@EXPORT, @EXPORT_OK],
     );
-
-;# pre-declare some things to keep the prototypes in sync
-
-
-    my $name;
-    local ($^W) = 0;		# prevent sub redefined warnings
-    no strict 'refs';		# so we can do the defined() checks
-    for $name (@EXPORT, @EXPORT_OK) {
-	# declare alone is not enough--need reference to silence -w
-	eval "sub $name (); \&$name;" unless defined(&$name);
-    }
 }
 
 ;# sub AUTOLOAD inherited from Net::Gen (via Net::Inet)

@@ -1,3 +1,122 @@
+Release as v0.91.  Now it should have non-blocking/timed connect logic
+which works just about everywhere, as long as perl isn't built with SOCKS.
+Maybe I'll move some of _valconnect into XS later, so that I have a shot
+at detecting SOCKS and doing the right thing for that, too.  In the
+meanwhile, it's back to trying to finish up a complete test suite for
+this code, even though the two test scripts I already ship cover more than
+was originally intended.
+
+Wed Feb 24 22:41:17 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/TCP.pm: Disable C<use AutoLoader> until such time as
+	we have real autoloadable subs again.  We still have &AUTOLOAD,
+	but that's for the constants.  We don't autosplit anything, so
+	why bother with running autosplit to create an empty index?
+
+	* lib/Net/Gen.pm: Bump version for release.
+
+Pre-release as 0.9007.
+
+Wed Feb 24 10:08:50 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.pm: Bump version before I forget.
+	(_valconnect): Don't try to read SO_ERROR if the select()
+	call doesn't show the connect to have finished.  Solaris 2.5.1
+	hangs the getsockopt in that case, even though the socket's
+	non-blocking.
+
+	* README: Added note about failure to handle non-blocking
+	connect() with SOCKS.
+
+Pre-release as 0.9006.
+
+Wed Feb 24 09:27:05 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.pm: Fix botch in connect() causing attempts to
+	finish pending connects to start new ones instead.  Bump
+	version stamp for re-distribution.
+
+Tue Feb 23 18:09:17 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* t/01unix.t: Ignore SIGPIPE while trying to figure out the
+	non-blocking connect problem with Solaris.
+
+	* Makefile.PL: Update to make the distribution write-locked
+	by default, while keeping it write-enabled on my local disk.
+
+	* lib/Net/Gen.pm: Update _tryconnect, add _valconnect.  Bump
+	version stamp for pre-release testers.
+
+Sat Feb 20 15:38:41 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.pm: Update test version stamp for pre-release
+	testers.
+
+	* MANIFEST.SKIP: Add some additional development directories to
+ 	keep out of the package.
+
+	* t/01unix.t: Update test output to include full errno
+ 	descriptions.  Still trying to figure out why Solaris has to be so
+ 	different for making sockets work right.
+
+Sun Feb 14 06:01:49 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.pm: Eliminate last uses of $myclass in favor of
+	__PACKAGE__.
+	(WRITE): Updated to default length argument now that syswrite
+	does so.
+	(initsockopts): localize $SIG{__DIE__} as well as __WARN__.
+	(TIEHANDLE): Deal with being called with an object.
+
+	* lib/Net/Inet.pm: Add IPPORT_DYNAMIC.
+
+Sat Feb 13 16:22:44 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* t/01unix.t: Update to give test names with TEST_VERBOSE=1
+	for better debugging (and better error reports).
+
+	* t/00basic.t: Modified yet again, still trying to work around
+	Solaris bug with socket emulation.
+
+Fri Feb  5 02:32:09 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/TCP.pm: Updated copyright.
+
+	* lib/Net/Inet.pm: Updated copyright.
+
+	* lib/Net/Gen.pm: Updated copyright.
+
+	* Gen.xs: Updated copyright.
+
+	* README: Updated copyright.
+
+Thu Feb  4 16:57:04 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* MANIFEST.SKIP: Update to skip "Net-ext-<foo>" directories.
+
+	* Makefile.PL (MY::libscan): Update to skip directories named
+	"<foo>.ORIG" or "Net-ext-<foo>".
+
+	* lib/Net/TCP.pm: Drop now-useless "used only once" hack
+	now that it's been fixed in Gen.xs.
+
+	* lib/Net/Inet.pm: Drop now-useless "used only once" hack
+	now that it's been fixed in Gen.xs.
+
+	* Gen.xs: Drop constant() entirely.  Replace with newmissing()
+	in XS code and %_missing for AUTOLOAD().
+
+	* lib/Net/Gen.pm: Bump version number.  Update AUTOLOAD() to
+	use %_missing instead of constant().  Drop now-useless preinit
+	seeding of missing routines, since they're always created in
+	Gen.xs even when undefined.
+
+Sun Jan 31 02:43:17 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* t/00basic.t: Work around Solaris bug with sockets-over-streams
+	emulation for UDP sockets.  (bind required when using connect
+	and defaulted addresses.)
+
 Released as version 0.89, since 0.88 leaked out before it was ready.
 
 Wed Nov  4 01:37:24 1998  Spider Boardman  <spider@Orb.Nashua.NH.US>
