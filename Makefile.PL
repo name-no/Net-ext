@@ -1,5 +1,8 @@
 #!perl
-use 5.004_05;
+
+# rcsid: "@(#) $Id: Makefile.PL,v 1.20 2000/01/19 07:49:40 spider Exp $"
+
+use 5.004_04;
 use ExtUtils::MakeMaker qw(WriteMakefile $Verbose);
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
@@ -15,6 +18,7 @@ END { unlink $tempfile }
 # This is wrapped in a sub so that it's here where you expected it to be
 # for easy customisation, but it won't take effect until the sub is called
 # after other initialisation is done.
+my @delfiles = ($tempfile, $hfile);
 sub runMM {
 WriteMakefile(
     'NAME'	=> 'Net::Gen',
@@ -33,14 +37,13 @@ WriteMakefile(
 			   # DEFINE is modified by hint-files.
     'INC'	=> '',     # e.g., '-I/usr/include/other' 
     'dist'	=> {
+		CI		=>	'ci -u -M',
 		COMPRESS	=>	'gzip -9fNv',
 		SUFFIX		=>	'.gz',
 		TARFLAGS	=>	'cvof',
-		PREOP		=>	'$(CHMOD) ugo-w `cat MANIFEST`',
-		POSTOP		=>	'$(CHMOD) u+w `cat MANIFEST`',
 		},
     'clean'	=> {
-		FILES	=>	qq[$tempfile $hfile],
+		FILES	=>	qq[@delfiles],
 		},
     'H'		=> [$hfile],
     'CONFIG'	=> [qw(usrinc locincpth)],
@@ -54,6 +57,7 @@ sub MY::post_initialize
 {
     my $self = shift;
     $self->{NOOP} = ':' if $^O eq 'dec_osf';
+    $self->{FULLPERL} .= ' -Ixlib' if $] < 5.004_05;
     $self->MM::post_initialize(@_);
 }
 
@@ -71,18 +75,69 @@ sub MY::makefile
 # I got tired of having my backup files 'installed' by the default
 # Makefile....
 
+# Also, we need a dummy version of attrs.pm for older perls.
+
+my $have_attributes = eval 'sub dummy : locked { 1;} 1;';
+my $have_attrs = $have_attributes || eval 'sub dummy { use attrs "locked"; 1} 1;';
+
 sub MY::libscan
 {
     my $self = shift;
     return ''
 	if $_[0] =~ /\~$/ or
 	    $_[0] =~ /\.ORIG$/i or
-		$_[0] =~ m,(?:^|/)Net-ext-, or
-		    $_[0] =~ m,(?:^|/)(?:OLD|DL)$,
-		    ;
+		$_[0] =~ /\.dat$/ or
+		    $_[0] =~ m,(?:^|/)Net-ext-, or
+			$_[0] =~ m,(?:^|/)(?:OLD|DL)$, or
+			    $_[0] =~ m,(?:^|/)attrs\.pm$, and $have_attrs
+				;
     $self->MM::libscan(@_);
 }
 
+# Here we create .pm files from the .dat files, based on whether we
+# have C<sub : attrs> or are stuck with C<use attrs qw(attrs)>.
+
+sub gen_pm_files () {
+    open MANI, "<MANIFEST" or die "Cannot read MANIFEST file: $!";
+    my @datfiles = grep { m/dat$/ } <MANI>;
+    chomp @datfiles;
+    my $file;
+    for $file (@datfiles) {
+	my $outfile = $file;
+	$outfile =~ s/dat$/pm/;
+	unlink $outfile;
+	next if $file eq 'lib/attrs.dat' and $have_attrs;
+	open $file, "<$file" or die "Cannot read $file file: $!";
+	open $outfile, ">$outfile" or die "Cannot write $outfile file: $!";
+	push @delfiles, $outfile;
+	my $line;
+	my $attrlist;
+	while (defined($line = <$file>)) {
+	    if ($attrlist) {
+		if ($have_attributes) {
+		    if ($line =~ m/^sub /) {
+			$line =~ s/$/ : $attrlist/;
+			undef $attrlist;
+		    }
+		}
+		else {
+		    if ($line =~ m/^[{]/) { #'}' for vi's sake
+			$line .= "    use attrs qw($attrlist);\n";
+			undef $attrlist;
+		    }
+		}
+	    }
+	    unless ($line =~ m/^[#][+]attrs (.*)$/) {
+		print $outfile $line;
+		next;
+	    }
+	    $attrlist = "$1"; # stringify to copy now, not later
+	}
+	close $outfile or die "Error writing $outfile file: $!";
+	close $file or die "Error reading $file file: $!";
+	print "Created $outfile from $file\n";
+    }
+}
 
 # Here are some possible include files which we'll need if the system
 # has them.  Add to this (and let me know!) if you find one that your
@@ -267,6 +322,7 @@ my %defdefines = (
 	TCP_MAX_WINSHIFT	=>		'14',
 
 	TCP_MSS			=>		'536',
+	TCP_MSS_IETF		=>		'536',
 
 	TH_FIN			=>		'0x01',
 	TH_SYN			=>		'0x02',
@@ -438,6 +494,9 @@ sub MY::post_constants
     # Finally, make sure that MM gets its own chance.
     $self->MM::post_constants(@_);	# in case it's not empty now
 }
+
+# Generate the .pm files before we let MM scan the lib directory.
+gen_pm_files;
 
 # Now that we're sure we've initialised all our tables, let MM do its thing.
 runMM;

@@ -1,4 +1,4 @@
-# Copyright 1995,1999 Spider Boardman.
+# Copyright 1995,2000 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -11,31 +11,30 @@
 # IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
 # WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
+# rcsid: "@(#) $Id: TCP.dat,v 1.23 2000/01/19 07:49:40 spider Exp $"
 
 package Net::TCP;
-use 5.004_05;			# new minimum Perl version for this package
+use 5.004_04;			# new minimum Perl version for this package
 
 use strict;
 #use Carp;
 sub carp { require Carp; goto &Carp::carp; }
 sub croak { require Carp; goto &Carp::croak; }
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD);
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS *AUTOLOAD);
 
-my $myclass;
 BEGIN {
-    $myclass = __PACKAGE__;
-    $VERSION = '0.90';
+    $VERSION = '0.93';
+    eval "sub Version () { __PACKAGE__ . ' v$VERSION' }";
 }
-sub Version () { "$myclass v$VERSION" }
 
 #use AutoLoader;	# disable this until we have autoloadable subs again
 #use Exporter ();	# we inherit what we need here from Net::Gen
-use Net::Inet 0.90;
-use Net::Gen 0.90;
-use Socket qw(!/^[a-z]/ !SOMAXCONN);
+use Net::Inet 0.93;
+use Net::Gen 0.93 ':sockvals', ':families';
 
 BEGIN {
-    @ISA = qw(Net::Inet);
+    @ISA = 'Net::Inet';
+    *AUTOLOAD = \$Net::Gen::AUTOLOAD;
 
 # Items to export into callers namespace by default
 # (move infrequently used names to @EXPORT_OK below)
@@ -77,7 +76,7 @@ BEGIN {
 ;# However, since 5.003_96 will make simple subroutines not inherit AUTOLOAD...
 sub AUTOLOAD
 {
-    $Net::Gen::AUTOLOAD = $AUTOLOAD;
+    #$Net::Gen::AUTOLOAD = $AUTOLOAD;
     goto &Net::Gen::AUTOLOAD;
 }
 
@@ -104,13 +103,14 @@ my %sockopts;
 	     # out of known TCP options
 	     );
 
-$myclass->initsockopts( IPPROTO_TCP, \%sockopts );
+__PACKAGE__->initsockopts( IPPROTO_TCP, \%sockopts );
 
 my $debug = 0;
 
-sub _debug			# $this, [$newval] ; returns oldval
+#& _debug($this, [$newval]) : oldval
+#+attrs locked
+sub _debug
 {
-    use attrs 'locked';
     my ($this,$newval) = @_;
     return $this->debug($newval) if ref $this;
     my $prev = $debug;
@@ -120,6 +120,7 @@ sub _debug			# $this, [$newval] ; returns oldval
 
 my %Sopts;			# do a full register_options only once
 
+#+attrs locked
 sub new
 {
     my $whoami = $_[0]->_trace(\@_,1);
@@ -133,17 +134,17 @@ sub new
 	;# no new keys for TCP?
 	# register our socket options
 	if (%Sopts) {
-	    ${*$self}{Sockopts} = { %Sopts } ;
+	    $ {*$self}{Sockopts} = { %Sopts } ;
 	}
 	else {
-	    $self->registerOptions('IPPROTO_TCP', IPPROTO_TCP(), \%sockopts);
-	    %Sopts = %{ ${*$self}{Sockopts} } ;
+	    $self->register_options('IPPROTO_TCP', IPPROTO_TCP(), \%sockopts);
+	    %Sopts = %{ $ {*$self}{Sockopts} } ;
 	}
 	# set our expected parameters
 	$self->setparams({IPproto => 'tcp',
 			  type => SOCK_STREAM,
 			  proto => IPPROTO_TCP},-1);
-	if ($class eq $myclass) {
+	if ($class eq __PACKAGE__) {
 	    unless ($self->init(@args)) {
 		local $!;	# protect returned errno value
 		undef $self;	# against excess closes in perl core
@@ -156,11 +157,12 @@ sub new
     $self;
 }
 
-sub _addrinfo			# $this, $sockaddr, [numeric_only]
+#& _addrinfo($this, $sockaddr, [numeric_only]) : @list
+sub _addrinfo
 {
     my($this,@args,@r) = @_;
     @r = $this->SUPER::_addrinfo(@args);
-    unless (!@r or ref($this) or $r[2] ne $r[3]) {
+    unless (!@r or $args[1] or ref($this) or $r[2] ne $r[3]) {
 	$this = getservbyport(htons($r[3]), 'tcp');
 	$r[2] = $this if defined $this;
     }
@@ -180,7 +182,6 @@ Net::TCP - TCP sockets interface module
 
 =head1 SYNOPSIS
 
-    use Socket;			# optional
     use Net::Gen;		# optional
     use Net::Inet;		# optional
     use Net::TCP;
@@ -197,7 +198,7 @@ The following methods are provided by the C<Net::TCP> module
 itself, rather than just being inherited from C<Net::Inet> or
 C<Net::Gen>.
 
-=over
+=over 4
 
 =item new
 
@@ -227,7 +228,7 @@ The examples above show the indirect object syntax which many prefer,
 as well as the guaranteed-to-be-safe static method call.  There
 are occasional problems with the indirect object syntax, which
 tend to be rather obscure when encountered.  See
-F<E<lt>URL:http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.htmlE<gt>>
+E<lt>URL:http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.htmlE<gt>
 for details.
 
 =back
@@ -240,7 +241,7 @@ none.
 
 These are the socket options known to the C<Net::TCP> module itself:
 
-=over
+=over 4
 
 =item Z<>
 
@@ -267,7 +268,7 @@ Example:
     print $y while defined($y = $x);
     untie $x;
 
-This is an expensive re-implementation of F<finger -s> on many
+This is an expensive re-implementation of S<finger -s> on many
 machines.
 
 Each assignment to the tied scalar is really a call to the C<put>
@@ -277,7 +278,7 @@ C<FETCH> method).
 
 =head2 Exports
 
-=over
+=over 4
 
 =item default
 
@@ -295,7 +296,7 @@ C<TH_SYN> C<TH_URG>
 The following I<:tags> are available for grouping related exportable
 items:
 
-=over
+=over 6
 
 =item :sockopts
 
@@ -320,9 +321,19 @@ Z<>
 
 =back
 
+=head1 THREADING STATUS
+
+This module has been tested with threaded perls, and should be as thread-safe
+as perl itself.  (As of 5.005_03 and 5.005_57, that's not all that safe
+just yet.)
+
+=head1 SEE ALSO
+
+Net::Inet(3), Net::Gen(3), Net::TCP::Server(3)
+
 =head1 AUTHOR
 
-Spider Boardman F<E<lt>spider@Orb.Nashua.NH.USE<gt>>
+Spider Boardman E<lt>spider@Orb.Nashua.NH.USE<gt>
 
 =cut
 

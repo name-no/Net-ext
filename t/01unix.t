@@ -1,14 +1,19 @@
 #!perl -w
 
+# rcsid: "@(#) $Id: 01unix.t,v 1.12 1999/08/04 04:59:29 spider Exp $"
+
+BEGIN {
+    unshift @INC, './xlib','../xlib' if $] < 5.004_05;
+}
+
 use Test;
 use Config ();
 use strict;
 
 # Special-case the constants we need later
-use Socket 'SOCK_STREAM';
 sub Net::Gen::SOMAXCONN () ;
-
-# Pre-declarations a la `sub SOCK_STREAM' would also have done.
+sub Net::Gen::SOCK_STREAM () ;
+BEGIN { package Net::Gen; *::SOCK_STREAM = \&SOCK_STREAM;}
 
 # Just in case, because of problems with some OSes, don't die on SIGPIPE.
 $SIG{PIPE} = 'IGNORE';
@@ -44,12 +49,14 @@ END { for my $endcv (@endav) { $endcv->() } }
 # test driver, which will `remember' it in %testvals.
 
 my $ok;				# continuation flag
+my $failures = 0;
 
 sub tdriver ()			# run the code refs in @testvec
 {
     for my $cv (@testvec) {
 	$ok = $cv->();
 	$testvals{"$cv"} = $ok;
+	$ok || $failures++;
     }
 }
 
@@ -129,7 +136,7 @@ push @testvec, \&t_send_hello_dgram;
 # check receipt
 sub t_chk_hello_dgram {
     ptest;
-    my $gotmsg = $srvr->recv(40);
+    my $gotmsg = ($ok ? $srvr->recv(40) : "<error>");
     ok $gotmsg, $sentmsg;
 }
 push @testvec, \&t_chk_hello_dgram;
@@ -283,5 +290,5 @@ use Net::Gen;
 
 tdriver;
 
-exit 0;
+exit($failures ? 1 : 0);
 

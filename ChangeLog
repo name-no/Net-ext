@@ -1,3 +1,288 @@
+Release as v0.93.
+
+Wed Jan 19 02:45:18 2000  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* Makefile.PL (gen_pm_files): Create .pm files from .dat
+	files, modifying the attribute lines appropriately depending
+	on which version of perl we have.
+
+	* MANIFEST: Replaced .pm files with .dat files.
+
+	* lib/Net/Gen.dat: replaced .pm files with .dat files, so
+	that C<sub : attrlist> vs. C<use attrs qw(attrlist)> problems
+	wouldn't give multiple warnings with 5.5.640.  Also made
+	conversion of lib/attrs.dat to lib/attrs.pm dependent on
+	whether we were going to install attrs.pm.
+	lib/Net/**.dat: re-formatted attribute information and many
+	subroutine headers for automated conversion from .dat to .pm
+	files with the proper application of subroutine attributes.
+
+Release as v0.92.
+
+Internal snaphost as v0.9111.
+
+Tue Sep 21 12:02:11 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Gen.pm: Bump version for next snapshot.
+
+	* Gen.xs (BAD_TCP_MSS): Fix to undef TCP_MSS after netgen.h
+	includes possible broken system .h files, and replace TCP_MSS
+	with TCP_MSS_IETF.
+
+	* Makefile.PL (%defdefines): Add TCP_MSS_IETF to hold the proper
+	value, so that we can fix older Linux systems.
+
+Internal snapshot as v0.9110.
+
+Wed Aug  4 00:38:43 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* t/01unix.t (t_chk_hello_dgram): Don't hang in the receive if the
+ 	client send() failed.
+
+Tue Aug  3 22:32:50 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/UNIX.pm: Pod tidying.
+
+	* lib/Net/UNIX/Server.pm: Pod tidying.
+
+	* lib/Net/TCP/Server.pm: Pod tidying.
+
+	* lib/Net/TCP.pm: Pod tidying.
+
+	* lib/Net/UDP.pm: Pod tidying.
+
+	* lib/Net/Inet.pm: Tidied pods.
+
+	* lib/Net/Gen.pm: Finish(?) implementing the netgen_fakeconnect
+	object parameter by making ->connect(), ->send(), and ->sendto()
+	respect it.  Pod tweaks.  Bump version for next snapshot.
+
+	* t/00basic.t: Update method of returning error when not all tests
+	succeed.
+
+	* t/01unix.t: Slight tweak to return error status if not all tests
+ 	succeeded.
+
+Internal snapshot as v0.9109.
+
+Tue Aug  3 01:58:29 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* Gen.xs: Make work with threaded 5.005_60.
+
+	* lib/Net/Gen.pm: Bumped version for next snapshot.
+
+Internal snapshot as v0.9108.
+
+Wed Jul 21 18:48:15 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* t/01unix.t: Updated order of ./xlib ../xlib @INC searching.
+
+	* t/00basic.t: Updated order of ./xlib ../xlib @INC searching.
+
+	* Makefile.PL: Update to ensure -Ixlib for 5.004_04 "make test".
+
+	* lib/Net/Gen.pm: Add new tied file handle routines for 5.005_57.
+	Bumped version for next snapshot.
+
+Internal snapshot as v0.9107.
+
+Sat Jul  3 13:07:25 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* Makefile.PL: Updated CI value for my environment.
+
+	* lib/Net/UDP.pm: Minor pod updates.  Fixed threaded ->new.
+
+	* lib/Net/TCP/Server.pm: Minor pod updates.  Fixed threaded ->new.
+
+	* lib/Net/TCP.pm: Minor pod updates.  Fixed threaded ->new.
+
+	* lib/Net/Inet.pm: Minor pod updates.  Fixed threaded ->new.
+
+	* lib/Net/UNIX/Server.pm: Minor pod updates.  Fixed threaded ->new.
+
+	* lib/Net/UNIX.pm: Minor pod updates.  Fixed threaded ->new.
+
+	* lib/Net/Gen.pm: Bumped version for next snapshot.  Updated pods.
+	Cleaned up ->_debug abuses in sockopt code.  Fixed threaded ->new.
+
+	* README: Updated to add thread-testing note.
+
+Internal snapshot as v0.9106.
+
+Sat Jul  3 12:22:17 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* README: Updated to claim 5.004_04 support again.
+
+	* lib/Net/Gen.pm: Bump version for next snapshot.
+
+	* t/00basic.t: Add xlib to @INC for 5.004_04.
+
+	* t/01unix.t: Add xlib to @INC for 5.004_04.
+
+	* MANIFEST: Added xlib/Test.pm and xlib/Test/Harness.pm for
+	5.004_04 sites.
+
+Internal snapshot as v0.9105.
+
+Fri Jul  2 14:05:44 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* Gen.xs: Change 5.004_0{4,5} detection of need for #defines
+	of PL_dowarn, etc.
+
+	* lib/Net/TCP/Server.pm: Reduce requirement back to 5.004_04.
+
+	* lib/Net/UNIX/Server.pm: Reduce requirement back to 5.004_04.
+
+	* lib/Net/UNIX.pm: Reduce requirement back to 5.004_04.
+
+	* lib/Net/UDP.pm: Reduce requirement back to 5.004_04.
+
+	* lib/Net/TCP.pm: Reduce requirement back to 5.004_04.
+
+	* lib/Net/Inet.pm: Reduce requirement back to 5.004_04.
+
+	* lib/Net/Gen.pm: Reduce requirement back to 5.004_04.  Bump version
+	for next snapshot.
+
+	* Makefile.PL (MY::libscan): Add skip for attrs.pm unless it's
+	not already installed.  Reduce requirement back to 5.004_04.
+
+	* MANIFEST: Add lib/attrs.pm .
+
+Internal snapshot as v0.9104.
+
+Tue Mar  9 13:44:26 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* t/01unix.t: Reduce clutter in the RCS string.
+
+	* t/00basic.t: Reduce clutter in the RCS string.
+
+	* lib/Net/UNIX/Server.pm: Reduce clutter in the RCS string.  Bump
+        version for next snapshot.
+
+	* lib/Net/TCP/Server.pm: Reduce clutter in the RCS string.  Bump
+        version for next snapshot.
+
+	* lib/Net/UNIX.pm: Reduce clutter in the RCS string.  Bump version
+        for next snapshot.
+
+	* lib/Net/UDP.pm: Reduce clutter in the RCS string.  Bump version
+        for next snapshot.
+
+	* lib/Net/TCP.pm: Reduce clutter in the RCS string.  Bump version
+        for next snapshot.
+
+	* lib/Net/Inet.pm: Reduce clutter in the RCS string.  Bump version
+        for next snapshot.
+
+	* lib/Net/Gen.pm: Reduce clutter in the RCS string.  Bump version
+        for next snapshot.
+
+	* Makefile.PL: Reduce clutter in the RCS string.
+
+	* Gen.xs: Reduce clutter in the RCS string.
+
+Internal snapshot as v0.9103.
+
+Tue Mar  9 12:57:11 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* t/00basic.t: Add a simple RCS string for the curious.
+
+	* t/01unix.t: Clean up to avoid possible clashes with Socket and
+	Net::Gen after adding the new constants to the latter.  Add a
+	simple RCS string for the curious.
+
+	* lib/Net/UNIX/Server.pm: Make Version() a constant sub.
+	Streamline AUTOLOAD a bit.  Remove Socket dependencies.  Add a
+	simple RCS string for the curious.
+
+	* lib/Net/TCP/Server.pm: Make Version() a constant sub.
+	Streamline AUTOLOAD a bit.  Remove Socket dependencies.  Add a
+	simple RCS string for the curious.
+
+	* lib/Net/UNIX.pm: Clean up Socket dependencies by using new XS
+	constants.  Streamline AUTOLOAD a bit.  Set netgen_fakeconnect for
+	SOCK_DGRAM sockets.  Make Version() a constant sub.  Add a simple
+	RCS string for the curious.
+
+	* lib/Net/UDP.pm: Streamline AUTOLOAD a bit.  Set
+	netgen_fakeconnect for datagram sockets.  Reduce dependency on
+	Socket by using new XS constants.  Make Version() a constant sub.
+	Add a simple RCS string for the curious.
+
+	* lib/Net/TCP.pm: Reduce dependency on Socket by using new XS
+	constants.  Streamline AUTOLOAD a bit (for future use).  Make
+	Version() a constant sub.  Add a simple RCS string for the
+	curious.
+
+	* lib/Net/Inet.pm: Make Version() a constant sub.  Reduce Socket
+	dependencies by using new XS constants.  Streamline AUTOLOAD a
+	bit.  Add a simple RCS string for the curious.
+
+	* lib/Net/Gen.pm: Reduce bloat from Socket by adding new XS
+	constants for various values.  Add new export tags for the new
+	constants.  Add some missing sockopts.  Start implementing
+	netgen_fakeconnect object parameter for UDP versus Solaris 2.5.1.
+	Update POD for the new constants, export tags, and socket options.
+	Make Version() a constant sub.  Streamline initsockopts() a bit.
+	Add a simple RCS string for the curious.
+
+	* Makefile.PL: Clean up PREOP and POSTOP, since the previous
+	write-enabling was a bad idea with RCS.  Add a simple RCS header
+	for the curious.
+
+	* Gen.xs: Use constants for several things we used to get from
+	Socket, since the latter doesn't make them into constant subs.
+	Add a simple RCS header for the curious.
+
+Sat Feb 27 02:08:01 1999  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* lib/Net/Inet.pm (_setport): Correct dependency on hash
+	ordering which caused some connects not to happen because the
+	port got set after the host, and the host was 0.
+	(_sethost): Fixed up gotcha with binding to just a port or
+	just a host.
+	(_setproto): Slight improvement to use a hash-slice delete
+	when clearing protocol information.  Improve updating of
+	the value to set at the epilogue.
+
+	* All .pm files: Replace C<${*$self}> with C<*$self{HASH}>.
+	It makes emacs happier with me, and it eliminates an annoying
+	unoptimised block when single-stepping in the debugger.
+	Rescinded upon realising that C<*$self{HASH}> has to generate
+	a temporary to hold a newly-created RV.  Changed them to
+	C<$ {*$self}>, which looks ugly but works with emacs.  I'll
+	just have to live with the debugger wart.
+
+	* lib/Net/UNIX/Server.pm: Get rid of `$myclass' in favour of
+	__PACKAGE__.  Update copyright.  POD cleanup.
+
+	* lib/Net/TCP/Server.pm: Get rid of `$myclass' in favour of
+	__PACKAGE__.  Update copyright.  POD cleanup.
+
+	* lib/Net/UNIX.pm: Get rid of `$myclass' in favour of
+	__PACKAGE__.  Update copyright.  POD cleanup.  Added
+	unbuffered_IO options (and PODs) a la Net::UDP, except
+	that they only operate on non-SOCK_STREAM sockets.
+
+	* lib/Net/UDP.pm: Get rid of `$myclass' in favour of
+	__PACKAGE__.  Update copyright.  POD cleanup.
+	(_addrinfo): Always obey the $numeric_only flag.
+
+	* lib/Net/TCP.pm: Finish getting rid of `$myclass' in favour
+	of __PACKAGE__.  POD cleanup.
+	(_addrinfo): Always obey the $numeric_only flag.
+
+	* lib/Net/Inet.pm: Finish getting rid of `$myclass' in favour
+	of __PACKAGE__.  POD cleanup.
+
+	* lib/Net/Gen.pm: Fix up studly caps in EXPORT_TAGS, allowing
+	non_block_vals as well as NonBlockVals.  POD cleanup.
+	Minor code tweaks for efficiency.  Bump version.
+
+	* Gen.xs: Allow for 4.4bsd-style addressing in unpack_sockaddr().
+	Minor cleanup.
+
 Release as v0.91.  Now it should have non-blocking/timed connect logic
 which works just about everywhere, as long as perl isn't built with SOCKS.
 Maybe I'll move some of _valconnect into XS later, so that I have a shot

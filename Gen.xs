@@ -15,6 +15,13 @@
 
  */
 
+/*
+ * Can't rely on #ifdef to keep some compilers from griping about a #pragma
+ * which they don't recognize, so do it the old-fashioned way.
+ */
+
+static char const rcsid[] = "@(#) $Id: Gen.xs,v 1.22 1999/09/21 16:14:20 spider Exp $";
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -45,11 +52,12 @@ extern "C" {
 #include "sockadapt.h"
 #endif
 
+#include "netgen.h"
+
 #ifdef BAD_TCP_MSS
 # undef TCP_MSS
+# define TCP_MSS TCP_MSS_IETF
 #endif
-
-#include "netgen.h"
 
 #ifndef	SHUT_RD
 #ifdef	O_RDONLY
@@ -75,13 +83,30 @@ extern "C" {
 #endif
 #endif
 
-#if !defined(SUBVERSION) && !defined(PATCHLEVEL)
+#if !defined(PATCHLEVEL)
 #include <patchlevel.h>
 #endif
-#if (PATCHLEVEL < 5) && (SUBVERSION < 5)
+#if (PATCHLEVEL < 5)
+#ifndef PL_sv_undef
 #define	PL_dowarn	dowarn
 #define	PL_sv_no	sv_no
 #define	PL_sv_undef	sv_undef
+#endif
+#endif
+
+#ifndef dTHX
+#define dTHX	dTHR
+#define pTHX_
+#define _pTHX
+#define pTHX
+#define aTHX
+#define aTHX_
+#define _aTHX
+#define NV double
+#endif
+
+#ifndef dTHR
+#define dTHR extern int Perl___notused
 #endif
 
 #ifdef __cplusplus
@@ -109,9 +134,14 @@ extern "C" {
 HV *missing;			/* not_there cases for AUTOLOAD() */
 
 static void
+#ifdef CAN_PROTOTYPE
+#define newmissing(_nm,_fl) S_newmissing(aTHX_ _nm, _fl)
+S_newmissing(pTHX_ char *name, char *file)
+#else
 newmissing(name, file)
 char *name;
 char *file;
+#endif
 {
     STRLEN klen;
     CV *cv;
@@ -148,10 +178,15 @@ XS(cv_constant)
  */
 
 static void
+#ifdef CAN_PROTOTYPE
+#define newXSconst(_nm,_vsv,_fl) S_newXSconst(aTHX_ _nm, _vsv, _fl)
+S_newXSconst(pTHX_ char *name, SV *valsv, char *file)
+#else
 newXSconst(name, valsv, file)
 char * name;
 SV * valsv;
 char * file;
+#endif
 {
     CV *cv;
     OP *svop;
@@ -169,40 +204,60 @@ char * file;
  */
 
 static void
+#ifdef CAN_PROTOTYPE
+#define newXSconstPV(_nm,_st,_fl) S_newXSconstPV(aTHX_ _nm, _st, _fl)
+S_newXSconstPV(pTHX_ char *name, char *string, char *file)
+#else
 newXSconstPV(name, string, file)
 char *name;
 char *string;
 char *file;
+#endif
 {
     SV *valsv = newSVpv(string, strlen(string));
     newXSconst(name, valsv, file);
 }
 
 static void
+#ifdef CAN_PROTOTYPE
+#define newXSconstPVN(_nm,_st,_ln,_fl) S_newXSconstPVN(aTHX_ _nm, _st, _ln, _fl)
+S_newXSconstPVN(pTHX_ char *name, char *string, STRLEN len, char *file)
+#else
 newXSconstPVN(name, string, len, file)
 char *name;
 char *string;
 STRLEN len;
 char *file;
+#endif
 {
     SV *valsv = newSVpv(string, len);
     newXSconst(name, valsv, file);
 }
 
 static void
+#ifdef CAN_PROTOTYPE
+#define newXSconstIV(_nm,_iv,_fl) S_newXSconstIV(aTHX_ _nm, _iv, _fl)
+S_newXSconstIV(pTHX_ char *name, IV ival, char *file)
+#else
 newXSconstIV(name, ival, file)
 char *name;
 IV ival;
 char *file;
+#endif
 {
     newXSconst(name, newSViv(ival), file);
 }
 
 static void
+#ifdef CAN_PROTOTYPE
+#define newXSconstUV(_nm,_uv,_fl) S_newXSconstUV(aTHX_ _nm, _uv, _fl)
+S_newXSconstUV(pTHX_ char *name, UV uval, char *file)
+#else
 newXSconstUV(name, uval, file)
 char *	name;
 UV	uval;
 char *	file;
+#endif
 {
     SV * valsv = newSVsv(&PL_sv_undef);	/* missing newSVuv()! */
     sv_setuv(valsv, uval);
@@ -210,10 +265,15 @@ char *	file;
 }
 
 static void
+#ifdef CAN_PROTOTYPE
+#define newXSconstNV(_nm,_nv,_fl) S_newXSconstNV(aTHX_ _nm, _nv, _fl)
+S_newXSconstNV(pTHX_ char *name, NV nval, char *file)
+#else
 newXSconstNV(name, nval, file)
 char *	name;
 double	nval;
 char *	file;
+#endif
 {
     newXSconst(name, newSVnv(nval), file);
 }
@@ -225,8 +285,13 @@ typedef U32 sv_inaddr_t;
  */
 
 static sv_inaddr_t
+#ifdef CAN_PROTOTYPE
+#define sv2inaddr(_sv) S_sv2inaddr(aTHX_ _sv)
+S_sv2inaddr(pTHX_ SV *sv)
+#else
 sv2inaddr(sv)
 SV *sv;
+#endif
 {
     struct in_addr ina;
     char *cp;
@@ -720,6 +785,419 @@ BOOT:
 	newmissing("Net::Gen::VAL_EAGAIN", file);
 #endif
 	newXSconstUV("Net::Gen::MSG_OOB", MSG_OOB, file);
+#ifdef	SO_ACCEPTCONN
+	newXSconstUV("Net::Gen::SO_ACCEPTCONN", SO_ACCEPTCONN, file);
+#else
+	newmissing("Net::Gen::SO_ACCEPTCONN", file);
+#endif
+#ifdef	SO_BROADCAST
+	newXSconstUV("Net::Gen::SO_BROADCAST", SO_BROADCAST, file);
+#else
+	newmissing("Net::Gen::SO_BROADCAST", file);
+#endif
+#ifdef	SO_DEBUG
+	newXSconstUV("Net::Gen::SO_DEBUG", SO_DEBUG, file);
+#else
+	newmissing("Net::Gen::SO_DEBUG", file);
+#endif
+#ifdef	SO_DONTROUTE
+	newXSconstUV("Net::Gen::SO_DONTROUTE", SO_DONTROUTE, file);
+#else
+	newmissing("Net::Gen::SO_DONTROUTE", file);
+#endif
+#ifdef	SO_ERROR
+	newXSconstUV("Net::Gen::SO_ERROR", SO_ERROR, file);
+#else
+	newmissing("Net::Gen::SO_ERROR", file);
+#endif
+#ifdef	SO_EXPANDED_RIGHTS
+	newXSconstUV("Net::Gen::SO_EXPANDED_RIGHTS", SO_EXPANDED_RIGHTS, file);
+#else
+	newmissing("Net::Gen::SO_EXPANDED_RIGHTS", file);
+#endif
+#ifdef	SO_KEEPALIVE
+	newXSconstUV("Net::Gen::SO_KEEPALIVE", SO_KEEPALIVE, file);
+#else
+	newmissing("Net::Gen::SO_KEEPALIVE", file);
+#endif
+#ifdef	SO_OOBINLINE
+	newXSconstUV("Net::Gen::SO_OOBINLINE", SO_OOBINLINE, file);
+#else
+	newmissing("Net::Gen::SO_OOBINLINE", file);
+#endif
+#ifdef	SO_PAIRABLE
+	newXSconstUV("Net::Gen::SO_PAIRABLE", SO_PAIRABLE, file);
+#else
+	newmissing("Net::Gen::SO_PAIRABLE", file);
+#endif
+#ifdef	SO_REUSEADDR
+	newXSconstUV("Net::Gen::SO_REUSEADDR", SO_REUSEADDR, file);
+#else
+	newmissing("Net::Gen::SO_REUSEADDR", file);
+#endif
+#ifdef	SO_REUSEPORT
+	newXSconstUV("Net::Gen::SO_REUSEPORT", SO_REUSEPORT, file);
+#else
+	newmissing("Net::Gen::SO_REUSEPORT", file);
+#endif
+#ifdef	SO_USELOOPBACK
+	newXSconstUV("Net::Gen::SO_USELOOPBACK", SO_USELOOPBACK, file);
+#else
+	newmissing("Net::Gen::SO_USELOOPBACK", file);
+#endif
+#ifdef	SO_XSE
+	newXSconstUV("Net::Gen::SO_XSE", SO_XSE, file);
+#else
+	newmissing("Net::Gen::SO_XSE", file);
+#endif
+#ifdef	SO_RCVBUF
+	newXSconstUV("Net::Gen::SO_RCVBUF", SO_RCVBUF, file);
+#else
+	newmissing("Net::Gen::SO_RCVBUF", file);
+#endif
+#ifdef	SO_SNDBUF
+	newXSconstUV("Net::Gen::SO_SNDBUF", SO_SNDBUF, file);
+#else
+	newmissing("Net::Gen::SO_SNDBUF", file);
+#endif
+#ifdef	SO_RCVTIMEO
+	newXSconstUV("Net::Gen::SO_RCVTIMEO", SO_RCVTIMEO, file);
+#else
+	newmissing("Net::Gen::SO_RCVTIMEO", file);
+#endif
+#ifdef	SO_SNDTIMEO
+	newXSconstUV("Net::Gen::SO_SNDTIMEO", SO_SNDTIMEO, file);
+#else
+	newmissing("Net::Gen::SO_SNDTIMEO", file);
+#endif
+#ifdef	SO_RCVLOWAT
+	newXSconstUV("Net::Gen::SO_RCVLOWAT", SO_RCVLOWAT, file);
+#else
+	newmissing("Net::Gen::SO_RCVLOWAT", file);
+#endif
+#ifdef	SO_SNDLOWAT
+	newXSconstUV("Net::Gen::SO_SNDLOWAT", SO_SNDLOWAT, file);
+#else
+	newmissing("Net::Gen::SO_SNDLOWAT", file);
+#endif
+#ifdef	SO_TYPE
+	newXSconstUV("Net::Gen::SO_TYPE", SO_TYPE, file);
+#else
+	newmissing("Net::Gen::SO_TYPE", file);
+#endif
+#ifdef	SO_STATE
+	newXSconstUV("Net::Gen::SO_STATE", SO_STATE, file);
+#else
+	newmissing("Net::Gen::SO_STATE", file);
+#endif
+#ifdef	SO_FAMILY
+	newXSconstUV("Net::Gen::SO_FAMILY", SO_FAMILY, file);
+#else
+	newmissing("Net::Gen::SO_FAMILY", file);
+#endif
+#ifdef	SO_LINGER
+	newXSconstUV("Net::Gen::SO_LINGER", SO_LINGER, file);
+#else
+	newmissing("Net::Gen::SO_LINGER", file);
+#endif
+#ifdef	SOL_SOCKET
+	newXSconstUV("Net::Gen::SOL_SOCKET", SOL_SOCKET, file);
+#else
+	newmissing("Net::Gen::SOL_SOCKET", file);
+#endif
+#ifdef	SOCK_STREAM
+	newXSconstUV("Net::Gen::SOCK_STREAM", SOCK_STREAM, file);
+#else
+	newmissing("Net::Gen::SOCK_STREAM", file);
+#endif
+#ifdef	SOCK_DGRAM
+	newXSconstUV("Net::Gen::SOCK_DGRAM", SOCK_DGRAM, file);
+#else
+	newmissing("Net::Gen::SOCK_DGRAM", file);
+#endif
+#ifdef	SOCK_RAW
+	newXSconstUV("Net::Gen::SOCK_RAW", SOCK_RAW, file);
+#else
+	newmissing("Net::Gen::SOCK_RAW", file);
+#endif
+#ifdef	SOCK_RDM
+	newXSconstUV("Net::Gen::SOCK_RDM", SOCK_RDM, file);
+#else
+	newmissing("Net::Gen::SOCK_RDM", file);
+#endif
+#ifdef	SOCK_SEQPACKET
+	newXSconstUV("Net::Gen::SOCK_SEQPACKET", SOCK_SEQPACKET, file);
+#else
+	newmissing("Net::Gen::SOCK_SEQPACKET", file);
+#endif
+#ifndef	AF_UNSPEC
+#define	AF_UNSPEC	0
+#endif
+	newXSconstUV("Net::Gen::AF_UNSPEC", AF_UNSPEC, file);
+#ifndef	PF_UNSPEC
+#define	PF_UNSPEC	0
+#endif
+	newXSconstUV("Net::Gen::PF_UNSPEC", PF_UNSPEC, file);
+#ifdef	AF_INET
+	newXSconstUV("Net::Gen::AF_INET", AF_INET, file);
+#else
+	newmissing("Net::Gen::AF_INET", file);
+#endif
+#ifdef	PF_INET
+	newXSconstUV("Net::Gen::PF_INET", PF_INET, file);
+#else
+	newmissing("Net::Gen::PF_INET", file);
+#endif
+#ifndef	AF_UNIX
+#ifdef	AF_LOCAL
+#define	AF_UNIX	AF_LOCAL
+#endif
+#endif
+#ifndef	PF_UNIX
+#ifdef	PF_LOCAL
+#define	PF_UNIX	PF_LOCAL
+#endif
+#endif
+#ifdef	AF_UNIX
+	newXSconstUV("Net::Gen::AF_UNIX", AF_UNIX, file);
+#else
+	newmissing("Net::Gen::AF_UNIX", file);
+#endif
+#ifdef	PF_UNIX
+	newXSconstUV("Net::Gen::PF_UNIX", PF_UNIX, file);
+#else
+	newmissing("Net::Gen::PF_UNIX", file);
+#endif
+#ifdef	AF_IMPLINK
+	newXSconstUV("Net::Gen::AF_IMPLINK", AF_IMPLINK, file);
+#else
+	newmissing("Net::Gen::AF_IMPLINK", file);
+#endif
+#ifdef	PF_IMPLINK
+	newXSconstUV("Net::Gen::PF_IMPLINK", PF_IMPLINK, file);
+#else
+	newmissing("Net::Gen::PF_IMPLINK", file);
+#endif
+#ifdef	AF_PUP
+	newXSconstUV("Net::Gen::AF_PUP", AF_PUP, file);
+#else
+	newmissing("Net::Gen::AF_PUP", file);
+#endif
+#ifdef	PF_PUP
+	newXSconstUV("Net::Gen::PF_PUP", PF_PUP, file);
+#else
+	newmissing("Net::Gen::PF_PUP", file);
+#endif
+#ifdef	AF_CHAOS
+	newXSconstUV("Net::Gen::AF_CHAOS", AF_CHAOS, file);
+#else
+	newmissing("Net::Gen::AF_CHAOS", file);
+#endif
+#ifdef	PF_CHAOS
+	newXSconstUV("Net::Gen::PF_CHAOS", PF_CHAOS, file);
+#else
+	newmissing("Net::Gen::PF_CHAOS", file);
+#endif
+#ifdef	AF_NS
+	newXSconstUV("Net::Gen::AF_NS", AF_NS, file);
+#else
+	newmissing("Net::Gen::AF_NS", file);
+#endif
+#ifdef	PF_NS
+	newXSconstUV("Net::Gen::PF_NS", PF_NS, file);
+#else
+	newmissing("Net::Gen::PF_NS", file);
+#endif
+#ifdef	AF_ISO
+	newXSconstUV("Net::Gen::AF_ISO", AF_ISO, file);
+#else
+	newmissing("Net::Gen::AF_ISO", file);
+#endif
+#ifdef	PF_ISO
+	newXSconstUV("Net::Gen::PF_ISO", PF_ISO, file);
+#else
+	newmissing("Net::Gen::PF_ISO", file);
+#endif
+#ifdef	AF_OSI
+	newXSconstUV("Net::Gen::AF_OSI", AF_OSI, file);
+#else
+	newmissing("Net::Gen::AF_OSI", file);
+#endif
+#ifdef	PF_OSI
+	newXSconstUV("Net::Gen::PF_OSI", PF_OSI, file);
+#else
+	newmissing("Net::Gen::PF_OSI", file);
+#endif
+#ifdef	AF_ECMA
+	newXSconstUV("Net::Gen::AF_ECMA", AF_ECMA, file);
+#else
+	newmissing("Net::Gen::AF_ECMA", file);
+#endif
+#ifdef	PF_ECMA
+	newXSconstUV("Net::Gen::PF_ECMA", PF_ECMA, file);
+#else
+	newmissing("Net::Gen::PF_ECMA", file);
+#endif
+#ifdef	AF_DATAKIT
+	newXSconstUV("Net::Gen::AF_DATAKIT", AF_DATAKIT, file);
+#else
+	newmissing("Net::Gen::AF_DATAKIT", file);
+#endif
+#ifdef	PF_DATAKIT
+	newXSconstUV("Net::Gen::PF_DATAKIT", PF_DATAKIT, file);
+#else
+	newmissing("Net::Gen::PF_DATAKIT", file);
+#endif
+#ifdef	AF_CCITT
+	newXSconstUV("Net::Gen::AF_CCITT", AF_CCITT, file);
+#else
+	newmissing("Net::Gen::AF_CCITT", file);
+#endif
+#ifdef	PF_CCITT
+	newXSconstUV("Net::Gen::PF_CCITT", PF_CCITT, file);
+#else
+	newmissing("Net::Gen::PF_CCITT", file);
+#endif
+#ifdef	AF_SNA
+	newXSconstUV("Net::Gen::AF_SNA", AF_SNA, file);
+#else
+	newmissing("Net::Gen::AF_SNA", file);
+#endif
+#ifdef	PF_SNA
+	newXSconstUV("Net::Gen::PF_SNA", PF_SNA, file);
+#else
+	newmissing("Net::Gen::PF_SNA", file);
+#endif
+#ifdef	AF_DECnet
+	newXSconstUV("Net::Gen::AF_DECnet", AF_DECnet, file);
+#else
+	newmissing("Net::Gen::AF_DECnet", file);
+#endif
+#ifdef	PF_DECnet
+	newXSconstUV("Net::Gen::PF_DECnet", PF_DECnet, file);
+#else
+	newmissing("Net::Gen::PF_DECnet", file);
+#endif
+#ifdef	AF_DLI
+	newXSconstUV("Net::Gen::AF_DLI", AF_DLI, file);
+#else
+	newmissing("Net::Gen::AF_DLI", file);
+#endif
+#ifdef	PF_DLI
+	newXSconstUV("Net::Gen::PF_DLI", PF_DLI, file);
+#else
+	newmissing("Net::Gen::PF_DLI", file);
+#endif
+#ifdef	AF_LAT
+	newXSconstUV("Net::Gen::AF_LAT", AF_LAT, file);
+#else
+	newmissing("Net::Gen::AF_LAT", file);
+#endif
+#ifdef	PF_LAT
+	newXSconstUV("Net::Gen::PF_LAT", PF_LAT, file);
+#else
+	newmissing("Net::Gen::PF_LAT", file);
+#endif
+#ifdef	AF_HYLINK
+	newXSconstUV("Net::Gen::AF_HYLINK", AF_HYLINK, file);
+#else
+	newmissing("Net::Gen::AF_HYLINK", file);
+#endif
+#ifdef	PF_HYLINK
+	newXSconstUV("Net::Gen::PF_HYLINK", PF_HYLINK, file);
+#else
+	newmissing("Net::Gen::PF_HYLINK", file);
+#endif
+#ifdef	AF_APPLETALK
+	newXSconstUV("Net::Gen::AF_APPLETALK", AF_APPLETALK, file);
+#else
+	newmissing("Net::Gen::AF_APPLETALK", file);
+#endif
+#ifdef	PF_APPLETALK
+	newXSconstUV("Net::Gen::PF_APPLETALK", PF_APPLETALK, file);
+#else
+	newmissing("Net::Gen::PF_APPLETALK", file);
+#endif
+#ifdef	AF_ROUTE
+	newXSconstUV("Net::Gen::AF_ROUTE", AF_ROUTE, file);
+#else
+	newmissing("Net::Gen::AF_ROUTE", file);
+#endif
+#ifdef	PF_ROUTE
+	newXSconstUV("Net::Gen::PF_ROUTE", PF_ROUTE, file);
+#else
+	newmissing("Net::Gen::PF_ROUTE", file);
+#endif
+#ifdef	AF_LINK
+	newXSconstUV("Net::Gen::AF_LINK", AF_LINK, file);
+#else
+	newmissing("Net::Gen::AF_LINK", file);
+#endif
+#ifdef	PF_LINK
+	newXSconstUV("Net::Gen::PF_LINK", PF_LINK, file);
+#else
+	newmissing("Net::Gen::PF_LINK", file);
+#endif
+#ifdef	AF_NETMAN
+	newXSconstUV("Net::Gen::AF_NETMAN", AF_NETMAN, file);
+#else
+	newmissing("Net::Gen::AF_NETMAN", file);
+#endif
+#ifdef	PF_NETMAN
+	newXSconstUV("Net::Gen::PF_NETMAN", PF_NETMAN, file);
+#else
+	newmissing("Net::Gen::PF_NETMAN", file);
+#endif
+#ifdef	AF_X25
+	newXSconstUV("Net::Gen::AF_X25", AF_X25, file);
+#else
+	newmissing("Net::Gen::AF_X25", file);
+#endif
+#ifdef	PF_X25
+	newXSconstUV("Net::Gen::PF_X25", PF_X25, file);
+#else
+	newmissing("Net::Gen::PF_X25", file);
+#endif
+#ifdef	AF_CTF
+	newXSconstUV("Net::Gen::AF_CTF", AF_CTF, file);
+#else
+	newmissing("Net::Gen::AF_CTF", file);
+#endif
+#ifdef	PF_CTF
+	newXSconstUV("Net::Gen::PF_CTF", PF_CTF, file);
+#else
+	newmissing("Net::Gen::PF_CTF", file);
+#endif
+#ifdef	AF_WAN
+	newXSconstUV("Net::Gen::AF_WAN", AF_WAN, file);
+#else
+	newmissing("Net::Gen::AF_WAN", file);
+#endif
+#ifdef	PF_WAN
+	newXSconstUV("Net::Gen::PF_WAN", PF_WAN, file);
+#else
+	newmissing("Net::Gen::PF_WAN", file);
+#endif
+#ifdef	AF_USER
+	newXSconstUV("Net::Gen::AF_USER", AF_USER, file);
+#else
+	newmissing("Net::Gen::AF_USER", file);
+#endif
+#ifdef	PF_USER
+	newXSconstUV("Net::Gen::PF_USER", PF_USER, file);
+#else
+	newmissing("Net::Gen::PF_USER", file);
+#endif
+#ifdef	AF_LAST
+	newXSconstUV("Net::Gen::AF_LAST", AF_LAST, file);
+#else
+	newmissing("Net::Gen::AF_LAST", file);
+#endif
+#ifdef	PF_LAST
+	newXSconstUV("Net::Gen::PF_LAST", PF_LAST, file);
+#else
+	newmissing("Net::Gen::PF_LAST", file);
+#endif
 	newXSconstUV("Net::Gen::ENOENT", ENOENT, file);
 	newXSconstUV("Net::Gen::EINVAL", EINVAL, file);
 	newXSconstUV("Net::Gen::EBADF", EBADF, file);
@@ -804,10 +1282,21 @@ unpack_sockaddr(sad)
 		Zero(&sa, sizeof sa - sizeof sa.sa_data, char);
 	    Copy(cp, &sa, len < sizeof sa ? len : sizeof sa, char);
 	    family = sa.sa_family;
+	    if (family > 255) {		/* 4.4bsd anyone? */
+		U8 famlen1, famlen2;
+		famlen1 = family & 255;
+		famlen2 = family >> 8;
+		if (famlen1 == famlen2)
+		    family = famlen1;
+		else if (famlen1 == len)
+		    family = famlen2;
+		else if (famlen2 == len)
+		    family = famlen1;
+	    }
 	    famsv = sv_2mortal(newSViv(family));
 	    if (len >= sizeof sa - sizeof sa.sa_data) {
 		len -= sizeof sa - sizeof sa.sa_data;
-		datsv = sv_2mortal(newSVpv(cp + sizeof sa - sizeof sa.sa_data,
+		datsv = sv_2mortal(newSVpv(cp + (sizeof sa - sizeof sa.sa_data),
 					   len));
 	    }
 	    else {

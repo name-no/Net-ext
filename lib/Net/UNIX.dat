@@ -1,4 +1,4 @@
-# Copyright 1995,1996,1997,1998 Spider Boardman.
+# Copyright 1995,2000 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -11,30 +11,28 @@
 # IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
 # WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
+# rcsid: "@(#) $Id: UNIX.dat,v 1.20 2000/01/19 07:49:40 spider Exp $"
 
 package Net::UNIX;
-use 5.004_05;			# new minimum Perl version for this package
+use 5.004_04;			# new minimum Perl version for this package
 
 use strict;
 #use Carp;
 sub carp { require Carp; goto &Carp::carp; }
 sub croak { require Carp; goto &Carp::croak; }
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD);
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS *AUTOLOAD);
 
-my $myclass;
 BEGIN {
-    $myclass = __PACKAGE__;
-    $VERSION = '0.86';
+    $VERSION = '0.93';
+    eval "sub Version { __PACKAGE__ . ' v$VERSION' }";
 }
-sub Version { "$myclass v$VERSION" }
 
 use AutoLoader;
 #use Exporter ();
-use Net::Gen 0.85 qw(/pack_sockaddr$/);
-use Socket qw(!pack_sockaddr_un !unpack_sockaddr_un !SOMAXCONN);
+use Net::Gen 0.93 qw(/pack_sockaddr$/ :sockvals :families);
 
 BEGIN {
-    @ISA = qw(Net::Gen);
+    @ISA = 'Net::Gen';
 
 # Items to export into callers namespace by default.
 # (Move infrequently used names to @EXPORT_OK below.)
@@ -51,6 +49,7 @@ BEGIN {
 	routines	=> [qw(pack_sockaddr_un unpack_sockaddr_un)],
 	ALL		=> [@EXPORT, @EXPORT_OK],
     );
+    *AUTOLOAD = \$Net::Gen::AUTOLOAD;
 }
 
 ;# sub AUTOLOAD inherited from Net::Gen
@@ -58,7 +57,7 @@ BEGIN {
 ;# since 5.003_96 will break simple subroutines with inherited autoload, cheat
 sub AUTOLOAD
 {
-    $Net::Gen::AUTOLOAD = $AUTOLOAD;
+    #$Net::Gen::AUTOLOAD = $AUTOLOAD;
     goto &Net::Gen::AUTOLOAD;
 }
 
@@ -71,7 +70,8 @@ sub AUTOLOAD
 my $sun_path_len =
     length(Socket::unpack_sockaddr_un(Socket::pack_sockaddr_un('')));
 
-sub _canonpath ($)		# $path; returns NUL-padded $path for sun_addr
+#& _canonpath($path) : returns NUL-padded $path for sun_addr
+sub _canonpath ($)
 {
     my $path = shift;
     my $ix;
@@ -93,14 +93,16 @@ sub _canonpath ($)		# $path; returns NUL-padded $path for sun_addr
     $path;
 }
 
-sub pack_sockaddr_un ($;$)	# [$family,] $path
+#& pack_sockaddr_un([$family,] $path) : $packed_addr
+sub pack_sockaddr_un ($;$)
 {
     my(@args) = @_;
     unshift(@args, AF_UNIX) if @args == 1;
     pack_sockaddr($args[0], _canonpath($args[1]));
 }
 
-sub unpack_sockaddr_un ($)	# $sockaddr_un; returns [$fam,] $path
+#& unpack_sockaddr_un($sockaddr_un) : [$fam,] $path
+sub unpack_sockaddr_un ($)
 {
     my $addr = shift;
     my ($fam,$path) = unpack_sockaddr($addr);
@@ -114,9 +116,10 @@ sub unpack_sockaddr_un ($)	# $sockaddr_un; returns [$fam,] $path
 
 my $debug = 0;
 
-sub _debug			# $this, [$newval] ; returns oldval
+#& _debug($this, [$newval]) : oldval
+#+attrs locked
+sub _debug
 {
-    use attrs 'locked';
     my ($this,$newval) = @_;
     return $this->debug($newval) if ref $this;
     my $prev = $debug;
@@ -124,13 +127,21 @@ sub _debug			# $this, [$newval] ; returns oldval
     $prev;
 }
 
+
 my %keyhandlers = (thispath => \&_setbindpath,
 		   destpath => \&_setconnpath,
+		   unbuffered_IO => \&_setbuf_unbuf,
+		   unbuffered_io => \&_setbuf_unbuf,
 );
 
-my @Keys = qw();
+my @Keys = qw(unbuffered_input unbuffered_output);
 
-sub new				# $class, [\%params]
+my %Keys;			# for storing the registrations
+
+
+#& new($class, [\%params]) : {$obj | undef}
+#+attrs locked
+sub new
 {
     my $whoami = $_[0]->_trace(\@_,1);
     my($class,@Args,$self) = @_;
@@ -141,15 +152,23 @@ sub new				# $class, [\%params]
 			      " after sub-new");
     if ($self) {
 	# register our keys and their handlers
-	$self->registerParamKeys(\@Keys) if @Keys;
-	$self->registerParamHandlers(\%keyhandlers);
+	if (%Keys) {
+	    $ {*$self}{Keys} = { %Keys };
+	}
+	else {
+	    $self->register_param_keys(\@Keys) if @Keys;
+	    $self->register_param_handlers(\%keyhandlers);
+	    %Keys = %{ $ {*$self}{Keys} };
+	}
 	# register our socket options
 	# none for AF_UNIX?
 	# set our expected parameters
 	$self->setparams({PF => PF_UNIX, AF => AF_UNIX,
+			  unbuffered_output => 0,
+			  unbuffered_input => 0,
 			  type => SOCK_DGRAM},
 			 -1);
-	if ($class eq $myclass) {
+	if ($class eq __PACKAGE__) {
 	    unless ($self->init(@Args)) {
 		local $!;	# protect errno
 		undef $self;	# from the side-effects of this
@@ -159,45 +178,47 @@ sub new				# $class, [\%params]
     }
     if ($debug) {
 	if ($self) {
-	    print STDERR "${myclass}::new returning self=$self\n";
+	    print STDERR __PACKAGE__ . "::new returning self=$self\n";
 	}
 	else {
-	    print STDERR "${myclass}::new returning undef\n";
+	    print STDERR __PACKAGE__ . "::new returning undef\n";
 	}
     }
     $self;
 }
 
-sub _setbindpath		# $self, 'thispath', $path
+#& _setbindpath($self, 'thispath', $path) : {'' | "carp string"}
+sub _setbindpath
 {
     my($self,$what,$path) = @_;
     my $ix;
     if (!defined($path)) {
 	# removing, so cooperate
-	delete ${*$self}{Parms}{srcaddrlist};
+	delete $ {*$self}{Parms}{srcaddrlist};
 	return '';
     }
     # canonicalize the path to be of the right length, if possible
     $path = _canonpath($path);
     $ix = index($path, "\0");	# check for NUL-termination
     if (!$ix) {			# empty path is not a bind
-	delete ${*$self}{Parms}{srcaddrlist};
+	delete $ {*$self}{Parms}{srcaddrlist};
 	$_[2] = undef;
     }
     else {
-	${*$self}{Parms}{srcaddrlist} =
+	$ {*$self}{Parms}{srcaddrlist} =
 	    [pack_sockaddr_un($self->getparam('AF',AF_UNIX,1), $path)];
     }
     '';
 }
 
-sub _setconnpath		# $self, 'destpath', $path
+#& _setconnpath($self, 'destpath', $path) : {'' | "carp string"}
+sub _setconnpath
 {
     my($self,$what,$path) = @_;
     my $ix;
     if (!defined($path)) {
 	# removing, so cooperate
-	delete ${*$self}{Parms}{dstaddrlist};
+	delete $ {*$self}{Parms}{dstaddrlist};
 	return '';
     }
     # canonicalize the path to be of the right length, if possible
@@ -207,15 +228,16 @@ sub _setconnpath		# $self, 'destpath', $path
 	"$what parameter has no path: $path";
     }
     else {			# just try it here
-	${*$self}{Parms}{dstaddrlist} =
+	$ {*$self}{Parms}{dstaddrlist} =
 	    [pack_sockaddr_un($self->getparam('AF',AF_UNIX,1), $path)];
 	'';
     }
 }
 
-sub _init			# $self, whatpath[, $path][, \%params]
+#& _init($self, whatpath[, $path][, \%params]) : {$self | undef}
+#+attrs locked method
+sub _init
 {
-    use attrs 'locked', 'method';
     my ($self,$what,@args,$path,$parms) = @_;
     if (@args == 1 or @args == 2) {
 	$parms = $args[-1];
@@ -225,7 +247,7 @@ sub _init			# $self, whatpath[, $path][, \%params]
 	$path = undef
 	    if defined($path) and ref($path);
     }
-    croak("Invalid call to ${myclass}::init(@_)")
+    croak("Invalid call to " . __PACKAGE__ . "::init(@_)")
 	if @args == 2 and !$parms or @args > 2 or !$what;
     $parms ||= {};
     $$parms{$what} = $path if defined $path;
@@ -233,6 +255,8 @@ sub _init			# $self, whatpath[, $path][, \%params]
     if (scalar %$parms) {
 	return undef unless $self->setparams($parms);
     }
+    $self->setparams({netgen_fakeconnect=>1},-1) if
+	$self->getparam('type') == SOCK_DGRAM;
     if ($self->getparams([qw(srcaddr srcaddrlist dstaddr dstaddrlist)],1) >0) {
 	return undef unless $self->isopen or $self->open;
 	if ($self->getparams([qw(srcaddr srcaddrlist)],1) > 0) {
@@ -246,18 +270,20 @@ sub _init			# $self, whatpath[, $path][, \%params]
     $self;
 }
 
-sub init			# $self [, $destpath][, \%params]
+#& init($self [, $destpath][, \%params]) : {$self | undef}
+sub init
 {
     my ($self,@args) = @_;
     $self->_init('destpath',@args);
 }
 
-sub connect			# $self [, $destpath] [, \%newparams]
+#& connect($self [, $destpath] [, \%newparams]) : boolean
+#+attrs locked method
+sub connect
 {
-    use attrs 'locked', 'method';
     my($self,$path,$parms) = @_;
     if (@_ > 3 or @_ == 3 and (!ref($parms) or ref($path))) {
-	croak("Invalid arguments to ${myclass}::connect(@_), called");
+	croak("Invalid arguments to " . __PACKAGE__ . "::connect(@_), called");
     }
     if (@_ == 2 and ref $path) {
 	$parms = $path;
@@ -275,7 +301,8 @@ sub connect			# $self [, $destpath] [, \%newparams]
     $self->SUPER::connect;
 }
 
-sub format_addr			# ($class|$obj) , $sockaddr
+#& format_addr({$class|$obj} , $sockaddr) : $string
+sub format_addr
 {
     my ($this,$addr) = @_;
     my ($fam,$sdata) = unpack_sockaddr($addr);
@@ -301,7 +328,6 @@ Net::UNIX - UNIX-domain sockets interface module
 
 =head1 SYNOPSIS
 
-    use Socket;			# optional
     use Net::Gen;		# optional
     use Net::UNIX;
 
@@ -316,7 +342,7 @@ is part of the same distribution.
 The following methods are provided by the C<Net::UNIX> module
 itself, rather than just being inherited from C<Net::Gen>.
 
-=over
+=over 4
 
 =item new
 
@@ -344,7 +370,7 @@ The examples above show the indirect object syntax which many prefer,
 as well as the guaranteed-to-be-safe static method call.  There
 are occasional problems with the indirect object syntax, which
 tend to be rather obscure when encountered.  See
-F<E<lt>URL:http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.htmlE<gt>>
+E<lt>URL:http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.htmlE<gt>
 for details.
 
 =item init
@@ -403,6 +429,50 @@ Usage:
 Returns a formatted representation of the socket address.  This
 is normally just a pathname, or the constant string C<''>.
 
+=item PRINT
+
+Usage:
+
+    $ok = $obj->PRINT(@args);
+    $ok = print $tied_fh @args;
+
+This method, intended to be used with tied filehandles, behaves like one
+of two inherited methods from the C<Net::Gen> class, depending on the
+setting of the object parameter C<unbuffered_output> and whether the
+socket is a SOCK_STREAM (stream) socket or a datagram socket (the
+default).  If that parameter is false (the default) or the socket
+is a stream socket, then the normal print() builtin is used.
+If the C<unbuffered_output> parameter is true for a datagram socket,
+then each print()
+operation will actually result in a call to the C<send> method.  The
+value of the $\ variable is ignored in that case, but
+the $, variable is still used if the C<@args> array has multiple
+elements.
+
+=item READLINE
+
+Usage:
+
+    $line_or_datagram = $obj->READLINE;
+    $line_or_datagram = <TIED_FH>;
+    $line_or_datagram = readline(TIED_FH);
+    @lines_or_datagrams = $obj->READLINE;
+    @lines_or_datagrams = <TIED_FH>;
+    @lines_or_datagrams = readline(TIED_FH);
+
+This method, intended to be used with tied filehandles, behaves
+like one of two inherited methods from the C<Net::Gen> class,
+depending on the setting of the object parameter
+C<unbuffered_input> and whether the socket is a SOCK_STREAM (stream) socket
+or a datagram socket (the default).  If that parameter is false (the default)
+or the socket is a stream socket,
+then this method does line-buffering of its input as defined by
+the current setting of the $/ variable.  If the
+C<unbuffered_input> parameter is true for a datagram socket,
+then the input records will
+be exact recv() datagrams, disregarding the setting of the $/
+variable.
+
 =back
 
 =head2 Protected Methods
@@ -418,8 +488,37 @@ There are no socket options known to the C<Net::UNIX> module itself.
 
 =head2 Known Object Parameters
 
-There are no object parameters registered by the C<Net::UNIX> module
-itself.
+The following object parameters are registered by the C<Net::UNIX> module
+(as distinct from being inherited from C<Net::Gen>):
+
+=over 4
+
+=item unbuffered_input
+
+If true, the C<READLINE> operation on tied filehandles which
+are datagram sockets will return each recv()
+buffer as though it were a single separate line, independently of the setting
+of the $/ variable.  The default is false, which causes the C<READLINE>
+interface to return lines split at boundaries as appropriate for $/.
+(The C<READLINE> method for tied filehandles is the C<E<lt>FHE<gt>>
+operation.)
+
+=item unbuffered_output
+
+If true, the C<PRINT> operation on tied filehandles which
+are datagram sockets will result in calls to
+the send() builtin rather than the print() builtin, as described in L</PRINT>
+above.  The default is false, which causes the C<PRINT> method to use the
+print() builtin.
+
+=item unbuffered_IO
+
+This object parameter's value is unreliable on C<getparam> or C<getparams>
+method calls.  It is provided as a handy way to set both the
+C<unbuffered_output> and C<unbuffered_input> object parameters to the same
+value at the same time during C<new> calls.
+
+=back
 
 =head2 TIESCALAR
 
@@ -432,12 +531,18 @@ C<pathname> argument is given.
 
 Each assignment to the tied scalar is really a call to the C<put>
 method (via the C<STORE> method), and each read from the tied
-scalar is really a call to the C<getline> method (via the
+scalar is really a call to the C<READLINE> method (via the
 C<FETCH> method).
+
+=head2 TIEHANDLE support
+
+As inherited from C<Net::Gen>, with the addition of
+unbuffered datagram I/O options for the C<FETCH>, C<READLINE>,
+and C<PRINT> methods.
 
 =head2 Non-Method Subroutines
 
-=over
+=over 4
 
 =item pack_sockaddr_un
 
@@ -469,7 +574,7 @@ that it trims the returned pathname at the first null character.
 
 =head2 Exports
 
-=over
+=over 4
 
 =item default
 
@@ -483,7 +588,7 @@ C<pack_sockaddr_un> C<unpack_sockaddr_un>
 
 The following I<:tags> are available for grouping exportable items:
 
-=over
+=over 6
 
 =item :routines
 
@@ -499,9 +604,19 @@ Z<>
 
 =back
 
+=head1 THREADING STATUS
+
+This module has been tested with threaded perls, and should be as thread-safe
+as perl itself.  (As of 5.005_03 and 5.005_57, that's not all that safe
+just yet.)
+
+=head1 SEE ALSO
+
+Net::Gen(3), Net::UNIX::Server(3)
+
 =head1 AUTHOR
 
-Spider Boardman F<E<lt>spider@Orb.Nashua.NH.USE<gt>>
+Spider Boardman E<lt>spider@Orb.Nashua.NH.USE<gt>
 
 =cut
 
@@ -510,17 +625,19 @@ Spider Boardman F<E<lt>spider@Orb.Nashua.NH.USE<gt>>
 #any real autoloaded methods go after this line
 
 
-sub setdebug			# $this, [bool, [norecurse]]
+#& setdebug($this, [bool, [norecurse]]) : oldvalues
+#+attrs locked
+sub setdebug
 {
-    use attrs 'locked';
     my $this = shift;
     $this->_debug($_[0]) .
 	((@_ > 1 && $_[1]) ? '' : $this->SUPER::setdebug(@_));
 }
 
-sub bind			# $self [, $destpath] [, \%newparams]
+#& bind($self [, $destpath] [, \%newparams]) : boolean
+#+attrs locked method
+sub bind
 {
-    use attrs 'locked', 'method';
     my($self,$path,$parms) = @_;
     if (@_ > 3 or @_ == 3 and (!ref($parms) or ref($path))) {
 	my $whoami = $self->_trace;
@@ -537,7 +654,55 @@ sub bind			# $self [, $destpath] [, \%newparams]
 	$$parms{thispath} = $path;
     }
     if (@_ > 1) {
-	return unless $self->setparams($parms);
+	return undef unless $self->setparams($parms);
     }
     $self->SUPER::bind;
+}
+
+#& _setbuf_unbuf($self, $param, $newvalue) : {'' | "carp string"}
+sub _setbuf_unbuf
+{
+    my ($self,$what,$newval) = @_;
+    $self->setparams({unbuffered_input => $newval,
+		      unbuffered_output => $newval});
+    '';
+}
+
+#& PRINT($self, @args) : boolean OKness
+#+attrs locked method
+sub PRINT
+{
+    my $self = shift;
+    if ($self->getparam('type',SOCK_DGRAM,1) != SOCK_STREAM and
+	$self->getparam('unbuffered_output'))
+    {
+	$self->send(join $, , @_);
+    }
+    else {
+	print {$self} @_;
+    }
+}
+
+#& READLINE($self) : $line | undef || @lines
+#+attrs locked method
+sub READLINE
+{
+    my $whoami = $_[0]->_trace(\@_,5);
+    carp "Excess arguments to ${whoami}, ignored" if @_ > 1;
+    my $self = shift;
+    if ($self->getparam('type',SOCK_DGRAM,1) != SOCK_STREAM and
+	$self->getparam('unbuffered_input'))
+    {
+	if (wantarray) {
+	    my ($line,@lines);
+	    push @lines, $line while defined($line = $self->recv);
+	    @lines;
+	}
+	else {
+	    $self->recv;
+	}
+    }
+    else {
+	$self->SUPER::READLINE;
+    }
 }

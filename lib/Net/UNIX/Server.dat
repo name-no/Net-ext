@@ -1,4 +1,4 @@
-# Copyright 1997,1998 Spider Boardman.
+# Copyright 1997,2000 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -11,32 +11,29 @@
 # IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
 # WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
+# rcsid: "@(#) $Id: Server.dat,v 1.14 2000/01/19 07:49:40 spider Exp $"
 
 package Net::UNIX::Server;
-use 5.004_05;
+use 5.004_04;
 
 use strict;
 #use Carp;
 sub carp { require Carp; goto &Carp::carp; }
 sub croak { require Carp; goto &Carp::croak; }
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD);
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
-my $myclass;
 BEGIN {
-    $myclass = __PACKAGE__;
-    $VERSION = '0.86';
+    $VERSION = '0.93';
+    eval "sub Version { __PACKAGE__ . ' v$VERSION' }";
 }
-sub Version { "$myclass v$VERSION" }
 
 #use AutoLoader;		# someday add back, along with AUTOLOAD, below
 #use Exporter ();
-#use Net::Gen 0.85 qw(/pack_sockaddr$/);
-#use Socket qw(!pack_sockaddr_un !unpack_sockaddr_un);
-use Socket '/^SOCK_/';
-use Net::UNIX 0.85;
+use Net::UNIX 0.93;
+use Net::Gen 0.93 qw(/^SOCK_/);
 
 BEGIN {
-    @ISA = qw(Net::UNIX);
+    @ISA = 'Net::UNIX';
 
 # Items to export into callers namespace by default.
 # (Move infrequently used names to @EXPORT_OK below.)
@@ -50,6 +47,7 @@ BEGIN {
     %EXPORT_TAGS = (
 	ALL		=> [@EXPORT, @EXPORT_OK],
     );
+#    *AUTOLOAD = \$Net::Gen::AUTOLOAD;
 }
 
 # sub AUTOLOAD inherited from Net::Gen
@@ -57,7 +55,7 @@ BEGIN {
 # since 5.003_96 will break simple subroutines with inherited autoload, cheat
 #sub AUTOLOAD
 #{
-#    $Net::Gen::AUTOLOAD = $AUTOLOAD;
+#    #$Net::Gen::AUTOLOAD = $AUTOLOAD;
 #    goto &Net::Gen::AUTOLOAD;
 #}
 
@@ -69,6 +67,7 @@ BEGIN {
 
 # No additional sockopts for UNIX-domain sockets (?)
 
+#+attrs locked
 sub new
 {
     my $whoami = $_[0]->_trace(\@_,1);
@@ -93,7 +92,8 @@ sub new
     $self;
 }
 
-sub init			# $self [, $thispath][, \%params]
+#& init($self [, $thispath][, \%params]) : {$self | undef}
+sub init
 {
     my ($self,@args) = @_;
     return undef unless $self->_init('thispath',@args);
@@ -117,7 +117,6 @@ Net::UNIX::Server - UNIX-domain sockets interface module for listeners
 
 =head1 SYNOPSIS
 
-    use Socket;			# optional
     use Net::Gen;		# optional
     use Net::UNIX;		# optional
     use Net::UNIX::Server;
@@ -134,7 +133,7 @@ which are part of the same distribution.
 The following methods are provided by the C<Net::UNIX::Server> module
 itself, rather than just being inherited from C<Net::UNIX> or C<Net::Gen>.
 
-=over
+=over 4
 
 =item new
 
@@ -158,7 +157,7 @@ The examples above show the indirect object syntax which many prefer,
 as well as the guaranteed-to-be-safe static method call.  There
 are occasional problems with the indirect object syntax, which
 tend to be rather obscure when encountered.  See
-F<E<lt>URL:http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.htmlE<gt>>
+E<lt>URL:http://www.rosat.mpe-garching.mpg.de/mailing-lists/perl-porters/1998-01/msg01674.htmlE<gt>
 for details.
 
 See L<Net::TCP::Server> for an example of running a server.  The
@@ -204,7 +203,7 @@ itself.
 
 =head2 Exports
 
-=over
+=over 4
 
 =item default
 
@@ -218,7 +217,7 @@ None.
 
 The following I<:tags> are available for grouping exportable items:
 
-=over
+=over 6
 
 =item :ALL
 
@@ -230,9 +229,19 @@ Z<>
 
 =back
 
+=head1 THREADING STATUS
+
+This module has been tested with threaded perls, and should be as thread-safe
+as perl itself.  (As of 5.005_03 and 5.005_57, that's not all that safe
+just yet.)
+
+=head1 SEE ALSO
+
+Net::UNIX(3), Net::Gen(3)
+
 =head1 AUTHOR
 
-Spider Boardman F<E<lt>spider@Orb.Nashua.NH.USE<gt>>
+Spider Boardman E<lt>spider@Orb.Nashua.NH.USE<gt>
 
 =cut
 

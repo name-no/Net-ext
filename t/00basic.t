@@ -1,5 +1,11 @@
 #!perl -w
 
+# rcsid: "@(#) $Id: 00basic.t,v 1.12 1999/08/04 04:59:16 spider Exp $"
+
+BEGIN {
+    unshift @INC, './xlib','../xlib' if $] < 5.004_05;
+}
+
 use Test;
 #use Config ();
 use strict;
@@ -36,14 +42,16 @@ END { for my $endcv (@endav) { $endcv->() } }
 # test driver, which will `remember' it in %testvals.
 
 my $ok;				# continuation flag
+my $failures = 0;
 
 sub tdriver ()			# run the code refs in @testvec
 {
     for my $cv (@testvec) {
 	$ok = $cv->();
 	$testvals{"$cv"} = $ok;
+	$ok || $failures++;
     }
-    $ok;
+    !$failures;
 }
 
 sub ptest ()			# print out the test name

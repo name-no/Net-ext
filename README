@@ -21,6 +21,11 @@ What's different from other offerings:
 	long as gethostbyname() returns more than one address.  (See RFC
 	1123.)
 
+	Has had testing on threaded perls, and works as well with threads
+	as perl itself (which isn't saying much, yet, given the experimental
+	status of threads in Perl, but that's the limit of resolution for
+	the testing).
+
 What's still missing:
 
 	Support for non-blocking sockets is under-tested at best.  The
@@ -55,7 +60,9 @@ the methods.
 I'm not a technical writer, nor do I usually play one on the net.
 The documentation could still use a lot of work, I'm sure.
 
-Making it all work requires perl 5.004_05(maint trial 8) or later.
+Making it all work requires perl 5.004_04 or later.  (There are features
+which are new to 5.004_05 and even 5.005 which are used, but there
+are backward compatibility hooks to keep it working with 5.004_04.)
 
 A simple test script:
 
@@ -101,7 +108,7 @@ of perl5 than this code ever could have).  If you were using the internals
 of the implementation rather than sticking to the documented interfaces,
 you will have some work to do before your derived classes will work again.
 
-# Copyright 1995,1999 Spider Boardman.
+# Copyright 1995,2000 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software

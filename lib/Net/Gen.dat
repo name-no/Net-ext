@@ -1,4 +1,4 @@
-# Copyright 1995,1999 Spider Boardman.
+# Copyright 1995,2000 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -11,9 +11,11 @@
 # IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
 # WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
+# rcsid: "@(#) $Id: Gen.dat,v 1.37 2000/01/19 07:49:40 spider Exp $"
+
 
 package Net::Gen;
-use 5.004_05;		# new minimum Perl version for this package
+use 5.004_04;		# new minimum Perl version for this package
 
 use strict;
 #use Carp; # no!  just require Carp when we want to croak.
@@ -21,12 +23,12 @@ use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS
 	    %_missing $AUTOLOAD $adebug);
 
 BEGIN {
-    $VERSION = '0.91';
+    $VERSION = '0.93';
+    eval "sub Version () { __PACKAGE__ . ' v$VERSION' }";
 }
 
-sub Version () { __PACKAGE__ . " v$VERSION" }
-
-use Socket qw(!/pack_sockaddr/ !/^MSG_OOB$/ !SOMAXCONN);
+#use Socket qw(!/pack_sockaddr/ !/^MSG_OOB$/ !SOMAXCONN);
+use Socket ();
 use AutoLoader;
 use Exporter ();
 use DynaLoader ();
@@ -61,6 +63,16 @@ BEGIN {
 		    EAGAIN EWOULDBLOCK
 		    ENOENT EINVAL EBADF
 		    SHUT_RD SHUT_WR SHUT_RDWR
+		    SOL_SOCKET
+		    SOCK_STREAM SOCK_DGRAM SOCK_RAW SOCK_RDM SOCK_SEQPACKET
+		    AF_UNSPEC AF_UNIX AF_INET AF_IMPLINK AF_PUP AF_CHAOS
+		    AF_NS AF_ISO AF_OSI AF_ECMA AF_DATAKIT AF_CCITT AF_SNA
+		    AF_DECnet AF_DLI AF_LAT AF_HYLINK AF_APPLETALK AF_ROUTE
+		    AF_LINK AF_NETMAN AF_X25 AF_CTF AF_WAN AF_USER AF_LAST
+		    PF_UNSPEC PF_UNIX PF_INET PF_IMPLINK PF_PUP PF_CHAOS
+		    PF_NS PF_ISO PF_OSI PF_ECMA PF_DATAKIT PF_CCITT PF_SNA
+		    PF_DECnet PF_DLI PF_LAT PF_HYLINK PF_APPLETALK PF_ROUTE
+		    PF_LINK PF_NETMAN PF_X25 PF_CTF PF_WAN PF_USER PF_LAST
 		   );
 
     %EXPORT_TAGS = (
@@ -78,17 +90,56 @@ BEGIN {
 		       ENOENT EINVAL EBADF
 		      )],
 	shutflags => [qw(SHUT_RD SHUT_WR SHUT_RDWR)],
+	sockopts => [qw(SO_ACCEPTCONN SO_BROADCAST SO_DEBUG SO_DONTROUTE
+			SO_ERROR SO_EXPANDED_RIGHTS SO_FAMILY SO_KEEPALIVE
+			SO_LINGER SO_OOBINLINE SO_PAIRABLE SO_RCVBUF
+			SO_RCVLOWAT SO_RCVTIMEO SO_REUSEADDR SO_REUSEPORT
+			SO_SNDBUF SO_SNDLOWAT SO_SNDTIMEO SO_STATE SO_TYPE
+			SO_USELOOPBACK SO_XSE
+		       )],
+	sockvals => [qw(SOL_SOCKET
+			SOCK_STREAM SOCK_DGRAM SOCK_RAW SOCK_RDM SOCK_SEQPACKET
+		       )],
+	af	=> [qw(AF_UNSPEC AF_UNIX AF_INET AF_IMPLINK AF_PUP AF_CHAOS
+		       AF_NS AF_ISO AF_OSI AF_ECMA AF_DATAKIT AF_CCITT AF_SNA
+		       AF_DECnet AF_DLI AF_LAT AF_HYLINK AF_APPLETALK AF_ROUTE
+		       AF_LINK AF_NETMAN AF_X25 AF_CTF AF_WAN AF_USER AF_LAST
+		      )],
+	pf	=> [qw(PF_UNSPEC PF_UNIX PF_INET PF_IMPLINK PF_PUP PF_CHAOS
+		       PF_NS PF_ISO PF_OSI PF_ECMA PF_DATAKIT PF_CCITT PF_SNA
+		       PF_DECnet PF_DLI PF_LAT PF_HYLINK PF_APPLETALK PF_ROUTE
+		       PF_LINK PF_NETMAN PF_X25 PF_CTF PF_WAN PF_USER PF_LAST
+		      )],
 	ALL	=> [@EXPORT, @EXPORT_OK],
     );
+    $EXPORT_TAGS{'non_block_vals'} = $EXPORT_TAGS{'NonBlockVals'};
+    $EXPORT_TAGS{'families'} = [@{$EXPORT_TAGS{'af'}}, @{$EXPORT_TAGS{'pf'}}];
 }
 
 my %loaded;
+
+
+# dummies for the Carp:: routines, which we'll re-invoke if we get called.
+
+sub croak
+{
+    require Carp;
+    goto &Carp::croak;
+}
+
+sub carp
+{
+    require Carp;
+    goto &Carp::carp;
+}
+
 
 my $nullsub = sub {};		# handy null warning handler
 # If the warning handler is this exact code ref, don't bother calling
 # croak in the AUTOLOAD constant section, since we're being called from
 # inside the eval in initsockopts().
 
+#+attrs locked
 sub AUTOLOAD
 {
     # This AUTOLOAD is used to validate possible missing constants from
@@ -102,7 +153,7 @@ sub AUTOLOAD
     # as a key for setparams/getparams, it will be simulated via _accessor().
     # Otherwise, control will be passed to the AUTOLOAD in AutoLoader.
 
-    use attrs 'locked';
+#   use attrs 'locked';		# modifies the symbol table and abuses a global
 
     my ($constname,$callpkg);
     {				# block to preserve $1,$2,et al.
@@ -112,10 +163,9 @@ sub AUTOLOAD
 	my $wh = $SIG{__WARN__};
 	die "\n"
 	    if ($wh and (ref($wh) eq 'CODE') and $wh == $nullsub);
-	require Carp;
-	Carp::croak "Your vendor has not defined $callpkg macro $constname, used";
+	croak "Your vendor has not defined $callpkg macro $constname, used";
     }
-    if (@_ && ref $_[0] && @_ < 3 && exists ${*{$_[0]}}{Keys}{$constname}) {
+    if (@_ && ref $_[0] && @_ < 3 && exists $ {*{$_[0]}}{Keys}{$constname}) {
 	no strict 'refs';	# allow us to define the sub
 	my $what = $constname;	# don't tie up $constname for closures
 	warn "Auto-generating accessor $AUTOLOAD\n" if $adebug;
@@ -139,23 +189,10 @@ BEGIN {
 # Preloaded methods go here.  Autoload methods go after __END__, and are
 # processed by the autosplit program.
 
-# dummies for the Carp:: routines, which we'll re-invoke if we get called.
-
-sub croak
-{
-    require Carp;
-    goto &Carp::croak;
-}
-
-sub carp
-{
-    require Carp;
-    goto &Carp::carp;
-}
-
 
 # This package has the core 'generic' routines for fiddling with
 # sockets.
+
 
 # initsockopts - Set up the socket options of a class using this module.
 # The structure of a sockopt hash is like this:
@@ -171,9 +208,10 @@ sub carp
 
 my %evalopts;			# avoid compiling an eval per sockopt
 
-sub initsockopts		# $class, $level+0, \%sockopts
+#& initsockopts($class, $level+0, \%sockopts) : void
+#+attrs locked
+sub initsockopts
 {
-    use attrs 'locked';
     my ($class,$level,$opts) = @_;
     croak "Invalid arguments to " . __PACKAGE__ . "::initsockopts, called"
 	if @_ != 3 or ref $opts ne 'HASH';
@@ -182,11 +220,13 @@ sub initsockopts		# $class, $level+0, \%sockopts
     my $nullwarn = $nullsub;	# a handy __WARN__ handler
     # The above has to be there, since the file-scope 'my' won't be seen
     # in the generated closure.
+    $class = ref $class if ref $class;
     $evalopts{$class} ||= eval "package $class; no strict 'refs';" .
 	'sub ($) {local($SIG{__WARN__})=$nullwarn;local($SIG{__DIE__});' .
 	    '&{$_[0]}()}';
     $esub = $evalopts{$class};
     foreach $opt (keys %$opts) {
+	delete $$opts{$opt}, next if exists $_missing{"${class}::$opt"};
 	$oval = eval {&$esub($opt)};
 	delete $$opts{$opt}, next if $@ or !defined($oval) or $oval eq '';
 	$oval += 0;		# force numeric
@@ -211,10 +251,14 @@ my %sockopts;
 	     'SO_DEBUG'		=> [ 'I' ],
 	     'SO_DONTROUTE'	=> [ 'I' ],
 	     'SO_ERROR'		=> [ 'I' ],
+	     'SO_EXPANDED_RIGHTS' => [ 'I' ],
 	     'SO_KEEPALIVE'	=> [ 'I' ],
 	     'SO_OOBINLINE'	=> [ 'I' ],
+	     'SO_PAIRABLE'	=> [ 'I' ],
 	     'SO_REUSEADDR'	=> [ 'I' ],
+	     'SO_REUSEPORT'	=> [ 'I' ],
 	     'SO_USELOOPBACK'	=> [ 'I' ],
+	     'SO_XSE'		=> [ 'I' ],
 
 	     # Simple integer options
 
@@ -225,6 +269,8 @@ my %sockopts;
 	     'SO_RCVLOWAT'	=> [ 'I' ],
 	     'SO_SNDLOWAT'	=> [ 'I' ],
 	     'SO_TYPE'		=> [ 'I' ],
+	     'SO_STATE'		=> [ 'I' ],
+	     'SO_FAMILY'	=> [ 'I' ],
 
 	     # Finally, one which is a struct
 
@@ -236,7 +282,8 @@ my %sockopts;
 __PACKAGE__->initsockopts( SOL_SOCKET(), \%sockopts );
 
 
-sub _genfh ()			# (void), returns orphan globref with HV slot.
+#& _genfh() : returns orphan globref with HV slot.
+sub _genfh ()
 {
     my $rval = gensym;
     *{$rval} = {};		# initialise a hash slot
@@ -247,9 +294,11 @@ my $debug = 0;			# module-wide debug hack -- don't use
 
 # On the other hand, per-object debugging isn't so bad....
 
-sub _debug			# $this [, $newval] ; returns oldval
+# can update $debug file variable
+#& _debug($this [, $newval]) : oldval
+#+attrs locked
+sub _debug
 {
-    use attrs 'locked';
     my ($this,$newval) = @_;
     return $this->debug($newval) if ref $this;
     # class method here
@@ -258,16 +307,18 @@ sub _debug			# $this [, $newval] ; returns oldval
     $oldval;
 }
 
-sub debug			# $self [, $newval] ; returns oldval
+#& debug($self [, $newval]) : oldval
+#+attrs locked method
+sub debug
 {
-    use attrs 'locked', 'method';
     my ($self,$newval) = @_;
-    my $oldval = ${*$self}{Parms}{'debug'} if defined wantarray;
+    my $oldval = $ {*$self}{Parms}{'debug'} if defined wantarray;
     $self->setparams({'debug'=>$newval}) if defined $newval;
     $oldval;
 }
 
-sub _trace			# $this , \@args, minlevel, [$moretext]
+#& _trace($this, \@args, minlevel, [$moretext]) : void
+sub _trace
 {
     my ($this,$aref,$level,$msg) = @_;
     my $rtn = (caller(1))[3];
@@ -278,7 +329,8 @@ sub _trace			# $this , \@args, minlevel, [$moretext]
     ${rtn};
 }
 
-sub _setdebug			# $self, $name, $newval
+#& _setdebug($self, $name, $newval) : {'' | "carp string"}
+sub _setdebug
 {
     my ($self,$what,$val) = @_;
     return '' unless defined $val;
@@ -295,9 +347,10 @@ my ($F_GETFL,$F_SETFL) =
 my $nonblock_flag = eval 'pack("I",VAL_O_NONBLOCK)';
 my $eagain = eval 'VAL_EAGAIN';
 
-sub _accessor			# $self, $what [, $newval] ; returns oldvalue
+#& _accessor($self, $what [, $newval]) : oldvalue
+#+attrs locked method
+sub _accessor
 {
-    use attrs 'locked', 'method';
     my ($self, $what, $newval) = @_;
     croak "Usage: \$sock->$what or \$sock->$what(\$newvalue),"
 	if @_ > 3;
@@ -306,19 +359,21 @@ sub _accessor			# $self, $what [, $newval] ; returns oldvalue
     $oldval;
 }
 
-sub _setblocking		# $self, $name, $newval
+#& _setblocking($self, $name, $newval) : {'' | "carp string"}
+sub _setblocking
 {
     my ($self,$what,$newval) = @_;
     $newval = 1 unless defined $newval;
     # default previous value, just in case
-    ${*$self}{Parms}{$what} = 1 unless defined ${*$self}{Parms}{$what};
+    $ {*$self}{Parms}{$what} = 1 unless
+	defined $ {*$self}{Parms}{$what};
     if ($newval) {
 	$_[2] = 1;	# canonicalise the new value
 	if (defined $F_GETFL and defined $F_SETFL and defined $nonblock_flag
 	    and $self->isopen) {
 	    if ((CORE::fcntl($self, $F_GETFL, 0) & VAL_O_NONBLOCK) ==
 		VAL_O_NONBLOCK) {
-		${*$self}{Parms}{$what} = 0;  # note previous status
+		$ {*$self}{Parms}{$what} = 0;  # note previous status
 		return 'Failed to clear non-blocking status'
 		    unless eval {CORE::fcntl($self, $F_SETFL,
 					   CORE::fcntl($self, $F_GETFL, 0) &
@@ -335,7 +390,7 @@ sub _setblocking		# $self, $name, $newval
 	if ($self->isopen) {
 	    if ((CORE::fcntl($self, $F_GETFL, 0) & VAL_O_NONBLOCK) !=
 		VAL_O_NONBLOCK) {
-		${*$self}{Parms}{$what} = 1;  # note previous state
+		$ {*$self}{Parms}{$what} = 1;  # note previous state
 		return 'Failed to set non-blocking status'
 		    unless eval {CORE::fcntl($self, $F_SETFL,
 					   CORE::fcntl($self, $F_GETFL, 0) |
@@ -346,9 +401,10 @@ sub _setblocking		# $self, $name, $newval
     '';		# return goodness if got this far
 }
 
-sub blocking			# $self [, $newval] ; returns canonical oldval
+#& blocking($self [, $newval]) : canonical_oldval
+#+attrs locked method
+sub blocking
 {
-    use attrs 'locked', 'method';
     my ($self, $newval) = @_;
     croak 'Usage: $sock->blocking or $sock->blocking(0|1),'
 	if @_ > 2;
@@ -357,7 +413,8 @@ sub blocking			# $self [, $newval] ; returns canonical oldval
     $oldval;
 }
 
-sub _settimeout			# $self, $what, $newval
+#& _settimeout($self, $what, $newval) : {'' | "carp string"}
+sub _settimeout
 {
     my ($self,$what,$newval) = @_;
     unless (defined $newval) {
@@ -372,7 +429,7 @@ sub _settimeout			# $self, $what, $newval
 }
 
 my @Keys = qw(PF AF type proto dstaddr dstaddrlist srcaddr srcaddrlist
-	      maxqueue reuseaddr);
+	      maxqueue reuseaddr netgen_fakeconnect reuseport);
 my %Codekeys = (
 		'debug' => \&_setdebug,
 		'blocking' => \&_setblocking,
@@ -384,22 +441,27 @@ my %Keys;
 # This hash remembers the original socket option settings after the first time.
 my %Opts;
 
-sub registerParamKeys		# $self, \@keys
+#& register_param_keys($self, \@keys)
+#+attrs locked method
+sub register_param_keys
 {
-    use attrs 'locked', 'method';
     my ($self, $names) = @_;
     my $whoami = $self->_trace(\@_,3);
     croak "Invalid arguments to ${whoami}(@_), called"
 	if @_ != 2 or ref $names ne 'ARRAY';
-    @{${*$self}{Keys}}{@$names} = (); # remember the names
+    @{$ {*$self}{Keys}}{@$names} =
+	@{$ {*$self}{Keys}}{@$names}; # remember the names
+    # this form doesn't clobber pre-existing register_param_handlers values
 }
 
-sub register_param_keys;	# helps with -w
-*register_param_keys = \&registerParamKeys; # alias form preferred by many
+sub registerParamKeys;	# helps with -w
+*registerParamKeys = \&register_param_keys; # alias form preferred by many
 
-sub registerParamHandlers	# $self, \@keys, [\]@handlers
-{				# -or- $self, \%key-handlers
-    use attrs 'locked', 'method';
+#& register_param_handlers($self, \@keys, [\]@handlers)
+#&  -or- ($self, \%key-handlers)
+#+attrs locked method
+sub register_param_handlers
+{
     my ($self, $names, @handlers, $handlers) = @_;
     my $whoami = $self->_trace(\@_,3);
     if (ref $names eq 'HASH') {
@@ -417,51 +479,56 @@ sub registerParamHandlers	# $self, \@keys, [\]@handlers
     croak "Invalid handlers in ${whoami}(@_), called"
 	if @$handlers != @$names or grep(ref $_ ne 'CODE', @$handlers);
     # finally, all is validated, so set the bloody things
-    @{${*$self}{Keys}}{@$names} = @$handlers;
+    @{$ {*$self}{Keys}}{@$names} = @$handlers;
 }
 
-sub register_param_handlers;	# helps with -w
-*register_param_handlers = \&registerParamHandlers; # alias other form
+sub registerParamHandlers;	# helps with -w
+*registerParamHandlers = \&register_param_handlers; # alias other form
 
-sub registerOptions		# $self, $levelname, $level, \%options
+#& register_options($self, $levelname, $level, \%options)
+#+attrs locked method
+sub register_options
 {
-    use attrs 'locked', 'method';
     my ($self, $levname, $level, $opts) = @_;
     my $whoami = $self->_trace(\@_,3);
     croak "Invalid arguments to ${whoami}(@_), called"
 	if ref $opts ne 'HASH';
-    ${*$self}{Sockopts}{$levname} = $opts;
-    ${*$self}{Sockopts}{$level+0} = $opts;
+    $ {*$self}{Sockopts}{$levname} = $opts;
+    $ {*$self}{Sockopts}{$level+0} = $opts;
 }
 
-sub register_options;		# helps with -w
-*register_options = \&registerOptions; # alias form preferred by many
+sub registerOptions;		# helps with -w
+*registerOptions = \&register_options; # alias form preferred by many
 
 # pseudo-subclass for saving parameters (ParamSaver, inspired by SelectSaver)
-sub paramSaver			# $self, @params
+#& param_saver($self, @params) : restoration_object
+#+attrs locked method
+sub param_saver
 {
-    use attrs 'locked', 'method';
     my ($self, @params) = @_;
+    my @delparams =
+	# map { exists $ {*$self}{Parms}{$_} ? () : ($_) } @params;
+	grep {!exists $ {*$self}{Parms}{$_}} @params;
     my %setparams = $self->getparams(\@params);
-    my @delparams = map { exists ${*$self}{Parms}{$_} ? () : ($_) } @params;
     bless [$self, \%setparams, \@delparams], 'Net::Gen::ParamSaver';
 }
 
-sub param_saver;		# aliases
-*param_saver = \&paramSaver;
+sub paramSaver;			# aliases
+*paramSaver = \&param_saver;
 sub ParamSaver;
-*ParamSaver = \&paramSaver;
+*ParamSaver = \&param_saver;
 
 sub Net::Gen::ParamSaver::DESTROY
 {
-    use attrs 'locked';
     local $!;	# just to be sure we don't clobber it
     $_[0]->[0]->setparams($_[0]->[1]);
     $_[0]->[0]->delparams($_[0]->[2]);
 }
 
-sub new				# classname [, \%params]
-{				# -or- $classname [, @ignored]
+#& new(classname [, \%params]) : {$self | undef}
+#&  -or- $classname [, @ignored]
+sub new
+{
     my $whoami = $_[0]->_trace(\@_,1);
     my($pack,$parms) = @_;
     my %parms;
@@ -471,23 +538,23 @@ sub new				# classname [, \%params]
     if (@_ > 2 and $parms and ref $parms eq 'HASH') {
 	croak "Invalid argument format to ${whoami}(@_), called";
     }
-    $pack = ref $pack if ref $pack;
+    my $class = ref $pack || $pack;
     my $self = _genfh;
-    bless $self,$pack;
+    bless $self,$class;
     $pack->_trace(\@_,2,", self=$self after bless");
-    ${*$self}{Parms} = \%parms;
+    $ {*$self}{Parms} = \%parms;
     if (%Keys) {
-	${*$self}{Keys} = { %Keys };
-	${*$self}{Sockopts} = { %Opts };
+	$ {*$self}{Keys} = { %Keys };
+	$ {*$self}{Sockopts} = { %Opts };
     }
     else {
-	$self->registerParamKeys(\@Keys); # register our keys
-	$self->registerParamHandlers(\%Codekeys);
-	$self->registerOptions('SOL_SOCKET', SOL_SOCKET(), \%sockopts);
-	%Keys = %{${*$self}{Keys}};
-	%Opts = %{${*$self}{Sockopts}};
+	$self->register_param_keys(\@Keys); # register our keys
+	$self->register_param_handlers(\%Codekeys);
+	$self->register_options('SOL_SOCKET', SOL_SOCKET(), \%sockopts);
+	%Keys = %{$ {*$self}{Keys}};
+	%Opts = %{$ {*$self}{Sockopts}};
     }
-    if ($pack eq __PACKAGE__) {
+    if ($class eq __PACKAGE__) {
 	unless ($self->init) {
 	    local $!;		# preserve errno
 	    undef $self;	# against the side-effects of this
@@ -505,9 +572,10 @@ sub new				# classname [, \%params]
     $self;
 }
 
-sub setparams			# $this, \%newparams [, $newonly [, $check]]
+#& setparams($this, \%newparams [, $newonly [, $check]]) : boolean
+#+attrs locked method
+sub setparams
 {
-    use attrs 'locked', 'method';
     my ($self,$newparams,$newonly,$check) = @_;
     my $errs = 0;
 
@@ -517,104 +585,111 @@ sub setparams			# $this, \%newparams [, $newonly [, $check]]
 	if @_ > 4;
 
     $newonly ||= 0;		# undefined or zero is equiv now (-w problem)
-    my ($parm,$newval);
+    my ($parm,$newval,$pslot);
     while (($parm,$newval) = each %$newparams) {
 	print STDERR __PACKAGE__ . "::setparams $self $parm" .
 	    (defined $newval ? " $newval" : "") . "\n"
 		if $self->debug;
 	(carp "Unknown parameter type $parm for a " . (ref $self) . " object")
 	    , $errs++, next
-		unless exists ${*$self}{Keys}{$parm};
-	next if $newonly < 0 && defined ${*$self}{Parms}{$parm};
+		unless exists $ {*$self}{Keys}{$parm};
+	$pslot = \$ {*$self}{Parms}{$parm};
+	next if $newonly < 0 && defined $$pslot;
 	if (!$check)
 	{
 	    # this ungodly construct brought to you by -w
 	    next if
-		defined(${*$self}{Parms}{$parm}) eq defined($newval)
+		defined($$pslot) eq defined($newval)
 		    and
 			!defined($newval) ||
-			${*$self}{Parms}{$parm} eq $newval ||
-			    ${*$self}{Parms}{$parm} !~ /\D/ &&
+			$$pslot eq $newval ||
+			    $$pslot !~ /\D/ &&
 			    $newval !~ /\D/ &&
 				length($newval) &&
-				length(${*$self}{Parms}{$parm}) &&
-				${*$self}{Parms}{$parm} == $newval
+				length($$pslot) &&
+				$$pslot == $newval
 	    ;
 	}
 	carp("Overwrite of $parm parameter for ".(ref $self)." object ignored")
 	    , $errs++, next
-		if $newonly > 0 && defined ${*$self}{Parms}{$parm};
-	if (defined(${*$self}{Keys}{$parm}) and
-	    (ref(${*$self}{Keys}{$parm}) eq 'CODE')) {
-	    my $rval = &{${*$self}{Keys}{$parm}}($self,$parm,$newval);
+		if $newonly > 0 && defined $$pslot;
+	if (defined($ {*$self}{Keys}{$parm}) and
+	    (ref($ {*$self}{Keys}{$parm}) eq 'CODE')) {
+	    my $rval = &{$ {*$self}{Keys}{$parm}}($self,$parm,$newval);
 	    (carp $rval), $errs++, next if $rval;
 	}
-	${*$self}{Parms}{$parm} = $newval;
+	# not using $$pslot here in case {Parms} hash re-generated
+	$ {*$self}{Parms}{$parm} = $newval;
     }
 
     $errs ? undef : 1;
 }
     
 
-sub delparams			# $self, \@paramnames ; returns bool
+#& delparams($self, \@paramnames) : boolean
+#+attrs locked method
+sub delparams
 {
-    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,1);
     my($self,$keysref) = @_;
     my(@k,%k);
-    @k = grep(exists ${*$self}{Parms}{$_}, @$keysref);
+    @k = grep(exists $ {*$self}{Parms}{$_}, @$keysref);
     return 1 unless @k;		# if no keys need deleting, succeed vacuously
     @k{@k} = ();		# a hash of undefs for the following
     return undef unless $self->setparams(\%k); # see whether undef is allowed
-    delete @{${*$self}{Parms}}{@k};
+    delete @{$ {*$self}{Parms}}{@k};
     1;				# return goodness
 }
 
-sub checkparams			# $self, (void) ; returns bool
+#& checkparams($self) : boolean
+#+attrs locked method
+sub checkparams
 {
-    use attrs 'locked', 'method';
     my $whoami = $_[0]->_trace(\@_,1);
     my $self = shift;
     carp "Excess arguments to ${whoami} ignored"
 	if @_;
-    my $curparms = ${*$self}{Parms};
+    my $curparms = $ {*$self}{Parms};
     $curparms = {} unless ref $curparms eq 'HASH';
     # make sure only the valid ones are set when we're done
-    ${*$self}{Parms} = {};
-    my(@valkeys) = grep(exists ${*$self}{Keys}{$_}, keys %$curparms);
+    $ {*$self}{Parms} = {};
+    my(@valkeys) = grep(exists $ {*$self}{Keys}{$_}, keys %$curparms);
     # this assignment allows for inter-key dependencies to be evaluated
-    @{${*$self}{Parms}}{@valkeys} =
+    @{$ {*$self}{Parms}}{@valkeys} =
 	@{$curparms}{@valkeys};
     # validate all current against the defined keys
     $self->setparams($curparms, 0, 1);
 }
 
-sub init			# $self, (void) ; returns updated $self
+#& init($self) : {$self | undef}
+sub init
 {
     $_[0]->_trace(\@_,1);
     my($self) = @_;
     $self->checkparams ? $self : undef;
 }
 
-sub getparam			# $self, $key [, $default [, $defaultifundef]]
+#& getparam($self, $key [, $default [, $defaultifundef]]) : param_value
+#+attrs locked method
+sub getparam
 {
-    use attrs 'locked', 'method';
     my $whoami = $_[0]->_trace(\@_,2);
     my($self,$key,$defval,$noundef) = @_;
     carp "Excess arguments to ${whoami}($self) ignored"
 	if @_ > 4;
     if ($noundef) {
-	return $defval unless defined(${*$self}{Parms}{$key});
+	return $defval unless defined($ {*$self}{Parms}{$key});
     }
     else {
-	return $defval unless exists(${*$self}{Parms}{$key});
+	return $defval unless exists($ {*$self}{Parms}{$key});
     }
-    ${*$self}{Parms}{$key};
+    $ {*$self}{Parms}{$key};
 }
 
-sub getparams			# $self, \@keys [, $noundef]; returns (%hash)
+#& getparams($self, \@keys [, $noundef]) : (%hash)
+#+attrs locked method
+sub getparams
 {
-    use attrs 'locked', 'method';
     my $whoami = $_[0]->_trace(\@_,2);
     my ($self,$aref,$noundef) = @_;
     croak "Insufficient arguments to ${whoami}($self), called"
@@ -625,14 +700,14 @@ sub getparams			# $self, \@keys [, $noundef]; returns (%hash)
     if (wantarray) {
 	# the actual list is wanted -- see which way to do it
 	if ($noundef) {
-	    map {defined ${*$self}{Parms}{$_} ?
-		    ($_, ${*$self}{Parms}{$_}) :
+	    map {defined $ {*$self}{Parms}{$_} ?
+		    ($_, $ {*$self}{Parms}{$_}) :
 		    () 
 		} @$aref;
 	}
 	else {
-	    map {exists ${*$self}{Parms}{$_} ?
-		    ($_, ${*$self}{Parms}{$_}) :
+	    map {exists $ {*$self}{Parms}{$_} ?
+		    ($_, $ {*$self}{Parms}{$_}) :
 		    () 
 		} @$aref;
 	}
@@ -640,42 +715,44 @@ sub getparams			# $self, \@keys [, $noundef]; returns (%hash)
     else {
 	# the list count is wanted -- see which way to do it
 	if ($noundef) {
-	    2 * grep {defined ${*$self}{Parms}{$_}} @$aref;
+	    2 * grep {defined $ {*$self}{Parms}{$_}} @$aref;
 	}
 	else {
-	    2 * grep {exists ${*$self}{Parms}{$_}} @$aref;
+	    2 * grep {exists $ {*$self}{Parms}{$_}} @$aref;
 	}
     }
 #    my @ret;
 #    foreach (@$aref) {
-#	push(@ret, $_, ${*$self}{Parms}{$_})
-#	    if exists(${*$self}{Parms}{$_}) and
-#		!$noundef || defined(${*$self}{Parms}{$_});
+#	push(@ret, $_, $ {*$self}{Parms}{$_})
+#	    if exists($ {*$self}{Parms}{$_}) and
+#		!$noundef || defined($ {*$self}{Parms}{$_});
 #    }
 #    wantarray ? @ret : 0+@ret;
 }
     
 
-sub condition			# $self ; return not useful
+#& condition($self)
+#+attrs locked method
+sub condition
 {
-    use attrs 'locked', 'method';
     my $self = $_[0];
     my $sel = SelectSaver->new;
     CORE::select($self);
     $| = 1;
     # $\ = "\015\012";
     binmode($self);
-    vec(${*$self}{FHVec} = '', CORE::fileno($self), 1) = 1;
+    vec($ {*$self}{FHVec} = '', CORE::fileno($self), 1) = 1;
     $self->setparams({'blocking'=>$self->getparam('blocking',1,1)},0,1);
 }
 
-sub open			# $self [, @ignore] ; returns boolean
+#& open($self [, @ignore]) : boolean
+#+attrs locked method
+sub open
 {
-    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,2);
     my $self = shift;
     $self->stopio if $self->isopen;
-    my($pf,$af,$type,$proto) = \@{${*$self}{Parms}}{qw(PF AF type proto)};
+    my($pf,$af,$type,$proto) = \@{$ {*$self}{Parms}}{qw(PF AF type proto)};
     $$pf = PF_UNSPEC unless defined $$pf;
     $$af = AF_UNSPEC unless defined $$af;
     $$type = 0 unless defined $$type;
@@ -686,7 +763,7 @@ sub open			# $self [, @ignore] ; returns boolean
     elsif (($$af == AF_UNSPEC) && ($$pf != PF_UNSPEC)) {
 	$$af = $$pf;
     }
-    if (${*$self}{'isopen'} = socket($self,$$pf,$$type,$$proto)) {
+    if ($ {*$self}{'isopen'} = socket($self,$$pf,$$type,$$proto)) {
 	# keep stdio output buffers out of my way
 	$self->condition;
     }
@@ -699,18 +776,19 @@ sub open			# $self [, @ignore] ; returns boolean
 my %connok = ( EISCONN,1 );
 my %connip = ( EWOULDBLOCK,1 , EINPROGRESS,1 , EAGAIN,1 , EALREADY,1 );
 
-sub _valconnect			# $self, $addr, $timeout ; returns boolean
+#& _valconnect($self, $addr, $timeout) : boolean
+sub _valconnect
 {
     my ($self,$addr,$timeout) = @_;
-    my ($fhvec,$rdvec,$wrvec,$nfound) = ${*$self}{FHVec};
+    my ($fhvec,$rdvec,$wrvec,$nfound) = $ {*$self}{FHVec};
     # don't block if socket is non-blocking
     $timeout = 0 if
-	!defined $timeout && !${*$self}{Parms}{'blocking'};
+	!defined $timeout && !$ {*$self}{Parms}{'blocking'};
     # assume caller checked for ->isconnecting
     $rdvec = $wrvec = $fhvec;
     $nfound = CORE::select($rdvec, $wrvec, undef, $timeout);
     # If socket is 'ready', then the connect is complete (possibly failed).
-    ${*$self}{'isconnecting'} = 0 if $nfound;
+    $ {*$self}{'isconnecting'} = 0 if $nfound;
     # If we don't think the connect has finished, just try to invent a
     # reasonable error and bug out.
     if (!$nfound) {
@@ -720,7 +798,7 @@ sub _valconnect			# $self, $addr, $timeout ; returns boolean
     my $rval;
     # If we can try to find out with SO_ERROR, give it a shot.
     # This won't give valid results with SOCKS.  Tough.
-    if (${*$self}{Sockopts}{'SOL_SOCKET'}{'SO_ERROR'}) {
+    if ($ {*$self}{Sockopts}{'SOL_SOCKET'}{'SO_ERROR'}) {
 	# Don't try the getsockopt if the connect is still pending!
 	# Solaris 2.5.1 (at least) hangs the getsockopt in that case.
 	# The connect is complete -- figure out whether we believe
@@ -740,7 +818,7 @@ sub _valconnect			# $self, $addr, $timeout ; returns boolean
     # we can't use that unless we have a stream socket.  SOCK_SEQPACKET and
     # real datagram services would lose their initial transmission to a
     # read check.  So, we try it here only if we think we are SOCK_STREAM.
-    my $type = ${*$self}{Parms}{'type'};
+    my $type = $ {*$self}{Parms}{'type'};
     if ($type && $type==SOCK_STREAM) {
 	my $buf = "";
 	$rval = sysread($self,$buf,0);
@@ -755,15 +833,16 @@ sub _valconnect			# $self, $addr, $timeout ; returns boolean
     $rval;
 }
 
-sub _tryconnect			# $self, $addr, $timeout ; returns boolean
+#& _tryconnect($self, $addr, $timeout) : boolean
+sub _tryconnect
 {
     my ($self,$addr,$timeout) = @_;
-    if (${*$self}{'isconnecting'}) {
-	if (${*$self}{Parms}{'dstaddr'} and
-	    (${*$self}{Parms}{'dstaddr'} ne $addr))
+    if ($ {*$self}{'isconnecting'}) {
+	if ($ {*$self}{Parms}{'dstaddr'} and
+	    ($ {*$self}{Parms}{'dstaddr'} ne $addr))
 	{
 	    carp "$self->_tryconnect: different destination address while ->isconnecting!"
-		if ${*$self}{Parms}{'debug'} > 2;
+		if $ {*$self}{Parms}{'debug'} > 2;
 	    $self->stopio;
 	    return undef unless $self->open;
 	    if ($self->getparam('srcaddr') || $self->getparam('srcaddrlist')
@@ -777,21 +856,32 @@ sub _tryconnect			# $self, $addr, $timeout ; returns boolean
     # So, if we're retrying a non-blocking connect, check by other means
     # before trying to use a second connect to get the status.
     # Warning: This will not work with SOCKS.
-    unless (${*$self}{'isconnecting'}) {
+    unless ($ {*$self}{'isconnecting'}) {
+	# For Solaris, if datagram socket, don't connect if not bound.
+	if ($ {*$self}{Parms}{netgen_fakeconnect}) {
+	    if (!$self->isbound) {
+		$ {*$self}{Parms}{'dstaddr'} = $addr;
+		return 1;
+	    }
+	    else {
+		$self->delparams(['netgen_fakeconnect']);
+	    }
+	}
 	my $rval = CORE::connect($self,$addr);
 	return $rval if $rval;
 	return 1  if $connok{0+$!};
 	return $rval unless $connip{0+$!};
-	${*$self}{'isconnecting'} = 1;
-	${*$self}{Parms}{'dstaddr'} = $addr;
+	$ {*$self}{'isconnecting'} = 1;
+	$ {*$self}{Parms}{'dstaddr'} = $addr;
 	return $rval unless defined $timeout;
     }
     &_valconnect;
 }
 
-sub connect			# $self, [@ignored] ; returns boolean
+#& connect($self, [@ignored]) : boolean
+#+attrs locked method
+sub connect
 {
-    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,2);
     my $self = shift;
     my $hval = *$self{HASH};
@@ -842,9 +932,10 @@ sub connect			# $self, [@ignored] ; returns boolean
     $self->isconnected;
 }
 
-sub getsockinfo			# $self, [@ignored] ; returns ?dest sockaddr?
+#& getsockinfo($self, [@ignored]) : ?dest sockaddr?
+#+attrs locked method
+sub getsockinfo
 {
-    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,4);
     my $self = shift;
     my ($sad,$dad);
@@ -862,9 +953,10 @@ sub getsockinfo			# $self, [@ignored] ; returns ?dest sockaddr?
 
 my %to_shut_flags = (SHUT_RD,1, SHUT_WR,2, SHUT_RDWR,3);
 
-sub shutdown			# $self [, $how=SHUT_RDWR] ; returns boolean
+#& shutdown($self [, $how=SHUT_RDWR]) : boolean
+#+attrs locked method
+sub shutdown
 {
-    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,3);
     my $self = shift;
     return 1 unless $self->isconnected or $self->isconnecting;
@@ -874,11 +966,12 @@ sub shutdown			# $self [, $how=SHUT_RDWR] ; returns boolean
     my $xhow = $to_shut_flags{$how};
     ($how = SHUT_RDWR), ($xhow = 3)
 	unless $xhow;
-    my $was = (${*$self}{'wasconnected'} |= $xhow);
+    my $was = ($ {*$self}{'wasconnected'} |= $xhow);
     my $rval = CORE::shutdown($self, $how);
     local $!;	# preserve shutdown()'s errno
-    ${*$self}{'isconnecting'} = ${*$self}{'isconnected'} = 0 if $was == 3 or
-	(!defined(getpeername($self)) && (${*$self}{'wasconnected'} = 3));
+    $ {*$self}{'isconnecting'} = $ {*$self}{'isconnected'} = 0 if
+	$was == 3 or
+	(!defined(getpeername($self)) && ($ {*$self}{'wasconnected'} = 3));
     $rval;
 }
 
@@ -887,9 +980,10 @@ my @CloseVars = qw(FHVec isopen isbound didlisten wasconnected isconnected
 		   isconnecting);
 my @CloseKeys = qw(srcaddr dstaddr);
 
-sub close			# $self [, @ignored] ; returns boolean
+#& close($self [, @ignored]) : boolean
+#+attrs locked method
+sub close
 {
-    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,3);
     my $self = shift;
     $self->shutdown if $self->isopen;
@@ -899,9 +993,10 @@ sub close			# $self [, @ignored] ; returns boolean
 sub CLOSE;
 *CLOSE = \&close;
 
-sub stopio			# $self [, @ignored] ; returns boolean
+#& stopio($self [, @ignored]) : boolean
+#+attrs locked method
+sub stopio
 {
-    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,4);
     my $self = shift;
     my $wasopen = $self->isopen;
@@ -916,7 +1011,11 @@ sub stopio			# $self [, @ignored] ; returns boolean
 # Warning!  No intercepting of SIGPIPE is done, so the output routines
 # can abort the program.
 
-sub send			# $self, $buf, [$flags, [$where]] : boolean
+# Note that (at least) Solaris 2.5.1 doesn't like connect() on datagram
+# sockets, at least not if they're not bound.  So, we fake it here.
+
+#& send($self, $buf, [$flags, [$where]]) : boolean
+sub send
 {
     my $whoami = $_[0]->_trace(\@_,3);
     my($self,$buf,$flags,$whither) = @_;
@@ -925,20 +1024,31 @@ sub send			# $self, $buf, [$flags, [$where]] : boolean
     $flags = 0 unless defined $flags;
     carp "Excess arguments to ${whoami} ignored" if @_ > 4;
     # send(2) requires connect(2)
-    unless (defined $whither or $self->isconnected) {
+    if (!(defined $whither or $self->isconnected)) {
 	if ($self->getparams([qw(dstaddrlist dstaddr)],1) > 0) {
 	    return undef unless $self->connect;
+	    if ($ {*$self}{Parms}{netgen_fakeconnect}) {
+		$whither = $ {*$self}{Parms}{'dstaddr'};
+	    }
 	}
 	else {
 	    if ($flags & MSG_OOB) {
-		$whither = ${*$self}{lastOOBFrom};
+		$whither = $ {*$self}{lastOOBFrom};
 	    }
 	    else {
-		$whither = ${*$self}{lastRegFrom};
+		$whither = $ {*$self}{lastRegFrom};
 	    }
 # Can't short-circuit this--need to get the right errno value.
 #	    return undef unless defined $whither or $self->connect;
 	}
+    }
+    elsif ($self->isconnected && $ {*$self}{Parms}{netgen_fakeconnect}) {
+	if (defined $whither) {
+	    # *sigh* -- what errno should I return?
+	    $! = EISCONN || EINVAL;
+	    return undef;
+	}
+	$whither = $ {*$self}{Parms}{'dstaddr'};
     }
     return getsockopt($self,SOL_SOCKET,SO_TYPE) unless
 	$self->isopen;		# generate EBADF return if not open
@@ -950,7 +1060,8 @@ sub send			# $self, $buf, [$flags, [$where]] : boolean
 sub SEND;
 *SEND = \&send;
 
-sub put				# $self, @stuff ; returns boolean
+#& put($self, @stuff) : boolean
+sub put
 {
     $_[0]->_trace(\@_,3);
     my($self,@args) = @_;
@@ -962,9 +1073,10 @@ sub PRINT;			# avoid -w error
 sub print;			# avoid -w error
 *print = \&put;			# maybe-useful alias
 
-sub ckeof			# $self ; returns boolean
+#& ckeof($self) : boolean
+#+attrs locked method
+sub ckeof
 {
-    use attrs 'locked', 'method';
     my $saverr = $!+0;
     local $!;			# preserve this over fcntl() and such
     my $whoami = $_[0]->_trace(\@_,3);
@@ -988,9 +1100,10 @@ sub ckeof			# $self ; returns boolean
     1;				# wrong errno or blocking
 }
 
-sub recv			# $self, [$maxlen, [$flags, [$from]]] ;
-{				# returns $buf or undef
-    use attrs 'locked', 'method';
+#& recv($self, [$maxlen, [$flags, [$from]]]) : {$buf | undef}
+#+attrs locked method
+sub recv
+{
     my $whoami = $_[0]->_trace(\@_,3);
     my($self,$maxlen,$flags) = @_;
     my($buf,$from,$xfrom) = '';
@@ -1004,16 +1117,16 @@ sub recv			# $self, [$maxlen, [$flags, [$from]]] ;
 	(stat $self)[11] || 8192
 	    unless $maxlen;
     $flags = 0 unless defined $flags;
-    if (defined(${*$self}{sockLineBuf}) && !$flags) {
-	$buf = ${*$self}{sockLineBuf};
+    if (defined($ {*$self}{sockLineBuf}) && !$flags) {
+	$buf = $ {*$self}{sockLineBuf};
 	if (length($buf) > $maxlen) {
-	    ${*$self}{sockLineBuf} = substr($buf, $maxlen);
+	    $ {*$self}{sockLineBuf} = substr($buf, $maxlen);
 	    substr($buf, $maxlen) = '';
 	}
 	else {
-	    ${*$self}{sockLineBuf} = undef;
+	    undef $ {*$self}{sockLineBuf};
 	}
-	$_[3] = ${*$self}{lastRegFrom} if @_ > 3;
+	$_[3] = $ {*$self}{lastRegFrom} if @_ > 3;
 	return $buf;
     }
     $! = 0;			# ease EOF checking
@@ -1021,13 +1134,13 @@ sub recv			# $self, [$maxlen, [$flags, [$from]]] ;
     my $errnum = $!+0;		# preserve possible recv failure
     $xfrom = getpeername($self) if defined($from) and $from eq '';
     $from = $xfrom if defined($xfrom) and $from eq '' and $xfrom ne '';
-    ${*$self}{lastFrom} = $from;
+    $ {*$self}{lastFrom} = $from;
     $_[3] = $from if @_ > 3;
     if ($flags & MSG_OOB) {
-	${*$self}{lastOOBFrom} = $from;
+	$ {*$self}{lastOOBFrom} = $from;
     }
     else {
-	${*$self}{lastRegFrom} = $from;
+	$ {*$self}{lastRegFrom} = $from;
     }
     $! = $errnum;		# restore possible failure in case we return
     return undef if !defined $from and (EOF_NONBLOCK or $errnum != $eagain);
@@ -1046,9 +1159,10 @@ sub recv			# $self, [$maxlen, [$flags, [$from]]] ;
 sub get;			# (helps with -w)
 *get = \&recv;			# a name that works for indirect references
 
-sub getline			# $self ; returns like scalar(<$fhandle>)
+#& getline($self) : like scalar(<$fhandle>)
+#+attrs locked method
+sub getline
 {
-    use attrs 'locked', 'method';
     my $whoami = $_[0]->_trace(\@_,4);
     carp "Excess arguments to ${whoami} ignored"
 	if @_ > 1;
@@ -1056,8 +1170,8 @@ sub getline			# $self ; returns like scalar(<$fhandle>)
     croak "Invalid arguments to ${whoami}, called"
 	if !@_ or !ref($self);
     my ($rval, $buf, $tbuf);
-    $buf = ${*$self}{sockLineBuf};
-    ${*$self}{sockLineBuf} = undef; # keep get from returning this again
+    $buf = $ {*$self}{sockLineBuf};
+    undef $ {*$self}{sockLineBuf}; # keep get from returning this again
     if (!defined($/)) {
 	$rval = <$self>;	# return all of the input
 	# what about non-blocking sockets here?!?
@@ -1088,7 +1202,7 @@ sub getline			# $self ; returns like scalar(<$fhandle>)
 	$tbuf = substr($buf, length($rval));
 	# duplicate annoyance of paragraph mode
 	$tbuf =~ s/^\n+//s if $/ eq '';
-	${*$self}{sockLineBuf} = $tbuf if length($tbuf);
+	$ {*$self}{sockLineBuf} = $tbuf if length($tbuf);
 	return $rval;
     }
     else {
@@ -1104,34 +1218,39 @@ sub DESTROY
     $_[0]->_trace(\@_,1);
 }
 
-sub isopen			# $self [, @ignored] ; returns boolean
+#& isopen($self [, @ignored]) : boolean
+sub isopen
 {
-    #$_[0]->_trace(\@_,4," - ".(${*{$_[0]}}{'isopen'} ? "yes" : "no"));
-    ${*{$_[0]}}{'isopen'};
+    #$_[0]->_trace(\@_,4," - ".($ {*{$_[0]}}{'isopen'} ? "yes" : "no"));
+    $ {*{$_[0]}}{'isopen'};
 }
 
-sub isconnected			# $self [, @ignored] ; returns boolean
+#& isconnected($self [, @ignored]) : boolean
+sub isconnected
 {
-    #$_[0]->_trace(\@_,4," - ".(${*{$_[0]}}{'isconnected'} ? "yes" : "no"));
-    ${*{$_[0]}}{'isconnected'};
+    #$_[0]->_trace(\@_,4," - ".($ {*{$_[0]}}{'isconnected'} ? "yes" : "no"));
+    $ {*{$_[0]}}{'isconnected'};
 }
 
-sub isconnecting		# $self [, @ignored] ; returns boolean
+#& isconnecting($self [, @ignored]) : boolean
+sub isconnecting
 {
-    #$_[0]->_trace(\@_,4," - ".(${*{$_[0]}}{'isconnecting'} ? "yes" : "no"));
-    ${*{$_[0]}}{'isconnecting'};
+    #$_[0]->_trace(\@_,4," - ".($ {*{$_[0]}}{'isconnecting'} ? "yes" : "no"));
+    $ {*{$_[0]}}{'isconnecting'};
 }
 
-sub wasconnected		# $self [, @ignored] ; returns boolean
+#& wasconnected($self [, @ignored]) : boolean
+sub wasconnected
 {
-    #$_[0]->_trace(\@_,4," - ".(${*{$_[0]}}{'wasconnected'} ? "yes" : "no"));
-    ${*{$_[0]}}{'wasconnected'};
+    #$_[0]->_trace(\@_,4," - ".($ {*{$_[0]}}{'wasconnected'} ? "yes" : "no"));
+    $ {*{$_[0]}}{'wasconnected'};
 }
 
-sub isbound			# $self [, @ignored] ; returns boolean
+#& isbound($self [, @ignored]) : boolean
+sub isbound
 {
-    #$_[0]->_trace(\@_,4," - ".(${*{$_[0]}}{'isbound'} ? "yes" : "no"));
-    ${*{$_[0]}}{'isbound'};
+    #$_[0]->_trace(\@_,4," - ".($ {*{$_[0]}}{'isbound'} ? "yes" : "no"));
+    $ {*{$_[0]}}{'isbound'};
 }
 
 1;
@@ -1157,10 +1276,14 @@ implementors of other modules.  To this end, several housekeeping
 functions are provided for the use of derived classes, as well as
 several inheritable methods.  The C<Net::Gen> class does inherit
 from C<IO::Handle>, thus making its methods available.  See
-L<IO::Handle/METHODS> for details on those methods.
+L<IO::Handle/METHODS> for details on those methods.  However, some
+of those methods are overridden, so be sure to check the methods
+described below to be sure.  (In particular, the C<fcntl> and C<ioctl>
+methods are overridden.)
 
 Also provided in this distribution are C<Net::Inet>, C<Net::TCP>,
-C<Net::UDP>, and C<Net::UNIX>,
+C<Net::TCP::Server>,
+C<Net::UDP>, C<Net::UNIX>, and C<Net::UNIX::Server>,
 which are layered atop C<Net::Gen>.
 
 =head2 Public Methods
@@ -1168,7 +1291,7 @@ which are layered atop C<Net::Gen>.
 The public methods are listed alphabetically below.  Here is an
 indication of their functional groupings:
 
-=over
+=over 4
 
 =item Creation and setup
 
@@ -1206,7 +1329,7 @@ C<format_addr>, C<format_local_addr>, C<format_remote_addr>
 =item Tied filehandle support
 
 C<SEND>, C<PRINT>, C<PRINTF>, C<RECV>, C<READLINE>, C<READ>, C<GETC>,
-C<WRITE>, C<CLOSE>, C<EOF>,
+C<WRITE>, C<CLOSE>, C<EOF>, C<BINMODE>, C<FILENO>,
 C<TIEHANDLE>
 
 =item Tied scalar support
@@ -1218,13 +1341,13 @@ C<FETCH>, C<STORE>, C<TIESCALAR>
 Any of the I<keys> known to the C<getparam> and C<setparams> methods
 may be used as an I<accessor> function.  See L<"Known Object Parameters">
 below, and the related sections in the derived classes.  For an example,
-see L</blocking> below.
+see L<"blocking"> below.
 
 =back
 
 The descriptions, listed alphabetically:
 
-=over
+=over 4
 
 =item accept
 
@@ -1273,6 +1396,15 @@ the foregoing discussion, you may be in trouble.  Don't panic
 until you've checked the discussion of binding in the derived
 class you're using, however.
 
+=item BINMODE
+
+Usage:
+
+    binmode(TIEDFH);
+
+A no-op provided for the tied file handle support of perl 5.005_57.
+The sockets managed by this module are always set binmode() anyway.
+
 =item blocking
 
 Usage:
@@ -1281,8 +1413,8 @@ Usage:
     $oldblocking = $obj->blocking($newvalue);
 
 The C<blocking> method is an example of an I<accessor> method.  The
-above usage examples are (effectively) equivalent to the following calls,
-respectively:
+above usage examples are (effectively) equivalent to the following code
+snippets, respectively:
 
     $isblocking = $obj->getparam('blocking');
 
@@ -1325,8 +1457,8 @@ Usage:
 an open() or accept().  (In other words, the C<open> and C<accept>
 methods call the C<condition> method.)
 Sets the socket to be autoflushed and marks it binmode().
-Attempts to set the socket blocking or non-blocking, depending on the
-state of the object's C<blocking> parameter.  (It may update that parameter
+This method attempts to set the socket blocking or non-blocking, depending on
+the state of the object's C<blocking> parameter.  (It may update that parameter
 if the socket's state cannot be made to match.)
 No useful value is returned.
 
@@ -1376,7 +1508,7 @@ the C<dstaddrlist> object parameter.  This is so that the re-try logic
 for connections in progress will be more useful.
 
 If, on entry to the C<connect> method, the object is already marked as
-having a connection in progress (C<$obj->isconnecting> returns true),
+having a connection in progress (C<$obj-E<gt>isconnecting> returns true),
 then the connection will be re-tried with a timeout of 0 to see whether it
 has succeeded in the meanwhile.  The appropriate success/fail condition
 for that check will be returned, with no further processing of the
@@ -1430,7 +1562,9 @@ Provided for tied filehandle support.  Determines whether select()
 says that a read would work immediately, and tries it if so.
 If the read was tried and returned an eof condition, 1 is returned.
 The return is 0 on read errors or when select() said that a read
-would block.
+would block.  Note that this interferes with use of the select()
+built-in, since it has to buffer the read data if the read was
+successful.
 
 =item fcntl
 
@@ -1448,16 +1582,19 @@ Usage:
 
 Returns a vector suitable as an argument to the 4-argument select()
 call.  This is for use in doing selects with multiple I/O streams.
-See also L</select>.
+See also L<"select">.
 
 =item fileno
+
+=item FILENO
 
 Usage:
 
     $fnum = $obj->fileno;
+    $fnum = fileno(TIEDFH);
 
 Returns the actual file descriptor number for the underlying socket.
-See L</getfh> for some restrictions as to the safety of using this.
+See L<"getfh"> for some restrictions as to the safety of using this.
 
 =item format_addr
 
@@ -1492,7 +1629,7 @@ associated with the object.
 =item get
 
 This is just a sugar-coated way to call the C<recv> method which will
-work with indirect-object syntax.  See L</recv> for details.
+work with indirect-object syntax.  See L<"recv"> for details.
 
 =item GETC
 
@@ -1519,26 +1656,29 @@ calls and traditional socket-level I/O.  However, if you're sure you can
 keep things straight, here are the rules under which it's safe to use the
 embedded filehandle:
 
-=over
+=over 6
 
-=item Z<>
+=item *
 
 Don't use perl's own C<stdio> calls.  Stick to sysread() and recv().
 
-=item Z<>
+=item *
 
 Don't use the object's C<getline> method, since that stores a read-ahead
 buffer in the object which only the object's own C<get>/C<recv> and
 C<getline> methods know to return to you.  (The object's C<select> method
 knows about the buffer enough to tell you that a read will succeed if
-there's saved data, though.)
+there's saved data, though.)  Similarly, avoid the object's C<EOF> method.
 
-=item Z<>
+=item *
 
 Please don't change the state of the socket behind my back.  That
 means no close(), shutdown(), connect(), bind(), or listen()
 built-ins.  Use the corresponding methods instead, or all bets
-are off.
+are off.  Of course, if you're only using this module to get the
+connect() or bind() processing, and you're going to discard the object
+after you've done your I/O, then it's OK to use the built-ins for I/O.
+Just don't expect my code to know what you did behind my back.
 
 =back
 
@@ -1588,14 +1728,16 @@ Usage:
 
     %hash = $obj->getparams(\@keynames, $noundefs);
     %hash = $obj->getparams(\@keynames);
+    $llen = $obj->getparams(\@keynames, $noundefs);
+    $llen = $obj->getparams(\@keynames);
 
 Returns a hash as a list (I<not> a reference) consisting of the key-value
 pairs corresponding to the specified keyname list.  Only those
 keys which exist in the current parameter list of the object will
 be returned.  If the C<$noundefs> parameter is present and true,
 then existing keys with undefined values will be suppressed as with
-non-existent keys.  If called in a scalar context, returns the
-number of values which would have been returned in array context.
+non-existent keys.  If called in scalar context, returns the
+number of values which would have been returned in list context.
 (This is twice the number of key-value pairs, in case that wasn't clear.)
 
 =item getropt
@@ -1609,7 +1751,7 @@ Returns the raw value from a call to the getsockopt() builtin.
 If both the C<$level> and C<$option> arguments are given as
 numbers, the getsockopt() call will be made even if the given
 socket option is not registered with the object.  Otherwise, the
-return value for unregistered objects will be undef with the
+return value for unregistered options will be undef with the
 value of $! set as described below for the C<getsopt> method.
 
 =item gets
@@ -1636,12 +1778,12 @@ object.  If a getsockname() call on the associated filehandle
 succeeds, the C<srcaddr> object parameter is set to that returned
 sockaddr.  If a getpeername() call on the associated filehandle
 succeeds, the C<dstaddr> parameter is set to that returned
-sockaddr.  In a scalar context, if both socket addresses were
+sockaddr.  In scalar context, if both socket addresses were
 found, the getpeername() value is returned, otherwise C<undef> is
-returned.  In a list context, the getsockname() and getpeername()
+returned.  In list context, the getsockname() and getpeername()
 values are returned, unless both are undefined.
 
-Derived classes normally replace this method with one which
+Derived classes normally override this method with one which
 provides friendlier return information appropriate to the derived
 class, and which establishes more of the object parameters.
 
@@ -1659,7 +1801,7 @@ socket options in L</initsockopts> below.
 
 Since registered socket options are known by name as well as by
 their level and option values, it is possible to make calls using
-only option name.  If the name is not registered with the object,
+only the option name.  If the name is not registered with the object,
 the return value is the same as that for C<getsopt $obj -1,-1>,
 which is an empty return array and $! set appropriately (should
 be C<EINVAL>).
@@ -1840,7 +1982,8 @@ Usage:
     $ok = $obj->PRINTF($format, @args);
     $ok = printf TIEDFH $format, @args;
 
-This method uses the printf() builtin to send the @args avlues to the
+This method uses the sprintf() builtin and the C<PRINT> method
+to send the @args values to the
 filehandle associated with the object, using the $format format string.
 It exists for the support of tied filehandles.
 
@@ -1892,7 +2035,7 @@ Usage:
 
 This method supports the use of the E<lt>E<gt> (or readline()) operator
 on tied filehandles.  In scalar context, it uses the C<getline> method.
-In array context, it reads all remaining input on the socket (until eof, which
+In list context, it reads all remaining input on the socket (until eof, which
 makes this unsuitable for connectionless socket types such as UDP), and
 splits it into lines based on the current value of the $/ variable.
 The return value is unreliable for non-blocking sockets.
@@ -1920,7 +2063,7 @@ Usage:
 
 This method calls the recv() builtin, and returns a buffer (if
 one is received) or C<undef> on eof or error.  If an eof is seen
-on the socket (as checked with its C<ckeof> method), then C<$!>
+on the socket (as checked with its C<ckeof> method), then $!
 will be 0 on return.  If the C<$whence> argument is supplied, it
 will be filled in with the sending socket address if possible.
 If the C<$flags> argument is not supplied, it defaults to 0.  If
@@ -1962,7 +2105,7 @@ Usage:
 This method calls the send() builtin (three- or four-argument
 form).  The C<$flags> parameter is defaulted to 0 if not
 supplied.  If the C<$destsockaddr> value is missing or undefined,
-and the socket is connected (C<$obj->isconnected> returns true), then
+and the socket is connected (C<$obj-E<gt>isconnected> returns true), then
 the three-argument form of the send() builtin will be used.  Otherwise, the
 C<$destsockaddr> parameter will be defaulted from the last recv()
 peer address for the same kind of message (depending on whether
@@ -2073,7 +2216,7 @@ the object.  This method is a no-op, returning 1, if the
 filehandle is not connected.  The C<$how> parameter is as per the
 shutdown() builtin, which in turn should be as described in the
 shutdown(2) manpage.  If the C<$how> parameter is not present,
-it is assumed to be C<SHUT_RDWR>(2).
+it is assumed to be C<SHUT_RDWR> (which is 2 on most UNIX systems).
 
 Returns 1 if it has nothing to do, otherwise propagates the return from
 the shutdown() builtin.
@@ -2110,9 +2253,9 @@ Usage:
 
     $was = $obj->wasconnected;
 
-Returns true for if the object has had a successful connect() completion
+Returns true if the object has had a successful connect() completion
 since it was last opened.  Returns false after a close() or on a new
-object.
+object.  Also returns true if C<$obj-E<gt>isconnecting> is true.
 
 =item WRITE
 
@@ -2135,7 +2278,7 @@ Yes, I know that Perl doesn't really have protected methods as
 such.  However, these are the methods which are only useful for
 implementing derived classes, and not for the general user.
 
-=over
+=over 4
 
 =item ckeof
 
@@ -2190,15 +2333,15 @@ value is an array ref with the following elements:
     [pack template, option value, option level, pack array len]
 
 Such a completed optiondesc is one of the required arguments to
-the C<registerOptions> method (see below).
-
-=item registerOptions
+the C<register_options> method (see below).
 
 =item register_options
 
+=item registerOptions
+
 Usage:
 
-    $obj->registerOptions($levelname, $level, \%optiondesc);
+    $obj->register_options($levelname, $level, \%optiondesc);
 
 This method attaches the socket options specified by the given
 option descriptions hash ref and the given level (as text and as
@@ -2209,16 +2352,16 @@ which get registered.
 
 Example:
 
-    $self->registerOptions('SOL_SOCKET', SOL_SOCKET+0, \%sockopts);
-
-=item registerParamHandlers
+    $self->register_options('SOL_SOCKET', SOL_SOCKET+0, \%sockopts);
 
 =item register_param_handlers
 
+=item registerParamHandlers
+
 Usage:
 
-    $obj->registerParamHandlers(\@keynames, \@keyhandlers);
-    $obj->registerParamHandlers(\%key_handler_pairs);
+    $obj->register_param_handlers(\@keynames, \@keyhandlers);
+    $obj->register_param_handlers(\%key_handler_pairs);
 
 This method registers the referenced keynames (if they haven't
 already been registered), and establishes the referenced
@@ -2231,13 +2374,13 @@ being called from the C<delparams> method).  See the other
 discussion of validation routines in the C<setparams> method
 description, above.
 
-=item registerParamKeys
-
 =item register_param_keys
+
+=item registerParamKeys
 
 Usage:
 
-    $obj->registerParamKeys(\@keynames);
+    $obj->register_param_keys(\@keynames);
 
 This method registers the referenced keynames as valid parameters
 for C<setparams> and the like for this object.  The C<new>
@@ -2265,7 +2408,7 @@ functions as they're referenced.  See L<"blocking"> above for an example.
 These are the socket options known to the C<Net::Gen> module
 itself:
 
-=over
+=over 4
 
 =item Z<>
 
@@ -2274,18 +2417,24 @@ C<SO_BROADCAST>,
 C<SO_DEBUG>,
 C<SO_DONTROUTE>,
 C<SO_ERROR>,
+C<SO_EXPANDED_RIGHTS>,
+C<SO_FAMILY>,
 C<SO_KEEPALIVE>,
+C<SO_LINGER>,
 C<SO_OOBINLINE>,
-C<SO_REUSEADDR>,
-C<SO_USELOOPBACK>,
+C<SO_PAIRABLE>,
 C<SO_RCVBUF>,
-C<SO_SNDBUF>,
-C<SO_RCVTIMEO>,
-C<SO_SNDTIMEO>,
 C<SO_RCVLOWAT>,
+C<SO_RCVTIMEO>,
+C<SO_REUSEADDR>,
+C<SO_REUSEPORT>,
+C<SO_SNDBUF>,
 C<SO_SNDLOWAT>,
+C<SO_SNDTIMEO>,
+C<SO_STATE>,
 C<SO_TYPE>,
-C<SO_LINGER>
+C<SO_USELOOPBACK>,
+C<SO_XSE>
 
 =back
 
@@ -2294,11 +2443,11 @@ C<SO_LINGER>
 These are the object parameters registered by the C<Net::Gen>
 module itself:
 
-=over
+=over 4
 
 =item AF
 
-Address family (will default from PF, and vice versa)
+Address family (will default from PF, and vice versa).
 
 =item blocking
 
@@ -2311,11 +2460,11 @@ them may surprise you.
 
 =item dstaddr
 
-The result of getpeername(), or an ephemeral proposed connect() address
+The result of getpeername(), or an ephemeral proposed connect() address.
 
 =item dstaddrlist
 
-A reference to an array of socket addresses to try for connect()
+A reference to an array of socket addresses to try for connect().
 
 =item maxqueue
 
@@ -2323,26 +2472,43 @@ An override of the default maximum queue depth parameter for
 listen().  This will be used if the $maxqueue argument to
 listen() is not supplied.
 
+=item netgen_fakeconnect
+
+This parameter is set true to keep the C<connect> method from
+really calling the connect() built-in if the socket has not
+had an source address specified and it is not bound.  This
+is used by the C<Net::UNIX> and C<Net::UDP> modules to keep
+from exercising a bug in some socket implementations with respect
+to how datagram sockets are handled.  (This was specifically done
+in response to quirks of Solaris 2.5.1.)  Instead, the C<connect>
+method simply sets the C<dstaddr> object parameter, which the C<send>
+method will respect.
+
 =item PF
 
-Protocol family for this object
+Protocol family for this object.
 
 =item proto
 
-The protocol to pass to the socket() call (often defaulted to 0)
+The protocol to pass to the socket() call (often defaulted to 0).
 
 =item reuseaddr
 
 A boolean, indicating whether the C<bind> method should do a
-setsockopt() call to set C<SO_REUSEADDR> to 1
+setsockopt() call to set C<SO_REUSEADDR> to 1.
+
+=item reuseport
+
+A boolean, indicating whether the C<bind> method should do a
+setsockopt() call to set C<SO_REUSEPORT> to 1.
 
 =item srcaddr
 
-The result of getsockname(), or an ephemeral proposed bind() address
+The result of getsockname(), or an ephemeral proposed bind() address.
 
 =item srcaddrlist
 
-A reference to an array of socket addresses to try for bind()
+A reference to an array of socket addresses to try for bind().
 
 =item timeout
 
@@ -2358,7 +2524,7 @@ The socket type to create (C<SOCK_STREAM>, C<SOCK_DGRAM>, etc.)
 
 =head2 Non-Method Subroutines
 
-=over
+=over 4
 
 =item pack_sockaddr
 
@@ -2422,7 +2588,7 @@ sysopen() or for eventual use in fcntl().
 
 =head2 Exports
 
-=over
+=over 4
 
 =item default
 
@@ -2430,33 +2596,49 @@ None.
 
 =item exportable
 
-C<VAL_O_NONBLOCK> C<VAL_EAGAIN> C<RD_NODATA> C<EOF_NONBLOCK>
-C<pack_sockaddr> C<unpack_sockaddr>
-C<SOMAXCONN>
-C<EADDRINUSE> C<EADDRNOTAVAIL> C<EAFNOSUPPORT> C<EAGAIN>
-C<EALREADY> C<EBADF> C<EBADMSG> C<ECONNABORTED> C<ECONNREFUSED>
-C<ECONNRESET> C<EDESTADDRREQ> C<EHOSTDOWN> C<EHOSTUNREACH>
-C<EINPROGRESS> C<EINVAL> C<EISCONN> C<EMSGSIZE> C<ENETDOWN> C<ENETRESET>
-C<ENETUNREACH> C<ENOBUFS> C<ENODATA> C<ENOENT> C<ENOPROTOOPT> C<ENOSR>
-C<ENOSTR> C<ENOTCONN> C<ENOTSOCK> C<EOPNOTSUPP> C<EPFNOSUPPORT>
-C<EPROTO> C<EPROTONOSUPPORT> C<EPROTOTYPE> C<ESHUTDOWN>
-C<ESOCKTNOSUPPORT> C<ETIME> C<ETIMEDOUT> C<ETOOMANYREFS> C<EWOULDBLOCK>
-C<SHUT_RD> C<SHUT_WR> C<SHUT_RDWR>
+C<AF_APPLETALK> C<AF_CCITT> C<AF_CHAOS> C<AF_CTF> C<AF_DATAKIT>
+C<AF_DECnet> C<AF_DLI> C<AF_ECMA> C<AF_HYLINK> C<AF_IMPLINK>
+C<AF_INET> C<AF_ISO> C<AF_LAST> C<AF_LAT> C<AF_LINK> C<AF_NETMAN>
+C<AF_NS> C<AF_OSI> C<AF_PUP> C<AF_ROUTE> C<AF_SNA> C<AF_UNIX>
+C<AF_UNSPEC> C<AF_USER> C<AF_WAN> C<AF_X25> C<EADDRINUSE>
+C<EADDRNOTAVAIL> C<EAFNOSUPPORT> C<EAGAIN> C<EALREADY> C<EBADF>
+C<EBADMSG> C<ECONNABORTED> C<ECONNREFUSED> C<ECONNRESET>
+C<EDESTADDRREQ> C<EHOSTDOWN> C<EHOSTUNREACH> C<EINPROGRESS>
+C<EINVAL> C<EISCONN> C<EMSGSIZE> C<ENETDOWN> C<ENETRESET>
+C<ENETUNREACH> C<ENOBUFS> C<ENODATA> C<ENOENT> C<ENOPROTOOPT>
+C<ENOSR> C<ENOSTR> C<ENOTCONN> C<ENOTSOCK> C<EOF_NONBLOCK>
+C<EOPNOTSUPP> C<EPFNOSUPPORT> C<EPROTO> C<EPROTONOSUPPORT>
+C<EPROTOTYPE> C<ESHUTDOWN> C<ESOCKTNOSUPPORT> C<ETIME>
+C<ETIMEDOUT> C<ETOOMANYREFS> C<EWOULDBLOCK> C<pack_sockaddr>
+C<PF_APPLETALK> C<PF_CCITT> C<PF_CHAOS> C<PF_CTF> C<PF_DATAKIT>
+C<PF_DECnet> C<PF_DLI> C<PF_ECMA> C<PF_HYLINK> C<PF_IMPLINK>
+C<PF_INET> C<PF_ISO> C<PF_LAST> C<PF_LAT> C<PF_LINK> C<PF_NETMAN>
+C<PF_NS> C<PF_OSI> C<PF_PUP> C<PF_ROUTE> C<PF_SNA> C<PF_UNIX>
+C<PF_UNSPEC> C<PF_USER> C<PF_WAN> C<PF_X25> C<RD_NODATA>
+C<SHUT_RD> C<SHUT_RDWR> C<SHUT_WR> C<SOCK_DGRAM> C<SOCK_RAW>
+C<SOCK_RDM> C<SOCK_SEQPACKET> C<SOCK_STREAM> C<SOL_SOCKET>
+C<SOMAXCONN> C<SO_ACCEPTCONN> C<SO_BROADCAST> C<SO_DEBUG>
+C<SO_DONTROUTE> C<SO_ERROR> C<SO_EXPANDED_RIGHTS> C<SO_FAMILY>
+C<SO_KEEPALIVE> C<SO_LINGER> C<SO_OOBINLINE> C<SO_PAIRABLE>
+C<SO_RCVBUF> C<SO_RCVLOWAT> C<SO_RCVTIMEO> C<SO_REUSEADDR>
+C<SO_REUSEPORT> C<SO_SNDBUF> C<SO_SNDLOWAT> C<SO_SNDTIMEO>
+C<SO_STATE> C<SO_TYPE> C<SO_USELOOPBACK> C<SO_XSE>
+C<unpack_sockaddr> C<VAL_EAGAIN> C<VAL_O_NONBLOCK>
 
 =item tags
 
 The following I<:tags> are available for grouping exported items
 together:
 
-=over
+=over 6
 
-=item :NonBlockVals
+=item :af
 
-C<EOF_NONBLOCK> C<RD_NODATA> C<VAL_EAGAIN> C<VAL_O_NONBLOCK>
-
-=item :routines
-
-C<pack_sockaddr> C<unpack_sockaddr>
+C<AF_APPLETALK> C<AF_CCITT> C<AF_CHAOS> C<AF_CTF> C<AF_DATAKIT>
+C<AF_DECnet> C<AF_DLI> C<AF_ECMA> C<AF_HYLINK> C<AF_IMPLINK>
+C<AF_INET> C<AF_ISO> C<AF_LAST> C<AF_LAT> C<AF_LINK> C<AF_NETMAN>
+C<AF_NS> C<AF_OSI> C<AF_PUP> C<AF_ROUTE> C<AF_SNA> C<AF_UNIX>
+C<AF_UNSPEC> C<AF_USER> C<AF_WAN> C<AF_X25>
 
 =item :errnos
 
@@ -2469,9 +2651,45 @@ C<ENOSTR> C<ENOTCONN> C<ENOTSOCK> C<EOPNOTSUPP> C<EPFNOSUPPORT>
 C<EPROTO> C<EPROTONOSUPPORT> C<EPROTOTYPE> C<ESHUTDOWN>
 C<ESOCKTNOSUPPORT> C<ETIME> C<ETIMEDOUT> C<ETOOMANYREFS> C<EWOULDBLOCK>
 
+=item :families
+
+The union of the C<:af> and C<:pf> tags.
+
+=item :NonBlockVals
+
+=item :non_block_vals
+
+C<EOF_NONBLOCK> C<RD_NODATA> C<VAL_EAGAIN> C<VAL_O_NONBLOCK>
+
+=item :pf
+
+C<PF_APPLETALK> C<PF_CCITT> C<PF_CHAOS> C<PF_CTF> C<PF_DATAKIT>
+C<PF_DECnet> C<PF_DLI> C<PF_ECMA> C<PF_HYLINK> C<PF_IMPLINK>
+C<PF_INET> C<PF_ISO> C<PF_LAST> C<PF_LAT> C<PF_LINK> C<PF_NETMAN>
+C<PF_NS> C<PF_OSI> C<PF_PUP> C<PF_ROUTE> C<PF_SNA> C<PF_UNIX>
+C<PF_UNSPEC> C<PF_USER> C<PF_WAN> C<PF_X25>
+
+=item :routines
+
+C<pack_sockaddr> C<unpack_sockaddr>
+
 =item :shutflags
 
 C<SHUT_RD> C<SHUT_WR> C<SHUT_RDWR>
+
+=item :sockopts
+
+C<SO_ACCEPTCONN> C<SO_BROADCAST> C<SO_DEBUG> C<SO_DONTROUTE>
+C<SO_ERROR> C<SO_EXPANDED_RIGHTS> C<SO_FAMILY> C<SO_KEEPALIVE>
+C<SO_LINGER> C<SO_OOBINLINE> C<SO_PAIRABLE> C<SO_RCVBUF>
+C<SO_RCVLOWAT> C<SO_RCVTIMEO> C<SO_REUSEADDR> C<SO_REUSEPORT>
+C<SO_SNDBUF> C<SO_SNDLOWAT> C<SO_SNDTIMEO> C<SO_STATE> C<SO_TYPE>
+C<SO_USELOOPBACK> C<SO_XSE>
+
+=item :sockvals
+
+C<SOL_SOCKET> C<SOCK_STREAM> C<SOCK_DGRAM> C<SOCK_RAW>
+C<SOCK_RDM> C<SOCK_SEQPACKET>
 
 =item :ALL
 
@@ -2483,9 +2701,19 @@ Z<>
 
 =back
 
+=head1 THREADING STATUS
+
+This module has been tested with threaded perls, and should be as thread-safe
+as perl itself.  (As of 5.005_03 and 5.005_57, that's not all that safe
+just yet.)
+
+=head1 SEE ALSO
+
+Net::Inet(3), Net::UNIX(3), Net::Dnet(3)
+
 =head1 AUTHOR
 
-Spider Boardman F<E<lt>spider@Orb.Nashua.NH.USE<gt>>
+Spider Boardman E<lt>spider@Orb.Nashua.NH.USE<gt>
 
 =cut
 
@@ -2493,73 +2721,81 @@ Spider Boardman F<E<lt>spider@Orb.Nashua.NH.USE<gt>>
 
 #any real autoloaded methods go after this line
 
-sub setdebug			# $this, [bool, [norecurse]] ; returns previous
+#& setdebug($this, [bool, [norecurse]]) : previous
+sub setdebug
 {
     $_[0]->_debug($_[1]);
 }
 
 # fluff routine to make things easy
-sub setparam			# $self, $name, $value, [newonly, [docheck]] ;
-{				# returns boolean
+#& setparam($self, $name, $value, [newonly, [docheck]]) : boolean
+sub setparam
+{
     my $whoami = $_[0]->_trace(\@_,1);
     my($self,$key,$val,$newonly,$docheck) = @_;
     carp "Excess arguments to ${whoami} ignored"
 	if @_ > 5;
     croak "Invalid arguments to ${whoami}, called"
-	if @_ < 3 or not ref $self or not exists ${*$self}{Keys}{$key};
+	if @_ < 3 or not ref $self or not exists $ {*$self}{Keys}{$key};
     $self->setparams({$key => $val}, $newonly, $docheck);
 }
 
-sub bind			# $self [, @ignored] ; returns boolean
+#& bind($self [, @ignored]) : boolean
+#+attrs locked method
+sub bind
 {
-    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,2);
     my $self = shift;
     $self->close if
 	$self->wasconnected || $self->isconnected || $self->isconnecting ||
 	    $self->isbound;
-    return ${*$self}{'isbound'} = undef unless $self->isopen or $self->open;
-    $self->setsopt('SO_REUSEADDR', 1) if ${*$self}{Parms}{reuseaddr};
+    return $ {*$self}{'isbound'} = undef unless
+	$self->isopen or $self->open;
+    $self->setsopt('SO_REUSEADDR', 1) if $ {*$self}{Parms}{reuseaddr};
+    $self->setsopt('SO_REUSEPORT', 1) if $ {*$self}{Parms}{reuseport};
     my $rval;
-    if (${*$self}{Parms}{srcaddrlist}) {
+    if ($ {*$self}{Parms}{srcaddrlist}) {
 	my $tryaddr;
-	foreach $tryaddr (@{${*$self}{Parms}{srcaddrlist}}) {
+	foreach $tryaddr (@{$ {*$self}{Parms}{srcaddrlist}}) {
 	    next unless $rval = CORE::bind($self, $tryaddr);
-	    ${*$self}{Parms}{srcaddr} = $tryaddr;
+	    $ {*$self}{Parms}{srcaddr} = $tryaddr;
 	    last;
 	}
     }
-    elsif (defined(${*$self}{Parms}{srcaddr}) and
-	   length ${*$self}{Parms}{srcaddr}) {
-	$rval = CORE::bind($self, ${*$self}{Parms}{srcaddr});
+    elsif (defined($ {*$self}{Parms}{srcaddr}) and
+	   length $ {*$self}{Parms}{srcaddr}) {
+	$rval = CORE::bind($self, $ {*$self}{Parms}{srcaddr});
     }
     else {
-	$rval = CORE::bind($self, pack_sockaddr(${*$self}{Parms}{AF},''));
+	$rval = CORE::bind($self, pack_sockaddr($ {*$self}{Parms}{AF},''));
     }
-    ${*$self}{'isbound'} = $rval;
+    $ {*$self}{'isbound'} = $rval;
     return $rval unless $rval;
     $self->getsockinfo;
     $self->isbound;
 }
 
-sub unbind			# $self [, @ignored] ; return not useful
+#& unbind($self [, @ignored])
+#+attrs locked method
+sub unbind
 {
-    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,2);
     my($self) = @_;
     $self->close unless $self->isconnected || $self->isconnecting;
     $self->delparams([qw(srcaddrlist)]);
 }
 
-sub delparam			# $self, @paramnames ; returns bool
+#& delparam($self, @paramnames) : boolean
+sub delparam
 {
     my ($self,@keys) = @_;
     $self->delparams(\@keys);
 }
 
-sub listen			# $self [, $maxq=SOMAXCONN] ; returns boolean
+#& listen($self [, $maxq=SOMAXCONN]) : boolean
+#+attrs locked method
+sub listen
 {
-    use attrs 'locked', 'method';
     my $whoami = $_[0]->_trace(\@_,2);
     my ($self,$maxq) = @_;
     $maxq = $self->getparam('maxqueue',SOMAXCONN,1) unless defined $maxq;
@@ -2567,14 +2803,15 @@ sub listen			# $self [, $maxq=SOMAXCONN] ; returns boolean
 	$maxq =~ /\D/ or !ref $self;
     carp "Excess args for ${whoami}(@_) ignored" if @_ > 2;
     return undef unless $self->isbound or $self->bind;
-    ${*$self}{'didlisten'} = $maxq;
-    CORE::listen($self,$maxq) or undef ${*$self}{'didlisten'};
+    $ {*$self}{'didlisten'} = $maxq;
+    CORE::listen($self,$maxq) or undef $ {*$self}{'didlisten'};
 }
 
-sub didlisten			# $self [, @ignored] ; returns boolean
+#& didlisten($self [, @ignored]) : boolean
+sub didlisten
 {
-    #$_[0]->_trace(\@_,4," - ".(${*{$_[0]}}{'didlisten'} ? "yes" : "no"));
-    ${*{$_[0]}}{'didlisten'};
+    #$_[0]->_trace(\@_,4," - ".($ {*{$_[0]}}{'didlisten'} ? "yes" : "no"));
+    $ {*{$_[0]}}{'didlisten'};
 }
 
 sub TIESCALAR
@@ -2585,18 +2822,16 @@ sub TIESCALAR
     $self && $self->isconnected && $self;
 }
 
+#+attrs locked method
 sub FETCH
 {
-    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,2);
-    my $self = shift;
-    my $line = $self->READLINE;
-    $line;
+    scalar $_[0]->READLINE;
 }
 
+#+attrs locked method
 sub STORE
 {
-    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,2);
     my $self = shift;
     return if @_ == 1 and !defined $_[0];	# "undef $x"
@@ -2605,8 +2840,9 @@ sub STORE
 
 # socket-option routines
 
-sub _findxopt			# $self, $realp, @args ;
-{				# returns ($aref,@subargs)
+#& _findxopt($self, $realp, @args) : ($aref,@subargs)
+sub _findxopt
+{
     my($self,$realp,@args) = @_;
     my($aref,$level,$what);
     $level = shift @args;	# try input arg as level first
@@ -2614,7 +2850,7 @@ sub _findxopt			# $self, $realp, @args ;
 	# if numeric, it had better be the level
 	$level = ((substr($level, 0, 1) eq '0') ? oct($level) : $level+0);
     }
-    $aref = ${*$self}{Sockopts}{$level};
+    $aref = $ {*$self}{Sockopts}{$level};
     if (!$aref) {
 	# here, we have to search for the ruddy thing by keyword
 	# if level was numeric, punt by trying to force EINVAL
@@ -2625,16 +2861,15 @@ sub _findxopt			# $self, $realp, @args ;
 	    last unless $what =~ /^(0x[\da-f]+|0[0-7]*|[1-9]\d*)$/si;
 	    $what = ((substr($what, 0, 1) eq '0') ? oct($what) : $what+0);
 	    $aref = ['h*', $what, $level, 0+@args];
-	    unshift(@args, $aref);
-	    return @args;
+	    return ($aref,@args);
 	}
 	return getsockopt($self,-1,-1) unless $level =~ /\D/;
 	$what = $level;
-	foreach $level (keys %{${*$self}{Sockopts}}) {
-	    next unless ref(${*$self}{Sockopts}{$level}) eq 'HASH';
-	    last if $aref = ${*$self}{Sockopts}{$level}{$what};
+	foreach $level (keys %{$ {*$self}{Sockopts}}) {
+	    next unless ref($ {*$self}{Sockopts}{$level}) eq 'HASH';
+	    last if $aref = $ {*$self}{Sockopts}{$level}{$what};
 	}
-	${*$self}{Sockopts}{$what} = $aref if ref $aref eq 'ARRAY';
+	$ {*$self}{Sockopts}{$what} = $aref if ref $aref eq 'ARRAY';
     }
     elsif (ref $aref eq 'HASH') {
 	$what = shift @args;
@@ -2648,9 +2883,10 @@ sub _findxopt			# $self, $realp, @args ;
     ($aref,@args);
 }
 
-sub _getxopt			# $this, $realp, [$level,] $what
+#& _getxopt($this, $realp, [$level,] $what) : @values
+#+attrs locked method
+sub _getxopt
 {
-    use attrs 'locked', 'method';
     my($self,$realp,@args) = @_;
     my($aref,$level,$what,$rval,$format);
     @args = $self->_findxopt($realp, @args); # get the array ref
@@ -2660,7 +2896,7 @@ sub _getxopt			# $this, $realp, [$level,] $what
     $level = $$aref[2];
     $format = $$aref[0];
     $rval = getsockopt($self,$level+0,$what+0);
-    if ($self->_debug > 3) {
+    if ($self->debug > 3) {
 	@args = unpack($format,$rval) if defined $rval;
 	print STDERR " - getsockopt $self,$level,$what => ";
 	print STDERR (defined $rval ? "@args\n" : "(undef)\n");
@@ -2670,21 +2906,24 @@ sub _getxopt			# $this, $realp, [$level,] $what
     unpack($format,$rval);
 }
 
-sub getsopt			# $this, [$level,] $what
+#& getsopt($this, [$level,] $what) : @values
+sub getsopt
 {
     my($self,@args) = @_;
     $self->_getxopt(0,@args);
 }
 
-sub getropt			# $this, [$level,] $what
+#& getropt($this, [$level,] $what) : $value
+sub getropt
 {
     my($self,@args) = @_;
     $self->_getxopt(1,@args);
 }
 
-sub _setxopt			# $this, $realp, [$level,] $what, @vals
+#& _setxopt($this, $realp, [$level,] $what, @vals) : boolean
+#+attrs locked method
+sub _setxopt
 {
-    use attrs 'locked', 'method';
     my($self,$realp,@args) = @_;
     my($aref,$level,$what,$rval,$format);
     @args = $self->_findxopt($realp, @args); # get the array ref and real args
@@ -2703,49 +2942,68 @@ sub _setxopt			# $this, $realp, [$level,] $what, @vals
     }
     print STDERR " - setsockopt $self,$level,$what,",
 	join($",unpack($format,$rval)),"\n"
-	    if $self->_debug > 3;
+	    if $self->debug > 3;
     setsockopt($self,$level+0,$what+0,$rval);
 }
 
-sub setsopt			# $this, [$level,] $what, @vals
+#& setsopt($this, [$level,] $what, @vals) : boolean
+sub setsopt
 {
     $_[0]->_trace(\@_,2);
     my($self,@args) = @_;
     $self->_setxopt(0,@args);
 }
 
-sub setropt			# $this, [$level,] $what, $realvalue
+#& setropt($this, [$level,] $what, $realvalue) : boolean
+sub setropt
 {
     $_[0]->_trace(\@_,2);
     my($self,@args) = @_;
     $self->_setxopt(1,@args);
 }
 
-sub fileno			# $this
+#& BINMODE($this)
+sub BINMODE
+{
+    # void
+}
+
+#& FILENO($this) : {$int | undef}
+sub FILENO
 {
 #    $_[0]->_trace(\@_,4);
     CORE::fileno($_[0]);
 }
 
-sub getfh			# $this
+#& fileno($this) : {$int | undef}
+sub fileno
+{
+#    $_[0]->_trace(\@_,4);
+    CORE::fileno($_[0]);
+}
+
+#& getfh($this) : {$gvref | undef}
+sub getfh
 {
 #    $_[0]->_trace(\@_,4);
     $_[0];
 }
 
-sub fhvec			# $this
+#& fhvec($this) : {$fhvec | undef}
+sub fhvec
 {
     $_[0]->_trace(\@_,4);
     my($self) = @_;
     return getsockopt($self,SOL_SOCKET,SO_TYPE) unless
 	$self->isopen and
 	    defined(CORE::fileno($self)); # return EBADF unless open
-    ${*$self}{FHVec};		# already setup by condition()
+    $ {*$self}{FHVec};		# already setup by condition()
 }
 
-sub select			# $this [[, $read, $write, $xcept, $timeout]]
+#& select($this [[, $read, $write, $xcept, $timeout]]) : $nready | @list
+#+attrs locked method
+sub select
 {
-    use attrs 'locked', 'method';
     $_[0]->_trace(\@_,4);
     my($self,$doread,$dowrite,$doxcept,$timer) = @_;
     my($fhvec,$rvec,$wvec,$xvec,$nfound,$timeleft) = $self->fhvec;
@@ -2753,23 +3011,25 @@ sub select			# $this [[, $read, $write, $xcept, $timeout]]
     $rvec = $doread ? $fhvec : undef;
     $wvec = $dowrite ? $fhvec : undef;
     $xvec = $doxcept ? $fhvec : undef;
-    $timer = 0 if $doread and defined(${*$self}{sockLineBuf});
+    $timer = 0 if $doread and defined($ {*$self}{sockLineBuf});
     ($nfound, $timeleft) = CORE::select($rvec, $wvec, $xvec, $timer)
 	or return ();
-    if (defined(${*$self}{sockLineBuf}) && $doread && ($rvec ne $fhvec)) {
-	$nfound += 1;
+    if (defined($ {*$self}{sockLineBuf}) && $doread && ($rvec ne $fhvec)) {
+	$nfound++;
 	$rvec |= $fhvec;
     }
-    return $nfound unless wantarray;
-    ($nfound, $timeleft,
-	$doread && $rvec eq $fhvec,
-	$dowrite && $wvec eq $fhvec,
-	$doxcept && $xvec eq $fhvec);
+    wantarray ?
+	($nfound, $timeleft,
+	    $doread && $rvec eq $fhvec,
+	    $dowrite && $wvec eq $fhvec,
+	    $doxcept && $xvec eq $fhvec)
+	: $nfound;
 }
 
-sub ioctl			# $this, @args
+#& ioctl($this, @args) : $scalar
+#+attrs locked method
+sub ioctl
 {
-    use attrs 'locked', 'method';
     my $whoami = $_[0]->_trace(\@_,4);
     croak "Insufficient arguments to ${whoami}(@_), found"
 	if @_ < 3;
@@ -2778,9 +3038,10 @@ sub ioctl			# $this, @args
     CORE::ioctl($_[0], $_[1], $_[2]);
 }
 
-sub fcntl			# $this, @args
+#& fcntl($this, @args) : $scalar
+#+attrs locked method
+sub fcntl
 {
-    use attrs 'locked', 'method';
     my $whoami = $_[0]->_trace(\@_,4);
     croak "Insufficient arguments to ${whoami}(@_), found"
 	if @_ < 3;
@@ -2789,7 +3050,8 @@ sub fcntl			# $this, @args
     CORE::fcntl($_[0], $_[1], $_[2]);
 }
 
-sub format_addr			# $thunk, $sockaddr
+#& format_addr($thunk, $sockaddr) : {$string | undef}
+sub format_addr
 {
     return undef unless defined $_[1];
     my($rval,$fam,$addr);
@@ -2804,28 +3066,31 @@ sub format_addr			# $thunk, $sockaddr
     $rval;
 }
 
-sub format_local_addr		# $this, [@args]
+#& format_local_addr($this, [@args]) : {$string | undef}
+sub format_local_addr
 {
     my($self,@args) = @_;
     $self->format_addr($self->getparam('srcaddr'),@args);
 }
 
-sub format_remote_addr		# $this, [@args]
+#& format_remote_addr($this, [@args]) : {$string | undef}
+sub format_remote_addr
 {
     my($self,@args) = @_;
     $self->format_addr($self->getparam('dstaddr'),@args);
 }
 
-sub new_from_fh			# classname, $filehandle
+#& new_from_fh(classname, $filehandle) : {$obj | undef}
+sub new_from_fh
 {
     my $whoami = $_[0]->_trace(\@_,2);
     my($pack) = @_;
-    $pack = ref $pack if ref $pack;
     if (@_ != 2) {
 	croak "Invalid number of arguments to ${whoami}, called";
     }
     my ($fh,$rfh);
-    unless(defined(eval {$fh=CORE::fileno($_[1])})) {
+    eval {local $SIG{__DIE__}; local $SIG{__WARN__}; $fh=CORE::fileno($_[1])};
+    unless(defined $fh) {
 	if ($_[1] =~ /\D/ or !length($_[1])) {
 	    croak "Invalid filehandle '$_[1]' in ${whoami}, called";
 	}
@@ -2841,36 +3106,36 @@ sub new_from_fh			# classname, $filehandle
 	}
 	return $self;
     }
-    ${*$self}{'isopen'} = 1;
-    ${*$self}{'isconnected'} = 1 if getpeername($self);
+    $ {*$self}{'isopen'} = 1;
+    $ {*$self}{'isconnected'} = 1 if getpeername($self);
     $rfh = getsockname($self);
     if (defined $rfh and length $rfh) {
 	($fh, $rfh) = unpack_sockaddr($rfh);
-	${*$self}{AF} = $fh if defined $fh and length $fh and $fh ne '0';
-	${*$self}{'isbound'} = defined $rfh and $rfh =~ /[^\0]/;
+	$ {*$self}{AF} = $fh if defined $fh and length $fh and $fh ne '0';
+	$ {*$self}{'isbound'} = defined $rfh and $rfh =~ /[^\0]/;
     }
     ($rfh) = $self->getsopt('SO_TYPE');
-    ${*$self}{type} = $rfh if defined $rfh;
+    $ {*$self}{type} = $rfh if defined $rfh;
     $self->getsockinfo;
     $self->isopen && $self;
 }
 
-sub accept			# $self ; returns new (ref $self) or undef
+#& accept($self) : {$new_obj | undef}
+sub accept
 {
     my $whoami = $_[0]->_trace(\@_,2);
     my($self) = @_;
     carp "Excess args to ${whoami}(@_) ignored" if @_ > 1;
     return undef unless $self->didlisten or $self->listen;
-    my $xclass = ref $self;
-    my $ns = $xclass->new;
+    my $ns = $self->new;
     return undef unless $ns;
     $ns->stopio;		# make sure we can use the filehandle
-    ${*$ns}{Parms} = { %{${*$self}{Parms}} };
+    $ {*$ns}{Parms} = { %{$ {*$self}{Parms}} };
     $ns->checkparams;
     {
 	my ($timeout,$fhvec,$saveblocking) =
-	    (${*$self}{Parms}{'timeout'}, ${*$self}{FHVec});
-	if (defined $timeout) {
+	    ($ {*$self}{Parms}{'timeout'}, $ {*$self}{FHVec});
+	if (defined $timeout and $ {*$self}{Parms}{'blocking'}) {
 	    $saveblocking = $self->param_saver('blocking');
 	    $self->setparams({'blocking'=>0});
 	    my $nfound = CORE::select($fhvec, undef, undef, $timeout);
@@ -2884,7 +3149,8 @@ sub accept			# $self ; returns new (ref $self) or undef
 	    return $ns;
 	}
     }
-    ${*$ns}{'isopen'} = ${*$ns}{'isbound'} = ${*$ns}{'isconnected'} = 1;
+    $ {*$ns}{'isopen'} = $ {*$ns}{'isbound'} =
+	$ {*$ns}{'isconnected'} = 1;
     $ns->getsockinfo;
     unless ($ns->isconnected) {
 	{
@@ -2898,8 +3164,9 @@ sub accept			# $self ; returns new (ref $self) or undef
     $ns;
 }
 
-sub RECV			# $self, $buf [,$maxlen] [,$flags]
-{				# returns $from  ( for tied-FH handling )
+#& RECV($self, $buf [,$maxlen] [,$flags]) : {$from | undef}
+sub RECV
+{
     my ($from,$buf);
     my $whoami = $_[0]->_trace(\@_,5);
     croak "Invalid arguments to ${whoami}, called"
@@ -2910,18 +3177,18 @@ sub RECV			# $self, $buf [,$maxlen] [,$flags]
     $from;
 }
 
-sub TIEHANDLE			# $class, $host, $port [,\%options]
+#& TIEHANDLE($class, $host, $port [,\%options]) : {$new_obj | undef}
+sub TIEHANDLE
 {				# redirects via $class->new(...)
     $_[0]->_trace(\@_,1);
     my $class = shift;
     my $self;
     if (ref $class and defined fileno($class)) {
 	if ($class->isa(__PACKAGE__)) {
-	    $self = $class->new_from_fh($class,@_) || $class->new(@_);
+	    $self = $class->new_from_fh(@_) || $class->new(@_);
 	}
 	else {
-	    $self = __PACKAGE__->new_from_fh($class,@_) ||
-		__PACKAGE__->new($class,@_);
+	    $self = new_from_fh($class,@_) || new($class,@_);
 	}
     }
     else {
@@ -2930,8 +3197,9 @@ sub TIEHANDLE			# $class, $host, $port [,\%options]
     }
 }
 
-sub PRINTF			# $self, $format [,@args]
-{				# returns boolean
+#& PRINTF($self, $format [,@args]) : boolean
+sub PRINTF
+{
     $_[0]->_trace(\@_,5);
     my $self = shift;
     my $fmt = shift;
@@ -2939,8 +3207,9 @@ sub PRINTF			# $self, $format [,@args]
     $self->PRINT(sprintf $fmt,@_);
 }
 
-sub READ			# $self, $buffer, $length [,$offset]
-{				# returns $lenread or undef
+#& READ($self, $buffer, $length [,$offset]) : {$lenread | undef}
+sub READ
+{
     my $whoami = $_[0]->_trace(\@_,5);
     croak "Invalid args to ${whoami}, called"
 	if @_ < 3 or @_ > 4 or !ref($_[0]);
@@ -2975,16 +3244,18 @@ sub READ			# $self, $buffer, $length [,$offset]
     length($buf);
 }
 
-sub GETC			# $self
-{				# returns $charstr or undef
+#& GETC($self) : {$charstr | undef}
+sub GETC
+{
     my $whoami = $_[0]->_trace(\@_,6);
     carp "Excess arguments to ${whoami} ignored"
 	if @_ > 1;
     $_[0]->recv(1,0);
 }
 
-sub READLINE			# $self
-{				# returns $line, @lines, or undef
+#& READLINE($self) : {$line | undef || @lines}
+sub READLINE
+{
     return $_[0]->getline unless wantarray and defined($/);
     my $whoami = $_[0]->_trace(\@_,5);
     my $self = shift;
@@ -2994,7 +3265,8 @@ sub READLINE			# $self
     @lines;
 }
 
-sub getlines			# $self
+#& getlines($self) : @lines
+sub getlines
 {
     my $whoami = $_[0]->_trace(\@_,6);
     croak "Invalid call to $whoami" unless @_ == 1;
@@ -3003,7 +3275,8 @@ sub getlines			# $self
 }
     
 
-sub sendto			# $self, $buf, $where, [$flags] ; returns bool
+#& sendto($self, $buf, $where, [$flags]) : boolean
+sub sendto
 {
     my $whoami = $_[0]->_trace(\@_,3);
     my($self,$buf,$whither,$flags) = @_;
@@ -3013,27 +3286,32 @@ sub sendto			# $self, $buf, $where, [$flags] ; returns bool
     carp "Excess arguments to ${whoami} ignored" if @_ > 4;
     return getsockopt($self,SOL_SOCKET,SO_TYPE) unless
 	$self->isopen or $self->open;	# generate EBADF return if not open
+    if ($ {*$self}{Parms}{netgen_fakeconnect}) {
+	return $self->send($buf,$flags,$whither);
+    }
     CORE::send($self, $buf, $flags, $whither);
 }
 
-sub EOF				# $self ; returns bool
+#& EOF($self) : boolean
+sub EOF
 {
     my $whoami = $_[0]->_trace(\@_,3);
     my ($self,$buf) = @_;
     croak "Invalid args to ${whoami}, called" if @_ != 1 or !ref $self;
     return getsockopt($self,SOL_SOCKET,SO_TYPE) unless
 	$self->isopen;			# generate EBADF return if not open
-    return 0 if defined ${*$self}{sockLineBuf}; # not EOF if can still read
-    my $fhvec = ${*$self}{FHVec};
+    return 0 if defined $ {*$self}{sockLineBuf}; # not EOF if can read
+    my $fhvec = $ {*$self}{FHVec};
     my $nfound = CORE::select($fhvec, undef, undef, 0);
     return 0 unless $nfound;
     $buf = $self->recv;
     return 1 if ! $! and !defined $buf;
-    ${*$self}{sockLineBuf} = $buf;
+    $ {*$self}{sockLineBuf} = $buf;
     0;
 }
 
-sub WRITE			# $self,$buffer,$len[,$offset] ; returns length
+#& WRITE($self,$buffer,$len[,$offset]) : {$length | undef}
+sub WRITE
 {
     my $whoami = $_[0]->_trace(\@_,3);
     my ($self,$buf,$len,$offset,$blen) = @_;
