@@ -1,4 +1,4 @@
-# Copyright 1995 Spider Boardman.
+# Copyright 1995,1996 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -13,24 +13,24 @@
 
 
 package Net::TCP;
-use Carp;
+require 5.003;			# new minimum Perl version for this package
 
-use strict qw(refs subs);
+use strict;
+use Carp;
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD);
 
 my $myclass = 'Net::TCP';
-my $Version = '0.51-alpha';
-sub Version { "$myclass v$Version" }
+$VERSION = '0.72';
+sub Version { "$myclass v$VERSION" }
 
 require Exporter;
 require AutoLoader;
 require DynaLoader;
 use Net::Inet;
 use Net::Gen;
-use Socket;
+use Socket qw(!pack_sockaddr_in !unpack_sockaddr_in !inet_ntoa !inet_aton);
 
-@ISA = qw(Net::Inet Exporter DynaLoader);
-
-*Net::TCP::Inherit::ISA = \@ISA; # delegation hook
+@ISA = qw(Exporter DynaLoader Net::Inet);
 
 # Items to export into callers namespace by default
 # (move infrequently used names to @EXPORT_OK below)
@@ -57,11 +57,19 @@ use Socket;
 	TH_URG
 );
 
+%EXPORT_TAGS = (
+	sockopts	=> [qw(TCP_NODELAY TCP_MAXSEG TCP_RPTR2RXT)],
+);
+
+
 sub AUTOLOAD
 {
-    local($constname);
+    # This AUTOLOAD is used to 'autoload' constants from the constant()
+    # XS function.  If a constant is not found then control is passed
+    # to the AUTOLOAD in AutoLoader.
+    my $constname;
     ($constname = $AUTOLOAD) =~ s/.*:://;
-    $val = constant($constname, @_ + 0);
+    my $val = constant($constname, @_ + 0);
     if ($! != 0) {
 	if ($! =~ /Invalid/) {
 	    $AutoLoader::AUTOLOAD = $AUTOLOAD;
@@ -71,21 +79,18 @@ sub AUTOLOAD
 	    croak "Your vendor has not defined Net::TCP macro $constname, used";
 	}
     }
-    eval "sub $AUTOLOAD { $val }";
+    no strict 'refs';		# allow various value types to be returned
+    *$AUTOLOAD = sub { $val };
+;#    eval "sub $AUTOLOAD { $val }";
+    $DB::sub = $AUTOLOAD if $DB::sub;
     goto &$AUTOLOAD;
 }
 
-use strict;
-
-if (defined &{"${myclass}::bootstrap"}) {
-    bootstrap $myclass;
-}
-else {
-    $myclass->DynaLoader::bootstrap;
-}
+bootstrap Net::TCP $VERSION;
 
 # Preloaded methods go here.  Autoload methods go after __END__, and are
 # processed by the autosplit program.
+
 
 my %sockopts;
 
@@ -93,12 +98,12 @@ my %sockopts;
 	     # known TCP socket options
 	     # simple booleans first
 
-	     'TCP_NODELAY' => ['i'],
+	     TCP_NODELAY	=> ['i'],
 
 	     # simple integer options
 
-	     'TCP_MAXSEG' => ['i'],
-	     'TCP_RPTR2RXT' => ['i'],
+	     TCP_MAXSEG		=> ['i'],
+	     TCP_RPTR2RXT	=> ['i'],
 
 	     # structured options
 
@@ -113,7 +118,7 @@ sub new
 {
     print STDERR "${myclass}::new(@_)\n" if $debug;
     my($class,@args) = @_;
-    my $self = $class->Net::TCP::Inherit::new(@args);
+    my $self = $class->SUPER::new(@args);
     print STDERR "${myclass}::new(@_), self=$self after sub-new\n"
 	if $debug > 1;
     if ($self) {
@@ -121,7 +126,7 @@ sub new
 	# register our socket options
 	$self->registerOptions(['IPPROTO_TCP', IPPROTO_TCP+0], \%sockopts);
 	# set our required parameters
-	$self->setparams({'type' => SOCK_STREAM, 'proto' => IPPROTO_TCP});
+	$self->setparams({type => SOCK_STREAM, proto => IPPROTO_TCP});
 	$self = $self->init(@args) if $class eq $myclass;
     }
     print STDERR "${myclass}::new returning self=$self\n" if $debug;
@@ -131,10 +136,11 @@ sub new
 sub _addrinfo			# $this, $sockaddr, [numeric_only]
 {
     my($this,@args,@r) = @_;
-    @r = $this->Net::TCP::Inherit::_addrinfo(@args);
-    return @r if !@r or ref($this) or $r[2] ne $r[3];
-    $this = getservbyport(htons($r[3]), 'tcp');
-    $r[2] = $this if defined $this;
+    @r = $this->SUPER::_addrinfo(@args);
+    unless (!@r or ref($this) or $r[2] ne $r[3]) {
+	$this = getservbyport(htons($r[3]), 'tcp');
+	$r[2] = $this if defined $this;
+    }
     @r;
 }
 
@@ -143,6 +149,52 @@ sub _addrinfo			# $this, $sockaddr, [numeric_only]
 #eval {new Net::TCP} if $] < 5.002;
 #eval "new " . $myclass . "()" if $] < 5.002;
 
+package Net::TCP::Server;	# here to ease creating server sockets
+
+@Net::TCP::Server::ISA = qw(Net::TCP);
+
+my $svclass = 'Net::TCP::Server';
+
+# When autosplit/autoload & inherticance work together (5.002 or 5.003),
+# every routine in this (sub-)class should be autoloaded.
+
+sub new				# classname, [[hostspec,] service,] [\%params]
+{
+    print STDERR "Net::TCP::Server::new(@_)\n" if $debug;
+    my ($xclass, @Args) = @_;
+    if (@Args == 2 && ref $Args[1] && ref($Args[1]) eq 'HASH' or
+	@Args == 1 and not ref $Args[0]) {
+	unshift(@Args, undef);	# thishost spec
+    }
+    my $self = $xclass->Net::TCP::new;
+    return undef unless $self;
+    $self = $self->init(@Args) if $xclass eq $svclass;
+    $self;
+}
+
+sub init			# $self, [@stuff] ; returns updated $self
+{
+    my ($self, @Args) = @_;
+    if (@Args == 2 && ref $Args[1] && ref $Args[1] eq 'HASH' or
+	@Args == 1 and not ref $Args[0]) {
+	unshift(@Args, undef);	# thishost spec
+    }
+    return undef unless $self->_hostport('this',\@Args);
+    return undef unless $self->Net::TCP::init;
+    $self->setsopt('SO_REUSEADDR',1);
+    if ($self->getparam('srcaddrlist') && !$self->isbound) {
+	return undef unless $self->bind;
+    }
+    if ($self->isbound && !$self->didlisten) {
+	return undef unless $self->listen;
+    }
+    $self;
+}
+
+# maybe someday add some fork+accept handling here
+
+package Net::TCP;		# back to starting package for autosplit
+
 1;
 
 # these would have been autoloaded, but autoload and inheritance conflict
@@ -150,27 +202,27 @@ sub _addrinfo			# $this, $sockaddr, [numeric_only]
 sub accept			# $self ; returns new (ref $self) or undef
 {
     my($self) = @_;
-    carp "Excess to args to ${myclass}::accept(@_) ignored" if @_ > 1;
+    carp "Excess args to ${myclass}::accept(@_) ignored" if @_ > 1;
     return undef unless $self->didlisten or $self->listen;
     my $xclass = ref $self;
     my $ns = new $xclass;
     return undef unless $ns;
-    $ns->close;			# make sure we can use the filehandle
+    $ns->stopio;		# make sure we can use the filehandle
     $ns->setparams($self->getparams([qw(thishost thisservice thisport)],1));
-    return undef unless accept($$ns{'fhref'},$$self{'fhref'});
-    $$ns{'isopen'} = $$ns{'isbound'} = $$ns{'isconnected'} = 1;
+    return undef unless accept($$ns{fhref},$$self{fhref});
+    $$ns{isopen} = $$ns{isbound} = $$ns{isconnected} = 1;
     return undef unless $ns->getsockinfo;
-    select((select($$ns{'fhref'}),$|=1)[0]); # keep stdio output unbuffered
+    select((select($$ns{fhref}),$|=1)[0]); # keep stdio output unbuffered
     $ns;
 }
 
 sub setdebug			# $this, [bool, [norecurse]]
 {
     my $prev = $debug;
-    shift;
+    my $this = shift;
     $debug = @_ ? $_[0] : 1;
     @_ > 1 && $_[1] ? $prev :
-	$prev . setdebug Net::TCP::Inherit @_;
+	$prev . $this->SUPER::setdebug(@_);
 }
 
 # autoloaded methods go after the END token (& pod) below
@@ -220,6 +272,39 @@ validated by calling its C<init> method, which C<Net::TCP>
 inherits from C<Net::Inet>.  In particular, this means that if
 both a host and a service are given, that an object will only be
 returned if a connect() call was successful.
+
+=item Server::new
+
+Usage:
+
+    $obj = new Net::TCP::Server $service;
+    $obj = new Net::TCP::Server $service, \%parameters;
+    $obj = new Net::TCP::Server $lcladdr, $service, \%parameters;
+
+Returns a newly-initialised object of the given class.  This is
+much like the regular C<new> method, except that it makes it easier
+to specify just a service name or port number, and it automatically
+does a setsockopt() call to set C<SO_REUSEADDR> to make the bind() more
+likely to succeed.
+
+Simple example for server setup:
+
+    $lh = new Net::TCP::Server 7788 or die;
+    while ($sh = $lh->accept) {
+	defined($pid=fork) or die "fork: $!\n";
+	if ($pid) {		# parent doesn't need client fh
+	    $sh->stopio;
+	    next;
+	}
+	# child doesn't need listener fh
+	$lh->stopio;
+	# do per-connection stuff here
+	exit;
+    }
+
+Note that signal-handling for the child processes is not included in this
+example.  A sample server will be included in the final kit which will show how
+to manage the subprocesses.
 
 =item accept
 
@@ -306,7 +391,16 @@ C<TH_URG>
 
 =item tags
 
-none, since that version of F<Exporter.pm> is not yet standard.
+=over 4
+
+=item C<:sockopts>
+
+This tag gets you the known socket options, C<TCP_MAXSEG>,
+C<TCP_NODELAY>, and C<TCP_RPTR2RXT>.
+
+=back
+
+Z<>
 
 =back
 

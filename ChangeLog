@@ -1,3 +1,88 @@
+Sun Dec 22 09:58:02 1996  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* Snapshot work-in-progress, even though should be updated
+	for 5.003_13, since I'll be away for a while.
+
+Wed Jul 24 03:29:13 1996  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* Dnet/Dnet.pm: Clean up some {'word'} and {'key'=>val} stuff.
+
+	* TCP/TCP.pm: Clean up some {'word'} and {'key'=>val} stuff.
+
+	* Inet/Inet.pm: Clean up some {'word'} and {'key'=>val} stuff.
+
+	* Gen/Gen.pm: Clean up some {'word'} and {'key'=>val} stuff.
+
+Tue Jul 23 10:52:38 1996  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* Contents: Remove pad_lexicals patch, since that fix is obsolete
+        with 5.003.
+
+Sun Jul 21 02:48:39 1996  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* Gen/Gen.pm: Fix old bug with OOB messages and 'lastFrom'
+        handling with respect to recv.
+
+Sat Jul 20 19:32:15 1996  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* Gen/Gen.pm: Begin updating for 5.003 language features (like
+        SUPER:: and anonymous globs.)
+
+	* UNIX/UNIX.pm: Begin updating for 5.003 language features (like
+        SUPER:: and anonymous globs.)
+
+	* Dnet/Dnet.pm: Begin updating for 5.003 language features (like
+        SUPER:: and anonymous globs.)
+
+	* Inet/Inet.pm: Begin updating for 5.003 language features (like
+        SUPER:: and anonymous globs.)
+
+	* UDP/UDP.pm: Begin updating for 5.003 language features (like
+        SUPER:: and anonymous globs.)
+
+Sun Jul 14 14:33:07 1996  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* TCP/TCP.pm: Fixed bug formerly patched in private testing kits
+        which prevented passing parameters to Net::TCP::Server::new and
+        having them take effect.
+	Begin updating for 5.003 language features (like SUPER:: and
+        anonymous globs.)
+
+	* Dnet/Makefile.PL: Upgraded to MakeMaker 5.34.
+
+	* UNIX/Makefile.PL: Upgraded to MakeMaker 5.34.
+
+	* UDP/Makefile.PL: Upgraded to MakeMaker 5.34.
+
+	* TCP/Makefile.PL: Upgraded to MakeMaker 5.34.
+
+	* Inet/Makefile.PL: Upgraded to MakeMaker 5.34.
+
+	* Gen/Makefile.PL: Upgraded to MakeMaker 5.34.
+
+Thu Jun  1 03:38:49 1995  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* Inet/Inet.xs: Added _inet_aton() for performance.
+
+	* Inet/Inet.pm: Moved some of inet_aton() into XSUB for
+	  performance.
+
+	* TCP/TCP.pm: Worked up Net::TCP::Server sub-module for easier
+	  server creation.
+
+Sun May 28 18:35:42 1995  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* Gen/Gen.pm: -w fixup in getline for (undef $/) case.
+	  Add aliases for registerOptions and similar mixed-case methods
+	  to allow names like "register_options" for those who prefer that.
+	  Updated the pod for the alias methods and a discussion of the use
+	  of the fileno method and/or the embedded filehandle.
+	  Added new_from_fh method and pod info.
+
+Sat May 27 02:30:46 1995  Spider Boardman  <spider@Orb.Nashua.NH.US>
+
+	* TCP/TCP.pm: 'use strict' fix for select() in accept method.
+
 Mon Apr 17 02:58:40 1995  Spider Boardman  <spider@Orb.Nashua.NH.US>
 
 	* version 0.51-alpha released.

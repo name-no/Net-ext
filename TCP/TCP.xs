@@ -1,6 +1,6 @@
 /*
 
-# Copyright 1995 Spider Boardman.
+# Copyright 1995,1996 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software

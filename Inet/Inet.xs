@@ -1,6 +1,6 @@
 /*
 
-# Copyright 1995 Spider Boardman.
+# Copyright 1995,1996 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -46,28 +46,11 @@ char *s;
 }
 
 static U32
-constant(name, arg)
+constant(name)
 char *name;
-int arg;
 {
     errno = 0;
     switch (*name) {
-    case 'A':
-	break;
-    case 'B':
-	break;
-    case 'C':
-	break;
-    case 'D':
-	break;
-    case 'E':
-	break;
-    case 'F':
-	break;
-    case 'G':
-	break;
-    case 'H':
-	break;
     case 'I':
 	if (strEQ(name, "ICMP_ADVLENMIN"))
 #ifdef ICMP_ADVLENMIN
@@ -886,12 +869,6 @@ int arg;
 	    goto not_there;
 #endif
 	break;
-    case 'J':
-	break;
-    case 'K':
-	break;
-    case 'L':
-	break;
     case 'M':
 	if (strEQ(name, "MAXTTL"))
 #ifdef MAXTTL
@@ -900,16 +877,6 @@ int arg;
 	    goto not_there;
 #endif
 	break;
-    case 'N':
-	break;
-    case 'O':
-	break;
-    case 'P':
-	break;
-    case 'Q':
-	break;
-    case 'R':
-	break;
     case 'S':
 	if (strEQ(name, "SUBNETSHIFT"))
 #ifdef SUBNETSHIFT
@@ -917,20 +884,6 @@ int arg;
 #else
 	    goto not_there;
 #endif
-	break;
-    case 'T':
-	break;
-    case 'U':
-	break;
-    case 'V':
-	break;
-    case 'W':
-	break;
-    case 'X':
-	break;
-    case 'Y':
-	break;
-    case 'Z':
 	break;
     }
     errno = EINVAL;
@@ -945,9 +898,51 @@ not_there:
 MODULE = Net::Inet		PACKAGE = Net::Inet
 
 U32
-constant(name,arg)
+constant(name)
 	char *		name
-	int		arg
+
+void
+_inet_aton(a1, a2=0, a3=0, a4=0)
+	U32	a1
+	U32	a2
+	U32	a3
+	U32	a4
+	CODE:
+	{
+	    U32	mask = 0xffffffff;
+	    U32 val;
+	    U32 accum = 0;
+	    U32 ishift = 32;
+	    U32 aref[4];
+	    struct in_addr arval;
+	    int	i = 0;
+
+	    aref[0] = a1;
+	    aref[1] = a2;
+	    aref[2] = a3;
+	    aref[3] = a4;
+
+	    while (i < items) {
+		if (i) {
+		    if (val & ~0xff) {
+			XSRETURN_UNDEF;
+		    }
+		    mask >>= 8;
+		    accum <<= 8;
+		    accum |= val;
+		    ishift -= 8;
+		}
+		val = aref[i];
+		if (val & ~mask) {
+		    XSRETURN_UNDEF;
+		}
+		i++;
+	    }
+	    accum <<= ishift;
+	    accum |= val;
+	    arval.s_addr = htonl(accum);
+	    ST(0) = sv_2mortal(newSVpv((char*)&arval, sizeof arval));
+	}
 
 void
 _pack_sockaddr_in(family,port,ip_address)

@@ -1,12 +1,12 @@
 What it is:
 
-	modules Net::Gen, Net::Inet, and Net::TCP (so far).
+	modules Net::Gen, Net::Inet, Net::UDP, and Net::TCP (so far).
 	Net::Gen is not a good name, I know that, but what's
 	in it really belongs in Socket, I think.  In any case,
 	I'm open to votes for a better name.
 
-	modules yet to come:  Net::UDP, Net::Unix, Net::DECnet,
-	maybe Net::Telnet.
+	modules yet to come:  Net::Unix, Net::Dnet,
+	maybe a real Net::Telnet.
 
 What's different from other offerings:
 
@@ -32,6 +32,8 @@ What's still missing:
 	thought, though, since the current ones work (for me)
 	for simple uses of this suite of packages.
 
+	Finished integration with 5.003_13 & later features.
+
 	Probably several other things I won't have missed (yet).
 
 
@@ -45,10 +47,7 @@ Your mileage may vary.
 I'm not a tech. writer, nor do I usually play one on the net.  The
 documentation could still use a lot of work, I'm sure.
 
-Making it work requires perl 5.001 or later.  However, pre-5.002,
-you need to apply the four "official unofficial" patches
-(available from ftp.metronet.com at least) plus the
-pad-lexicals-patch in this archive if you want it to work.
+Making it work requires perl 5.003_05 or later.
 
 A simple test script:
 

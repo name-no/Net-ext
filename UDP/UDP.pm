@@ -1,4 +1,4 @@
-# Copyright 1995 Spider Boardman.
+# Copyright 1995,1996 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -13,42 +13,22 @@
 
 
 package Net::UDP;
-use Carp;
+require 5.003;			# new minimum Perl version for this package
 
-use strict qw(refs subs);
+use strict;
+use Carp;
+use vars qw($VERSION @ISA);
 
 my $myclass = 'Net::UDP';
-my $Version = '0.51-alpha';
-sub Version { "$myclass v$Version" }
+$VERSION = '0.72';
+sub Version { "$myclass v$VERSION" }
 
+require AutoLoader;
 use Net::Inet;
 use Net::Gen;
 use Socket;
-require Exporter;
-require DynaLoader;
-require AutoLoader;
 
-@ISA = qw(Net::Inet Exporter AutoLoader DynaLoader);
-
-*Net::UDP::Inherit::ISA = \@ISA; # delegation hook
-
-# Items to export into callers namespace by default. Note: do not export
-# names by default without a very good reason. Use EXPORT_OK instead.
-# Do not simply export all your public functions/methods/constants.
-@EXPORT = qw(
-);
-
-@EXPORT_OK = qw(
-);
-
-use strict;
-
-#if (defined &{"${myclass}::bootstrap"}) {
-#    bootstrap $myclass;
-#}
-#else {
-#    $myclass->DynaLoader::bootstrap;
-#}
+@ISA = qw(AutoLoader Net::Inet);
 
 # Preloaded methods go here.  Autoload methods go after
 # __END__, and are processed by the autosplit program.
@@ -58,7 +38,7 @@ use strict;
 sub new
 {
     my($class,@args) = @_;
-    my $self = $class->Net::UDP::Inherit::new(@args);
+    my $self = $class->SUPER::new(@args);
     if ($self) {
 	# no new keys for UDP?
 	# no new sockopts for UDP?
@@ -72,10 +52,11 @@ sub new
 sub _addrinfo			# $this, $sockaddr, [numeric_only]
 {
     my($this,@args,@r) = @_;
-    @r = $this->Net::UDP::Inherit::_addrinfo(@args);
-    return @r if !@r or ref($this) or $r[2] ne $r[3];
-    $this = getservbyport(htons($r[3]), 'udp');
-    $r[2] = $this if defined $this;
+    @r = $this->SUPER::_addrinfo(@args);
+    unless(!@r or ref($this) or $r[2] ne $r[3]) {
+	$this = getservbyport(htons($r[3]), 'udp');
+	$r[2] = $this if defined $this;
+    }
     @r;
 }
 

@@ -1,4 +1,4 @@
-# Copyright 1995 Spider Boardman.
+# Copyright 1995,1996 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -13,23 +13,23 @@
 
 
 package Net::Inet;
-use Carp;
+require 5.003;			# new minimum Perl version for this package
 
-use strict qw(refs subs);
+use strict;
+use Carp;
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $AUTOLOAD);
 
 my $myclass = 'Net::Inet';
-my $Version = '0.51-alpha';
-sub Version { "$myclass v$Version" }
+$VERSION = '0.72';
+sub Version { "$myclass v$VERSION" }
 
 require Exporter;
 require AutoLoader;
 require DynaLoader;
 use Net::Gen;
-use Socket;
+use Socket qw(!pack_sockaddr_in !unpack_sockaddr_in !inet_aton);
 
-@ISA = qw(Net::Gen Exporter DynaLoader);
-
-*Net::Inet::Inherit::ISA = \@ISA; # delegation support
+@ISA = qw(Exporter DynaLoader Net::Gen);
 
 # Items to export into callers namespace by default
 # (move infrequently used names to @EXPORT_OK below)
@@ -187,12 +187,25 @@ use Socket;
 	unpack_sockaddr_in
 );
 
+%EXPORT_TAGS = (
+	sockopts	=> [qw(IP_HDRINCL IP_RECVDSTADDR IP_RECVOPTS
+			       IP_RECVRETOPTS IP_TOS IP_TTL IP_ADD_MEMBERSHIP
+			       IP_DROP_MEMBERSHIP IP_MULTICAST_IF
+			       IP_MULTICAST_LOOP IP_MULTICAST_TTL
+			       IP_OPTIONS IP_RETOPTS)],
+	routines	=> [qw(pack_sockaddr_in unpack_sockaddr_in
+			       inet_ntoa inet_aton inet_addr
+			       htonl ntohl htons ntohs)],
+);
 
 sub AUTOLOAD
 {
-    local($constname);
+    # This AUTOLOAD is used to 'autoload' constants from the constant()
+    # XS function.  If a constant is not found then control is passed
+    # to the AUTOLOAD in AutoLoader.
+    my $constname;
     ($constname = $AUTOLOAD) =~ s/.*:://;
-    $val = constant($constname, @_ + 0);
+    my $val = constant($constname);
     if ($! != 0) {
 	if ($! =~ /Invalid/) {
 	    $AutoLoader::AUTOLOAD = $AUTOLOAD;
@@ -202,18 +215,14 @@ sub AUTOLOAD
 	    croak "Your vendor has not defined Net::Inet macro $constname, used";
 	}
     }
-    eval "sub $AUTOLOAD { $val }";
+    no strict 'refs';		# allow various value types in autoload
+    *{$AUTOLOAD} = sub { $val };
+;#    eval "sub $AUTOLOAD { $val }";
+    $DB::sub = $AUTOLOAD if $DB::sub;
     goto &$AUTOLOAD;
 }
 
-use strict;
-
-if (defined &{"${myclass}::bootstrap"}) {
-    bootstrap $myclass;
-}
-else {
-    $myclass->DynaLoader::bootstrap;
-}
+bootstrap Net::Inet $VERSION;
 
 # Preloaded methods go here.  Autoload methods go after __END__, and are
 # processed by the autosplit program.
@@ -224,96 +233,77 @@ my %sockopts;
 	     # socket options from the list above
 	     # simple booleans first
 
-	     'IP_HDRINCL' => ['I'],
-	     'IP_RECVDSTADDR' => ['I'],
-	     'IP_RECVOPTS' => ['I'],
-	     'IP_RECVRETOPTS' => ['I'],
+	     IP_HDRINCL		=> ['I'],
+	     IP_RECVDSTADDR	=> ['I'],
+	     IP_RECVOPTS	=> ['I'],
+	     IP_RECVRETOPTS	=> ['I'],
 
 	     # simple integer options
 
-	     'IP_TOS' => ['I'],
-	     'IP_TTL' => ['I'],
+	     IP_TOS		=> ['I'],
+	     IP_TTL		=> ['I'],
 
 	     # structured options
 
-	     'IP_ADD_MEMBERSHIP' => ['a4a4'], # ip_mreq
-	     'IP_DROP_MEMBERSHIP' => ['a4a4'], # ip_mreq
-	     'IP_MULTICAST_IF' => ['a4'], # inet_addr
-	     'IP_MULTICAST_LOOP' => ['C'], # u_char
-	     'IP_MULTICAST_TTL' => ['C'], # u_char
-	     'IP_OPTIONS' => ['a4C40'], # ip_options
-	     'IP_RETOPTS' => ['a4C40'], # ip_options
+	     IP_ADD_MEMBERSHIP	=> ['a4a4'], # ip_mreq
+	     IP_DROP_MEMBERSHIP	=> ['a4a4'], # ip_mreq
+	     IP_MULTICAST_IF	=> ['a4'], # inet_addr
+	     IP_MULTICAST_LOOP	=> ['C'], # u_char
+	     IP_MULTICAST_TTL	=> ['C'], # u_char
+	     IP_OPTIONS		=> ['a4C40'], # ip_options
+	     IP_RETOPTS		=> ['a4C40'], # ip_options
 
 	     # out of known IP options
 	     );
 
 $myclass->initsockopts( &IPPROTO_IP, \%sockopts );
 
-sub _htons
+sub htonl			# number ; number // or array of same
 {
-    unpack('S*',pack('n*',@_));
+    carp "Wrong number of arguments ($#_) to ${myclass}::htonl, called"
+	if @_ != 1 and !wantarray;
+    unpack('N*', pack('L*', @_));
 }
 
-sub _htonl
+sub htons			# number ; number // or array of same
 {
-    unpack('L*',pack('N*',@_));
+    carp "Wrong number of arguments ($#_) to ${myclass}::htons, called"
+	if @_ != 1 and !wantarray;
+    unpack('n*', pack('S*', @_));
 }
 
-sub _nullop
+sub ntohl			# number ; number // or array of same
 {
-    wantarray ? @_ : $_[0];
+    carp "Wrong number of arguments ($#_) to ${myclass}::ntohl, called"
+	if @_ != 1 and !wantarray;
+    unpack('L*', pack('N*', @_));
 }
 
-
-if (&_htons(2) != 2) {	# if lilliputian machine
-    *htons = \&_htons;	# make these calls a bit faster
-    *htonl = \&_htonl;
+sub ntohs			# number ; number // or array of same
+{
+    carp "Wrong number of arguments ($#_) to ${myclass}::ntohs, called"
+	if @_ != 1 and !wantarray;
+    unpack('S*', pack('n*', @_));
 }
-else {			# if blefuscuan machine
-    *htons = \&_nullop;	# make the no-ops a bit faster
-    *htonl = \&_nullop;
-}
-
-sub ntohs; sub ntohl;		# (helps with -w)
-*ntohs = \&htons;		# synonyms that callers may expect
-*ntohl = \&htonl;
-
 
 sub inet_aton			# (string) ; returns packed n_long or undef
 {
-#   use integer;		# can't do this--hi-order bit gets lost
+    use integer;
     return undef unless @_ == 1;
-    my(@pieces,$val,$accum,$mask,$shift,$piece);
+    my(@pieces,$piece);
     @pieces = split(/\./,$_[0],-1);
     return undef if @pieces > 4 or !@pieces or $pieces[-1] eq '';
-    $mask = 0xffffffff;
-    $shift = 32;
-    $accum=0;
-    $val = 0;
     foreach $piece (@pieces) {
-	return undef unless ($val & 0xff) == $val;
-	return undef unless $piece =~ /^(0x[a-f\d]+|0[0-7]*|[1-9]\d*)$/s;
-	$accum |= ($val << $shift);
-	$shift -= 8;
-	$val = 0 + ((substr($piece, 0, 1) eq '0') ? oct($piece) : $piece);
-	return undef unless ($val & $mask) == $val;
-	($mask >>= 8) &= 0xffffff;
+	return undef unless $piece =~ /^(?:0x[a-f\d]+|0[0-7]*|[1-9]\d*)$/s;
+	$piece = 0 + ((substr($piece, 0, 1) eq '0') ? oct($piece) : $piece);
     }
-    $accum |= $val;		# finish assembling the value
-    pack('N',$accum);		# return as n_long (eqv to inet_addr)
+    _inet_aton(@pieces);
 }
 
 sub inet_addr;			# (helps with -w)
 *inet_addr = \&inet_aton;	# same code for old interface
 
-sub inet_ntoa			# (packed n_long) returns string
-{
-    my $str = shift;
-    if (length($str) > 4 and substr($str,4) !~ /[^\0]/) {
-	substr($str,4) = '';
-    }
-    join('.',unpack('C*',$str));
-}
+;# removed inet_ntoa that was here -- the one in Socket is good enough for me
 
 sub pack_sockaddr_in		# [$family,] $port, $in_addr
 {
@@ -338,7 +328,7 @@ sub new				# $class, [\%params]
 {
     print STDERR "${myclass}::new(@_)\n" if $debug;
     my($class,@Args,$self) = @_;
-    $self = $class->Net::Inet::Inherit::new(@Args);
+    $self = $class->SUPER::new(@Args);
     print STDERR "${myclass}::new(@_), self=$self after sub-new\n"
 	if $debug > 1;
     if ($self) {
@@ -352,7 +342,7 @@ sub new				# $class, [\%params]
 	# register our socket options
 	$self->registerOptions('IPPROTO_IP', &IPPROTO_IP+0, \%sockopts);
 	# set our required parameters
-	$self->setparams({'PF' => PF_INET, 'AF' => AF_INET});
+	$self->setparams({PF => PF_INET, AF => AF_INET});
 	$self = $self->init(@Args) if $class eq $myclass;
     }
     print STDERR "${myclass}::new returning self=$self\n" if $debug;
@@ -363,11 +353,11 @@ sub _hostport			# $self, {'this'|'dest'}, [\]@list
 {
     my($self,$which,@args,$aref) = @_;
     $aref = \@args;		# assume in-line list unless proved otherwise
-    $aref = $args[0] if @args == 1 and ref $args[0] eq 'ARRAY';
+    $aref = $args[0] if @args == 1 && ref $args[0] && ref $args[0] eq 'ARRAY';
     return undef if $which ne 'dest' and $which ne 'this';
     if (@$aref) {		# assume this is ('desthost','destport')
 	my %p;			# where we'll build the params list
-	if (@$aref == 3 and ref($$aref[2]) eq 'HASH') {
+	if (@$aref == 3 and ref($$aref[2]) and ref($$aref[2]) eq 'HASH') {
 	    %p = %{$$aref[2]};
 	}
 	else {
@@ -386,8 +376,8 @@ sub init			# $self, [\%params || @speclist]
 {				# returns updated $self
     print STDERR "${myclass}::init(@_)\n" if $debug > 1;
     my($self,@args) = @_;
-    return $self unless $self = $self->Net::Inet::Inherit::init(@args);
-    if (@args > 1 or @args == 1 and ref $args[0] ne 'HASH') {
+    return $self unless $self = $self->SUPER::init(@args);
+    if (@args > 1 || @args == 1 && (!ref $args[0] || ref $args[0] ne 'HASH')) {
 	return undef unless $self->_hostport('dest',@args);
     }
     my @r;			# dummy array needed in 5.000
@@ -408,14 +398,14 @@ sub connect			# $self, [\]@([host],[port])
 {
     my($self,@args) = @_;
     return undef if @args and not $self->_hostport('dest',@args);
-    $self->Net::Inet::Inherit::connect;
+    $self->SUPER::connect;
 }
 
 sub _sethost			# $self,$key,$newval
 {
     my($self,$key,$newval) = @_;
     return "Invalid args to ${myclass}::_sethost(@_), called"
-	if @_ != 3 or ref($$self{'Keys'}{$key}) ne 'CODE';
+	if @_ != 3 or ref($$self{Keys}{$key}) ne 'CODE';
     # check for call from delparams
     if (!defined $newval) {
 	my @delkeys;
@@ -464,7 +454,7 @@ sub _sethost			# $self,$key,$newval
     }
     # valid so far, get out if can't form addresses yet
     return '' unless
-	($port = $$self{'Parms'}{$pkey}) =~ /^\d+$/s or
+	($port = $$self{Parms}{$pkey}) =~ /^\d+$/s or
 	    !defined $port and $pkey eq 'thisport'; # allow for 'bind'
     return '' if $key eq 'host'; # don't know yet whether 'dest' or 'this'
     my $af = $self->getparam('AF',AF_INET,1);
@@ -485,15 +475,15 @@ sub _setport			# ($self,$key,$newval)
 {
     my($self,$key,$newval) = @_;
     return "Invalid arguments to ${myclass}::_setport(@_), called"
-	if @_ != 3 || !exists($$self{'Keys'}{$key});
+	if @_ != 3 || !exists($$self{Keys}{$key});
     print STDERR " - ${myclass}::_setport(@_)\n" if $debug;
     my($skey,$hkey,$pkey,$svc,$port,$proto,$type,$host,$reval,$pname,@serv);
     ($skey = $key) =~ s/port$/service/;	# a key known to be for a service
     ($pkey = $key) =~ s/service$/port/;	# and one for the port
     ($hkey = $pkey) =~ s/port$/host/; # another for calling _sethost
     if (!defined $newval) {	# deleting a service or port
-	delete $$self{'Parms'}{$skey};
-	delete $$self{'Parms'}{$pkey} unless
+	delete $$self{Parms}{$skey};
+	delete $$self{Parms}{$pkey} unless
 	    $pkey ne 'port' and $self->isconnected;
 	my @delkeys;
 	if ($pkey eq 'thisport') {
@@ -531,8 +521,8 @@ sub _setport			# ($self,$key,$newval)
 	}
     }
     $reval = $newval;		# make resetting $_[2] simple
-    $svc = $$self{'Parms'}{$skey}; # keep earlier values around (to preserve)
-    $port = $$self{'Parms'}{$pkey};
+    $svc = $$self{Parms}{$skey}; # keep earlier values around (to preserve)
+    $port = $$self{Parms}{$pkey};
     $port = undef if
 	defined($port) and $port =~ /\D/; # but stored ports must be numeric
     if ($skey eq $key || $newval =~ /\D/) { # trying to set a service
@@ -550,19 +540,19 @@ sub _setport			# ($self,$key,$newval)
 	return "Unknown service $newval, found";
     }
     $reval = (($key eq $skey) ? $svc : $port); # in case we get that far
-    $$self{'Parms'}{$skey} = $svc if $svc; # in case no port change
+    $$self{Parms}{$skey} = $svc if $svc; # in case no port change
     $_[2] = $reval;
     print STDERR " - ${myclass}::_setport $self $skey $svc\n" if
 	$debug and $svc;
     print STDERR " - ${myclass}::_setport $self $pkey $port\n" if
 	$debug and defined $port;
-    return '' if defined($$self{'Parms'}{$pkey}) and
-	$$self{'Parms'}{$pkey} == $port; # nothing to update if same number
-    $$self{'Parms'}{$pkey} = $port; # in case was service key
+    return '' if defined($$self{Parms}{$pkey}) and
+	$$self{Parms}{$pkey} == $port; # nothing to update if same number
+    $$self{Parms}{$pkey} = $port; # in case was service key
     # check for whether we can ask _sethost to set {dst,src}addrlist now
     return '' if $pkey eq 'port'; # not if don't know local/remote yet
     return '' unless
-	$host = $$self{'Parms'}{$hkey} or $hkey eq 'thishost';
+	$host = $$self{Parms}{$hkey} or $hkey eq 'thishost';
     $host = '0' if !defined $host; # 'thishost' value was null
     $self->setparams({$hkey => $host},0,1); # try it
     '';				# return goodness from here
@@ -572,8 +562,8 @@ sub _setproto			# $this, $key, $newval
 {
     my($self,$key,$newval) = @_;
     if (!defined $newval) {	# delparams call?
-	delete $$self{'Parms'}{'IPproto'}; # make both go away at once
-	delete $$self{'Parms'}{'proto'};
+	delete $$self{Parms}{IPproto}; # make both go away at once
+	delete $$self{Parms}{proto};
 	return '';
     }
     my($pname,$proto);
@@ -598,9 +588,9 @@ sub _setproto			# $this, $key, $newval
 	    $pname = 'tcp';
 	}
     }
-    $$self{'Parms'}{'IPproto'} = $pname; # update our values
-    $$self{'Parms'}{'proto'} = $proto;
-    $_[2] = $$self{'Parms'}{$key}; # make sure the right value gets set
+    $$self{Parms}{IPproto} = $pname; # update our values
+    $$self{Parms}{proto} = $proto;
+    $_[2] = $$self{Parms}{$key}; # make sure the right value gets set
     '';				# return goodness
 }
 
@@ -621,14 +611,14 @@ sub getsockinfo			# $this
 {
     my($self) = @_;
     my($rem,$lcl,$port,$serv,$name,$addr);
-    return undef unless $rem = $self->Net::Inet::Inherit::getsockinfo;
+    return undef unless $rem = $self->SUPER::getsockinfo;
     ($name, $addr, $serv, $port) = $self->_addrinfo($rem);
-    $self->setparams({'remhost' => $name, 'remaddr' => $addr,
-		      'remservice' => $serv, 'remport' => $port});
+    $self->setparams({remhost => $name, remaddr => $addr,
+		      remservice => $serv, remport => $port});
     $lcl = $self->getparam('srcaddr');
     ($name, $addr, $serv, $port) = $self->_addrinfo($lcl);
-    $self->setparams({'lclhost' => $name, 'lcladdr' => $addr,
-		      'lclservice' => $serv, 'lclport' => $port});
+    $self->setparams({lclhost => $name, lcladdr => $addr,
+		      lclservice => $serv, lclport => $port});
     $rem;
 }
 
@@ -653,17 +643,17 @@ sub format_addr			# $this, $sockaddr, [numeric_only]
 sub setdebug			# $this, [bool, [norecurse]]
 {
     my $prev = $debug;
-    shift;
+    my $this = shift;
     $debug = @_ ? $_[0] : 1;
     @_ > 1 && $_[1] ? $prev :
-	$prev . setdebug Net::Inet::Inherit @_;
+	$prev . $this->SUPER::setdebug(@_);
 }
 
 sub bind			# $self, [\]@([host],[port])
 {
     my($self,@args) = @_;
     return undef if @args and not $self->_hostport('this',@args);
-    $self->Net::Inet::Inherit::bind;
+    $self->SUPER::bind;
 }
 
 sub unbind			# $self
@@ -671,7 +661,7 @@ sub unbind			# $self
     my($self,@args) = @_;
     carp "Excess args to ${myclass}::unbind ignored" if @args;
     $self->delparams([qw(thishost thisport)]) || return undef;
-    $self->Net::Inet::Inherit::unbind;
+    $self->SUPER::unbind;
 }
 
 # autoloaded methods go after the END token (& pod) below
@@ -702,10 +692,10 @@ C<Net::UDP> (future).
 
 Usage:
 
-    $obj = new Net::TCP;
-    $obj = new Net::TCP $host, $service;
-    $obj = new Net::TCP \%parameters;
-    $obj = new Net::TCP $host, $service, \%parameters;
+    $obj = new Net::Inet;
+    $obj = new Net::Inet $host, $service;
+    $obj = new Net::Inet \%parameters;
+    $obj = new Net::Inet $host, $service, \%parameters;
 
 Returns a newly-initialised object of the given class.  If called
 for a derived class, no validation of the supplied parameters
@@ -723,6 +713,7 @@ Usage:
 
     return undef unless $self = $self->init;
     return undef unless $self = $self->init(\%parameters);
+    return undef unless $self = $self->init($host, $service);
     return undef unless $self = $self->init($host, $service, \%parameters);
 
 Verifies that all previous parameter assignments are valid (via
@@ -768,13 +759,13 @@ Attempts to establish a connection for the object.  If the $host
 or $service arguments are specified, they will be used to set the
 C<desthost> and C<destservice>/C<destport> object parameters,
 with side-effects of setting up the C<dstaddrlist> object
-parameter.  Then, the result of a call to the inherited C<bind>
-method will be returned.
+parameter.  Then, the result of a call to the inherited
+C<connect> method will be returned.
 
 =item format_addr
 
 Usage:
-{
+
     $string = $obj->format_addr($sockaddr);
     $string = $obj->format_addr($sockaddr, $numeric_only);
     $string = format_addr Module $sockaddr;
@@ -822,10 +813,10 @@ described below.)
 
 =head2 Protected Methods
 
-[See the note in Net::Gen about my definition of protected methods
-in Perl.]
+[See the note in the C<Net::Gen> documentation about my
+definition of protected methods in Perl.]
 
-none.
+None.
 
 =head2 Known Socket Options
 
@@ -1051,7 +1042,7 @@ Usage:
     ($family, $port, $in_addr) = unpack_sockaddr_in($connected_address);
 
 Returns the address family, port, and packed C<struct in_addr>
-from the supplied packed <struct sockaddr_in>.  This is the
+from the supplied packed C<struct sockaddr_in>.  This is the
 inverse of pack_sockaddr_in().
 
 =back
@@ -1215,8 +1206,7 @@ C<unpack_sockaddr_in>
 
 =item tags
 
-None, since that version of F<Exporter.pm> is not yet standard.
-Wait for Perl version 5.002.
+None, yet.  Taking suggestions for useful groupings.
 
 =back
 

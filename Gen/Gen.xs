@@ -1,6 +1,6 @@
 /*
 
-# Copyright 1995 Spider Boardman.
+# Copyright 1995,1996 Spider Boardman.
 # All rights reserved.
 #
 # Automatic licensing for this software is available.  This software
@@ -19,10 +19,69 @@
 #include "perl.h"
 #include "XSUB.h"
 
+#ifdef I_FCNTL
+#include <fcntl.h>
+#endif
+#ifdef I_SYS_FILE
+#include <sys/file.h>
+#endif
+
 #include <sys/socket.h>
 
+static U32
+constant(name)
+char *name;
+{
+    errno = 0;
+    switch (*name) {
+    case 'E':
+	if (strEQ(name, "EOF_NONBLOCK")) {
+#ifdef EOF_NONBLOCK
+	    return 1;
+#else
+	    return 0;
+#endif
+	}
+	break;
+    case 'R':
+	if (strEQ(name, "RD_NODATA")) {
+#ifdef RD_NODATA
+	    return RD_NODATA;
+#else
+	    goto not_there;
+#endif
+	}
+	break;
+    case 'V':
+	if (strEQ(name, "VAL_O_NONBLOCK")) {
+#ifdef VAL_O_NONBLOCK
+	    return VAL_O_NONBLOCK;
+#else
+	    goto not_there;
+#endif
+	}
+	if (strEQ(name, "VAL_EAGAIN")) {
+#ifdef VAL_EAGAIN
+	    return VAL_EAGAIN;
+#else
+	    goto not_there;
+#endif
+	}
+	break;
+    }
+    errno = EINVAL;
+    return 0;
+
+not_there:
+    errno = ENOENT;
+    return 0;
+}
 
 MODULE = Net::Gen		PACKAGE = Net::Gen
+
+U32
+constant(name)
+	char *	name
 
 void
 pack_sockaddr(family,address)

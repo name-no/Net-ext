@@ -1,7 +1,6 @@
 Net/ChangeLog
 Net/Contents
 Net/README
-Net/pad-lexicals-patch
 Net/Gen/MANIFEST
 Net/Gen/Makefile.PL
 Net/Gen/Gen.xs
@@ -17,3 +16,11 @@ Net/TCP/TCP.pm
 Net/UDP/MANIFEST
 Net/UDP/Makefile.PL
 Net/UDP/UDP.pm
+Net/UNIX/MANIFEST
+Net/UNIX/Makefile.PL
+Net/UNIX/UNIX.xs
+Net/UNIX/UNIX.pm
+Net/Dnet/MANIFEST
+Net/Dnet/Makefile.PL
+Net/Dnet/Dnet.xs
+Net/Dnet/Dnet.pm
