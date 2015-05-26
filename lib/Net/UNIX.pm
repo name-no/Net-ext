@@ -117,7 +117,7 @@ sub unpack_sockaddr_un ($)
 my $debug = 0;
 
 #& _debug($this, [$newval]) : oldval
-sub _debug : locked
+sub _debug
 {
     my ($this,$newval) = @_;
     return $this->debug($newval) if ref $this;
@@ -139,7 +139,7 @@ my %Keys;			# for storing the registrations
 
 
 #& new($class, [\%params]) : {$obj | undef}
-sub new : locked
+sub new
 {
     my $whoami = $_[0]->_trace(\@_,1);
     my($class,@Args,$self) = @_;
@@ -233,7 +233,7 @@ sub _setconnpath
 }
 
 #& _init($self, whatpath[, $path][, \%params]) : {$self | undef}
-sub _init : locked method
+sub _init : method
 {
     my ($self,$what,@args,$path,$parms) = @_;
     if (@args == 1 or @args == 2) {
@@ -275,7 +275,7 @@ sub init
 }
 
 #& connect($self [, $destpath] [, \%newparams]) : boolean
-sub connect : locked method
+sub connect : method
 {
     my($self,$path,$parms) = @_;
     if (@_ > 3 or @_ == 3 and (!ref($parms) or ref($path))) {
@@ -632,7 +632,7 @@ Spider Boardman E<lt>spidb@cpan.orgE<gt>
 
 
 #& setdebug($this, [bool, [norecurse]]) : oldvalues
-sub setdebug : locked
+sub setdebug
 {
     my $this = shift;
     $this->_debug($_[0]) .
@@ -640,7 +640,7 @@ sub setdebug : locked
 }
 
 #& bind($self [, $destpath] [, \%newparams]) : boolean
-sub bind : locked method
+sub bind : method
 {
     my($self,$path,$parms) = @_;
     if (@_ > 3 or @_ == 3 and (!ref($parms) or ref($path))) {
@@ -673,7 +673,7 @@ sub _setbuf_unbuf
 }
 
 #& PRINT($self, @args) : boolean OKness
-sub PRINT : locked method
+sub PRINT : method
 {
     my $self = shift;
     if ($self->getparam('type',SOCK_DGRAM,1) != SOCK_STREAM and
@@ -687,7 +687,7 @@ sub PRINT : locked method
 }
 
 #& READLINE($self) : $line | undef || @lines
-sub READLINE : locked method
+sub READLINE : method
 {
     my $whoami = $_[0]->_trace(\@_,5);
     carp "Excess arguments to ${whoami}, ignored" if @_ > 1;

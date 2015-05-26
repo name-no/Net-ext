@@ -58,7 +58,6 @@ my %CodeKeys;
 
 my %Keys;			# for only calling registration routines once
 
-#+attrs locked
 sub new
 {
     my($class,@args) = @_;
@@ -351,7 +350,7 @@ sub _setbuf_unbuf
 }
 
 #& PRINT($self, @args) : OKness
-#+attrs locked method
+#+attrs method
 sub PRINT
 {
     my $self = shift;
@@ -364,7 +363,7 @@ sub PRINT
 }
 
 #& READLINE($self) : $line | undef || @lines
-#+attrs locked method
+#+attrs method
 sub READLINE
 {
     my $whoami = $_[0]->_trace(\@_,5);

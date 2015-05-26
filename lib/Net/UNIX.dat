@@ -117,7 +117,6 @@ sub unpack_sockaddr_un ($)
 my $debug = 0;
 
 #& _debug($this, [$newval]) : oldval
-#+attrs locked
 sub _debug
 {
     my ($this,$newval) = @_;
@@ -140,7 +139,6 @@ my %Keys;			# for storing the registrations
 
 
 #& new($class, [\%params]) : {$obj | undef}
-#+attrs locked
 sub new
 {
     my $whoami = $_[0]->_trace(\@_,1);
@@ -235,7 +233,7 @@ sub _setconnpath
 }
 
 #& _init($self, whatpath[, $path][, \%params]) : {$self | undef}
-#+attrs locked method
+#+attrs method
 sub _init
 {
     my ($self,$what,@args,$path,$parms) = @_;
@@ -278,7 +276,7 @@ sub init
 }
 
 #& connect($self [, $destpath] [, \%newparams]) : boolean
-#+attrs locked method
+#+attrs method
 sub connect
 {
     my($self,$path,$parms) = @_;
@@ -636,7 +634,6 @@ Spider Boardman E<lt>spidb@cpan.orgE<gt>
 
 
 #& setdebug($this, [bool, [norecurse]]) : oldvalues
-#+attrs locked
 sub setdebug
 {
     my $this = shift;
@@ -645,7 +642,7 @@ sub setdebug
 }
 
 #& bind($self [, $destpath] [, \%newparams]) : boolean
-#+attrs locked method
+#+attrs method
 sub bind
 {
     my($self,$path,$parms) = @_;
@@ -679,7 +676,7 @@ sub _setbuf_unbuf
 }
 
 #& PRINT($self, @args) : boolean OKness
-#+attrs locked method
+#+attrs method
 sub PRINT
 {
     my $self = shift;
@@ -694,7 +691,7 @@ sub PRINT
 }
 
 #& READLINE($self) : $line | undef || @lines
-#+attrs locked method
+#+attrs method
 sub READLINE
 {
     my $whoami = $_[0]->_trace(\@_,5);

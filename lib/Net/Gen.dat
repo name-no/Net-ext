@@ -148,7 +148,6 @@ my $nullsub = sub {};		# handy null warning handler
 # croak in the AUTOLOAD constant section, since we're being called from
 # inside the eval in initsockopts().
 
-#+attrs locked
 sub AUTOLOAD
 {
     # This AUTOLOAD is used to validate possible missing constants from
@@ -218,7 +217,6 @@ BEGIN {
 my %evalopts;			# avoid compiling an eval per sockopt
 
 #& initsockopts($class, $level+0, \%sockopts) : void
-#+attrs locked
 sub initsockopts
 {
     my ($class,$level,$opts) = @_;
@@ -305,7 +303,6 @@ my $debug = 0;			# module-wide debug hack -- don't use
 
 # can update $debug file variable
 #& _debug($this [, $newval]) : oldval
-#+attrs locked
 sub _debug
 {
     my ($this,$newval) = @_;
@@ -317,7 +314,7 @@ sub _debug
 }
 
 #& debug($self [, $newval]) : oldval
-#+attrs locked method
+#+attrs method
 sub debug
 {
     my ($self,$newval) = @_;
@@ -357,7 +354,7 @@ my $nonblock_flag = eval 'pack("I",VAL_O_NONBLOCK)';
 my $eagain = eval 'VAL_EAGAIN';
 
 #& _accessor($self, $what [, $newval]) : oldvalue
-#+attrs locked method
+#+attrs method
 sub _accessor
 {
     my ($self, $what, $newval) = @_;
@@ -415,7 +412,7 @@ sub _setblocking
 }
 
 #& blocking($self [, $newval]) : canonical_oldval
-#+attrs locked method
+#+attrs method
 sub blocking
 {
     my ($self, $newval) = @_;
@@ -455,7 +452,7 @@ my %Keys;
 my %Opts;
 
 #& register_param_keys($self, \@keys)
-#+attrs locked method
+#+attrs method
 sub register_param_keys
 {
     my ($self, $names) = @_;
@@ -472,7 +469,7 @@ sub registerParamKeys;	# helps with -w
 
 #& register_param_handlers($self, \@keys, [\]@handlers)
 #&  -or- ($self, \%key-handlers)
-#+attrs locked method
+#+attrs method
 sub register_param_handlers
 {
     my ($self, $names, @handlers, $handlers) = @_;
@@ -499,7 +496,7 @@ sub registerParamHandlers;	# helps with -w
 *registerParamHandlers = \&register_param_handlers; # alias other form
 
 #& register_options($self, $levelname, $level, \%options)
-#+attrs locked method
+#+attrs method
 sub register_options
 {
     my ($self, $levname, $level, $opts) = @_;
@@ -515,7 +512,7 @@ sub registerOptions;		# helps with -w
 
 # pseudo-subclass for saving parameters (ParamSaver, inspired by SelectSaver)
 #& param_saver($self, @params) : restoration_object
-#+attrs locked method
+#+attrs method
 sub param_saver
 {
     my ($self, @params) = @_;
@@ -586,7 +583,7 @@ sub new
 }
 
 #& setparams($this, \%newparams [, $newonly [, $check]]) : boolean
-#+attrs locked method
+#+attrs method
 sub setparams
 {
     my ($self,$newparams,$newonly,$check) = @_;
@@ -641,7 +638,7 @@ sub setparams
     
 
 #& delparams($self, \@paramnames) : boolean
-#+attrs locked method
+#+attrs method
 sub delparams
 {
     $_[0]->_trace(\@_,1);
@@ -656,7 +653,7 @@ sub delparams
 }
 
 #& checkparams($self) : boolean
-#+attrs locked method
+#+attrs method
 sub checkparams
 {
     my $whoami = $_[0]->_trace(\@_,1);
@@ -684,7 +681,7 @@ sub init
 }
 
 #& getparam($self, $key [, $default [, $defaultifundef]]) : param_value
-#+attrs locked method
+#+attrs method
 sub getparam
 {
     my $whoami = $_[0]->_trace(\@_,2);
@@ -701,7 +698,7 @@ sub getparam
 }
 
 #& getparams($self, \@keys [, $noundef]) : (%hash)
-#+attrs locked method
+#+attrs method
 sub getparams
 {
     my $whoami = $_[0]->_trace(\@_,2);
@@ -746,7 +743,7 @@ sub getparams
     
 
 #& condition($self)
-#+attrs locked method
+#+attrs method
 sub condition
 {
     my $self = $_[0];
@@ -760,7 +757,7 @@ sub condition
 }
 
 #& open($self [, @ignore]) : boolean
-#+attrs locked method
+#+attrs method
 sub open
 {
     $_[0]->_trace(\@_,2);
@@ -893,7 +890,7 @@ sub _tryconnect
 }
 
 #& connect($self, [@ignored]) : boolean
-#+attrs locked method
+#+attrs method
 sub connect
 {
     $_[0]->_trace(\@_,2);
@@ -947,7 +944,7 @@ sub connect
 }
 
 #& getsockinfo($self, [@ignored]) : ?dest sockaddr?
-#+attrs locked method
+#+attrs method
 sub getsockinfo
 {
     $_[0]->_trace(\@_,4);
@@ -968,7 +965,7 @@ sub getsockinfo
 my %to_shut_flags = (SHUT_RD,1, SHUT_WR,2, SHUT_RDWR,3);
 
 #& shutdown($self [, $how=SHUT_RDWR]) : boolean
-#+attrs locked method
+#+attrs method
 sub shutdown
 {
     $_[0]->_trace(\@_,3);
@@ -995,7 +992,7 @@ my @CloseVars = qw(FHVec isopen isbound didlisten wasconnected isconnected
 my @CloseKeys = qw(srcaddr dstaddr);
 
 #& close($self [, @ignored]) : boolean
-#+attrs locked method
+#+attrs method
 sub close
 {
     $_[0]->_trace(\@_,3);
@@ -1008,7 +1005,7 @@ sub CLOSE;
 *CLOSE = \&close;
 
 #& stopio($self [, @ignored]) : boolean
-#+attrs locked method
+#+attrs method
 sub stopio
 {
     $_[0]->_trace(\@_,4);
@@ -1088,7 +1085,7 @@ sub print;			# avoid -w error
 *print = \&put;			# maybe-useful alias
 
 #& ckeof($self) : boolean
-#+attrs locked method
+#+attrs method
 sub ckeof
 {
     my $saverr = $!+0;
@@ -1115,7 +1112,7 @@ sub ckeof
 }
 
 #& recv($self, [$maxlen, [$flags, [$from]]]) : {$buf | undef}
-#+attrs locked method
+#+attrs method
 sub recv
 {
     my $whoami = $_[0]->_trace(\@_,3);
@@ -1174,7 +1171,7 @@ sub get;			# (helps with -w)
 *get = \&recv;			# a name that works for indirect references
 
 #& getline($self) : like scalar(<$fhandle>)
-#+attrs locked method
+#+attrs method
 sub getline
 {
     my $whoami = $_[0]->_trace(\@_,4);
@@ -2820,7 +2817,7 @@ sub setparam
 }
 
 #& bind($self [, @ignored]) : boolean
-#+attrs locked method
+#+attrs method
 sub bind
 {
     $_[0]->_trace(\@_,2);
@@ -2856,7 +2853,7 @@ sub bind
 }
 
 #& unbind($self [, @ignored])
-#+attrs locked method
+#+attrs method
 sub unbind
 {
     $_[0]->_trace(\@_,2);
@@ -2873,7 +2870,7 @@ sub delparam
 }
 
 #& listen($self [, $maxq=SOMAXCONN]) : boolean
-#+attrs locked method
+#+attrs method
 sub listen
 {
     my $whoami = $_[0]->_trace(\@_,2);
@@ -2902,14 +2899,14 @@ sub TIESCALAR
     $self && $self->isconnected && $self;
 }
 
-#+attrs locked method
+#+attrs method
 sub FETCH
 {
     $_[0]->_trace(\@_,2);
     scalar $_[0]->READLINE;
 }
 
-#+attrs locked method
+#+attrs method
 sub STORE
 {
     $_[0]->_trace(\@_,2);
@@ -2964,7 +2961,7 @@ sub _findxopt
 }
 
 #& _getxopt($this, $realp, [$level,] $what) : @values
-#+attrs locked method
+#+attrs method
 sub _getxopt
 {
     my($self,$realp,@args) = @_;
@@ -3001,7 +2998,7 @@ sub getropt
 }
 
 #& _setxopt($this, $realp, [$level,] $what, @vals) : boolean
-#+attrs locked method
+#+attrs method
 sub _setxopt
 {
     my($self,$realp,@args) = @_;
@@ -3043,7 +3040,7 @@ sub setropt
 }
 
 #& BINMODE($this)
-#+attrs locked method
+#+attrs method
 sub BINMODE
 {
     # Need to allow for PerlIO layers here
@@ -3083,7 +3080,7 @@ sub fhvec
 }
 
 #& select($this [[, $read, $write, $xcept, $timeout]]) : $nready | @list
-#+attrs locked method
+#+attrs method
 sub select
 {
     $_[0]->_trace(\@_,4);
@@ -3109,7 +3106,7 @@ sub select
 }
 
 #& ioctl($this, @args) : $scalar
-#+attrs locked method
+#+attrs method
 sub ioctl
 {
     my $whoami = $_[0]->_trace(\@_,4);
@@ -3121,7 +3118,7 @@ sub ioctl
 }
 
 #& fcntl($this, @args) : $scalar
-#+attrs locked method
+#+attrs method
 sub fcntl
 {
     my $whoami = $_[0]->_trace(\@_,4);

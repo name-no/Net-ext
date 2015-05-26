@@ -67,7 +67,7 @@ BEGIN {
 
 # No additional sockopts for UNIX-domain sockets (?)
 
-sub new : locked
+sub new
 {
     my $whoami = $_[0]->_trace(\@_,1);
     my($class,@Args,$self) = @_;

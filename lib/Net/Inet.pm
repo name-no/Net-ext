@@ -400,7 +400,7 @@ sub inet_addr;			# (helps with -w)
 my $debug = 0;
 
 #& _debug($this, [$newval]) : oldval
-sub _debug : locked
+sub _debug
 {
     my ($this,$newval) = @_;
     return $this->debug($newval) if ref $this;
@@ -502,7 +502,7 @@ sub _hostport
 }
 
 #& init($self, [\%params || @speclist]) : {$self | undef}
-sub init : locked
+sub init
 {
     $_[0]->_trace(\@_,2);
     my($self,@args) = @_;
@@ -532,7 +532,7 @@ sub init : locked
 }
 
 #& connect($self, [\]@([host],[port])) : boolean
-sub connect : locked method
+sub connect : method
 {
     my($self,@args) = @_;
     return undef if @args and not $self->_hostport('dest',@args);
@@ -3731,7 +3731,7 @@ sub _addrinfo
 }
 
 #& getsockinfo($this) : $remote_addr || ($local_addr, $rem_addr) | ()
-sub getsockinfo : locked method
+sub getsockinfo : method
 {
     my($self) = @_;
     my($rem,$lcl,$port,$serv,$name,$addr);
@@ -4467,7 +4467,7 @@ Spider Boardman E<lt>spidb@cpan.orgE<gt>
 
 
 #& setdebug($this, [bool, [norecurse]]) : oldvalue
-sub setdebug : locked
+sub setdebug
 {
     my $this = shift;
     $this->_debug($_[0]) .
@@ -4475,7 +4475,7 @@ sub setdebug : locked
 }
 
 #& bind($self, [\]@([host],[port])) : boolean
-sub bind : locked method
+sub bind : method
 {
     my($self,@args) = @_;
     return undef if @args and not $self->_hostport('this',@args);
@@ -4483,7 +4483,7 @@ sub bind : locked method
 }
 
 #& unbind($self) : boolean
-sub unbind : locked method
+sub unbind : method
 {
     my($self,@args) = @_;
     if (@args) {

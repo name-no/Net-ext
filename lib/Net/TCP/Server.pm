@@ -70,7 +70,7 @@ BEGIN {
 # inheritance, so new() and init() have to be here.
 
 #& new(classname, [[hostspec,] service,] [\%params]) : {$self | undef}
-sub new : locked
+sub new
 {
     $_[0]->_trace(\@_,1);
     my ($xclass, @Args) = @_;
@@ -93,7 +93,7 @@ sub new : locked
 }
 
 #& init($self, [@stuff]) : {$self | undef}
-sub init : locked method
+sub init : method
 {
     my ($self, @Args) = @_;
     if (@Args == 2 && ref $Args[1] && ref $Args[1] eq 'HASH' or

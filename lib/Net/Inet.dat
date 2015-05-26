@@ -400,7 +400,6 @@ sub inet_addr;			# (helps with -w)
 my $debug = 0;
 
 #& _debug($this, [$newval]) : oldval
-#+attrs locked
 sub _debug
 {
     my ($this,$newval) = @_;
@@ -503,7 +502,6 @@ sub _hostport
 }
 
 #& init($self, [\%params || @speclist]) : {$self | undef}
-#+attrs locked
 sub init
 {
     $_[0]->_trace(\@_,2);
@@ -534,7 +532,7 @@ sub init
 }
 
 #& connect($self, [\]@([host],[port])) : boolean
-#+attrs locked method
+#+attrs method
 sub connect
 {
     my($self,@args) = @_;
@@ -3734,7 +3732,7 @@ sub _addrinfo
 }
 
 #& getsockinfo($this) : $remote_addr || ($local_addr, $rem_addr) | ()
-#+attrs locked method
+#+attrs method
 sub getsockinfo
 {
     my($self) = @_;
@@ -4471,7 +4469,6 @@ Spider Boardman E<lt>spidb@cpan.orgE<gt>
 
 
 #& setdebug($this, [bool, [norecurse]]) : oldvalue
-#+attrs locked
 sub setdebug
 {
     my $this = shift;
@@ -4480,7 +4477,7 @@ sub setdebug
 }
 
 #& bind($self, [\]@([host],[port])) : boolean
-#+attrs locked method
+#+attrs method
 sub bind
 {
     my($self,@args) = @_;
@@ -4489,7 +4486,7 @@ sub bind
 }
 
 #& unbind($self) : boolean
-#+attrs locked method
+#+attrs method
 sub unbind
 {
     my($self,@args) = @_;

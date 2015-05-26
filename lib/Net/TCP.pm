@@ -108,7 +108,7 @@ __PACKAGE__->initsockopts( IPPROTO_TCP, \%sockopts );
 my $debug = 0;
 
 #& _debug($this, [$newval]) : oldval
-sub _debug : locked
+sub _debug
 {
     my ($this,$newval) = @_;
     return $this->debug($newval) if ref $this;
@@ -119,7 +119,7 @@ sub _debug : locked
 
 my %Sopts;			# do a full register_options only once
 
-sub new : locked
+sub new
 {
     my $whoami = $_[0]->_trace(\@_,1);
     my($class,@args) = @_;

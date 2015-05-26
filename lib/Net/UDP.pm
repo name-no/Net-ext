@@ -58,7 +58,7 @@ my %CodeKeys;
 
 my %Keys;			# for only calling registration routines once
 
-sub new : locked
+sub new
 {
     my($class,@args) = @_;
     my $self = $class->SUPER::new(@args);
@@ -350,7 +350,7 @@ sub _setbuf_unbuf
 }
 
 #& PRINT($self, @args) : OKness
-sub PRINT : locked method
+sub PRINT : method
 {
     my $self = shift;
     if ($self->getparam('unbuffered_output')) {
@@ -362,7 +362,7 @@ sub PRINT : locked method
 }
 
 #& READLINE($self) : $line | undef || @lines
-sub READLINE : locked method
+sub READLINE : method
 {
     my $whoami = $_[0]->_trace(\@_,5);
     carp "Excess arguments to ${whoami}, ignored" if @_ > 1;

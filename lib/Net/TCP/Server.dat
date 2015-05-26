@@ -70,7 +70,6 @@ BEGIN {
 # inheritance, so new() and init() have to be here.
 
 #& new(classname, [[hostspec,] service,] [\%params]) : {$self | undef}
-#+attrs locked
 sub new
 {
     $_[0]->_trace(\@_,1);
@@ -94,7 +93,7 @@ sub new
 }
 
 #& init($self, [@stuff]) : {$self | undef}
-#+attrs locked method
+#+attrs method
 sub init
 {
     my ($self, @Args) = @_;
